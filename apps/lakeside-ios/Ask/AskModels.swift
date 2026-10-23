@@ -87,8 +87,10 @@ struct ChatTurn: Identifiable {
     var model: String = ""
     var local = false
     var stopped: StopOutcome?
+    /// Status narration from older servers. Kept as a fallback for a stream
+    /// that predates structured research steps.
     var trail: [String] = []
-    var actions: [JSONValue] = []
+    var research = ResearchTrail()
     var metadata: JSONValue = .null
     var attachments: [JSONValue] = []
 
@@ -123,6 +125,271 @@ struct ChatTurn: Identifiable {
     var exportTurn: ExportTurn {
         ExportTurn(question: question, answer: answer, model: model,
                    sources: (citations + liveSources).map { ExportSource(label: $0.first("label", "title", "path"), url: $0["url"].string) })
+    }
+}
+
+/// One tool call in the research pass.
+///
+/// The server announces each call twice, under one id: a start carrying the
+/// human verb, kind and target, then a completion carrying the duration, the
+/// summary of what came back, and whether it found anything. Keeping that as a
+/// value type means the view renders a step without re-parsing JSON, and the
+/// session tests can exercise the correlation directly.
+struct ResearchStep: Identifiable, Equatable {
+    enum Status: Equatable { case running, done }
+
+    let id: String
+    var name: String
+    var label: String
+    var verb: String
+    var kind: String
+    var icon: String
+    var target: String
+    var phase: String
+    var status: Status
+    var ok: Bool?
+    var summary: String
+    var milliseconds: Int
+
+    init?(event: JSONValue, fallbackPhase: String = "") {
+        let identifier = event["id"].string
+        let name = event["name"].string
+        let verb = event["verb"].string
+        let label = event["label"].string
+        guard !identifier.isEmpty || !name.isEmpty || !verb.isEmpty || !label.isEmpty else { return nil }
+        id = identifier.isEmpty ? "local-\(UUID().uuidString)" : identifier
+        self.name = name
+        self.label = label
+        self.verb = verb
+        kind = event["kind"].string
+        icon = event["icon"].string
+        target = event["target"].string
+        let kindPhase = ResearchStep.phase(for: kind)
+        let declared = event["phase"].string
+        phase = !declared.isEmpty ? declared : (!kindPhase.isEmpty ? kindPhase : fallbackPhase)
+        status = event["state"].string == "end" ? .done : .running
+        ok = event["ok"] == .null ? nil : event["ok"].bool
+        summary = event["summary"].string
+        milliseconds = max(0, Int(event["ms"].number ?? 0))
+    }
+
+    /// What the player reads. The verb comes from the server's vocabulary; a
+    /// legacy single-shot event only has its old `tool(query)` label.
+    var title: String {
+        if !verb.isEmpty { return verb }
+        if !label.isEmpty { return label }
+        return name.isEmpty ? "Research step" : name
+    }
+
+    var missed: Bool { status == .done && ok == false }
+
+    var durationText: String? {
+        guard status == .done else { return nil }
+        if milliseconds < 950 { return "\(max(1, milliseconds))ms" }
+        return String(format: "%.1fs", Double(milliseconds) / 1000)
+    }
+
+    var symbol: String {
+        let key = icon.isEmpty ? ResearchStep.icon(for: name) : icon
+        return switch key {
+        case "search": "magnifyingglass"
+        case "file": "doc.text"
+        case "history": "clock.arrow.circlepath"
+        case "corp": "building.2"
+        case "ballot": "checkmark.rectangle"
+        case "chart": "chart.bar"
+        case "globe": "globe"
+        case "map": "map"
+        case "person": "person"
+        case "people": "person.2"
+        case "math": "function"
+        case "list": "list.bullet"
+        case "docs": "book.closed"
+        case "flag": "flag"
+        case "market": "chart.line.uptrend.xyaxis"
+        case "live": "bolt"
+        default: "wrench.and.screwdriver"
+        }
+    }
+
+    /// Older servers send only a tool name, so its family stands in for the icon.
+    static func icon(for name: String) -> String {
+        let value = name.lowercased()
+        if value.contains("search") || value.contains("grep") { return "search" }
+        if value.contains("read") { return "file" }
+        if value.contains("history") || value.contains("change") { return "history" }
+        if value.contains("corp") || value.contains("sector") { return "corp" }
+        if value.contains("elect") || value.contains("race") { return "ballot" }
+        if value.contains("map") || value.contains("geo") { return "map" }
+        if value.contains("countr") || value.contains("globe") { return "globe" }
+        if value.contains("character") || value.contains("player") { return "person" }
+        return "tool"
+    }
+
+    mutating func settle(_ event: JSONValue) {
+        status = .done
+        if event["ok"] != .null { ok = event["ok"].bool }
+        if event["ms"] != .null { milliseconds = max(0, Int(event["ms"].number ?? 0)) }
+        if !event["summary"].string.isEmpty { summary = event["summary"].string }
+    }
+
+    var accessibilityLabel: String {
+        var parts = [title]
+        if let target = target.nonempty { parts.append(target) }
+        if status == .running { parts.append("working") }
+        else if let outcome = summary.nonempty { parts.append(outcome) }
+        return parts.joined(separator: ", ")
+    }
+
+    static func phase(for kind: String) -> String {
+        switch kind {
+        case "source": "search"
+        case "file": "read"
+        case "history": "history"
+        case "live": "live"
+        case "community": "community"
+        case "math": "think"
+        case "catalogue": "think"
+        default: ""
+        }
+    }
+}
+
+/// The research pass as the player sees it: one ordered set of steps with the
+/// same start/end correlation the server uses. Durations are measured on the
+/// device from the first step to the first answer token, which is the wait the
+/// player actually experienced.
+struct ResearchTrail: Equatable {
+    private(set) var steps: [ResearchStep] = []
+    var phase: String = ""
+    var startedAt: Date?
+    var finishedAt: Date?
+    static let limit = 60
+
+    mutating func apply(_ event: JSONValue, at now: Date = Date()) {
+        let state = event["state"].string
+        if state == "end" {
+            if let identifier = event["id"].string.nonempty,
+               let index = steps.lastIndex(where: { $0.id == identifier }) {
+                steps[index].settle(event)
+            } else if var orphan = ResearchStep(event: event, fallbackPhase: phase) {
+                // A completion without its start (a dropped frame, or an older
+                // server) still settles into a row rather than a silent gap.
+                orphan.status = .done
+                if startedAt == nil { startedAt = now }
+                steps.append(orphan)
+            }
+            return
+        }
+        if state == "start" {
+            guard steps.count < Self.limit, let step = ResearchStep(event: event, fallbackPhase: phase) else { return }
+            if startedAt == nil { startedAt = now }
+            if phase.isEmpty { phase = step.phase }
+            steps.append(step)
+            return
+        }
+        // A single event from an older server: already finished by the time it
+        // arrives, and its label is the old `tool(query)` form.
+        guard steps.count < Self.limit, var legacy = ResearchStep(event: event, fallbackPhase: phase) else { return }
+        legacy.status = .done
+        if startedAt == nil { startedAt = now }
+        steps.append(legacy)
+    }
+
+    func durationText(at now: Date = Date()) -> String? {
+        let measured: TimeInterval
+        if let startedAt {
+            measured = max(0, (finishedAt ?? now).timeIntervalSince(startedAt))
+        } else {
+            measured = 0
+        }
+        // Calls run in parallel, but the pass can never have taken less than its
+        // longest single call. Without this floor a burst-delivered event stream
+        // can claim "0.2s" beside a 731ms step.
+        let longest = steps.map { Double($0.milliseconds) / 1000 }.max() ?? 0
+        if startedAt == nil && longest <= 0 { return nil }
+        return ResearchTrail.duration(max(measured, longest))
+    }
+
+    static func duration(_ seconds: TimeInterval) -> String {
+        if seconds < 10 { return String(format: "%.1fs", seconds) }
+        return "\(Int(seconds.rounded()))s"
+    }
+
+    var tally: ResearchTally {
+        var value = ResearchTally(steps: steps.count)
+        for step in steps {
+            switch step.kind {
+            case "source": value.searches += 1
+            case "file": value.files += 1
+            case "history": value.history += 1
+            case "live": value.live += 1
+            case "community": value.community += 1
+            case "math": value.calculations += 1
+            default: break
+            }
+            if step.missed { value.misses += 1 }
+        }
+        if let startedAt {
+            value.seconds = Int(((finishedAt ?? Date()).timeIntervalSince(startedAt)).rounded())
+        }
+        return value
+    }
+
+    /// Consecutive steps with the same phase, in the order the phases happened.
+    var groups: [ResearchGroup] {
+        var result: [ResearchGroup] = []
+        for step in steps {
+            if let last = result.last, last.phase == step.phase {
+                result[result.count - 1] = ResearchGroup(phase: last.phase, steps: last.steps + [step])
+            } else {
+                result.append(ResearchGroup(phase: step.phase, steps: [step]))
+            }
+        }
+        return result
+    }
+
+    static func phaseTitle(_ key: String) -> String {
+        switch key {
+        case "think": "Thinking"
+        case "search": "Searching"
+        case "read": "Reading"
+        case "history": "Change history"
+        case "live": "Live game data"
+        case "community": "Community"
+        case "write": "Writing"
+        case "check": "Checking"
+        default: "Researching"
+        }
+    }
+}
+
+struct ResearchGroup: Identifiable, Equatable {
+    let phase: String
+    let steps: [ResearchStep]
+    var id: String { "\(phase)-\(steps.first?.id ?? "")" }
+}
+
+struct ResearchTally: Equatable {
+    var steps = 0
+    var searches = 0
+    var files = 0
+    var history = 0
+    var live = 0
+    var community = 0
+    var calculations = 0
+    var misses = 0
+    var seconds = 0
+
+    var line: String {
+        var parts: [String] = []
+        if searches > 0 { parts.append("\(searches) search\(searches == 1 ? "" : "es")") }
+        if files > 0 { parts.append("\(files) file\(files == 1 ? "" : "s") read") }
+        if history > 0 { parts.append("\(history) history check\(history == 1 ? "" : "s")") }
+        if live > 0 { parts.append("\(live) live read\(live == 1 ? "" : "s")") }
+        if community > 0 { parts.append("\(community) community search\(community == 1 ? "" : "es")") }
+        if calculations > 0 { parts.append("\(calculations) calculation\(calculations == 1 ? "" : "s")") }
+        return parts.joined(separator: " · ")
     }
 }
 

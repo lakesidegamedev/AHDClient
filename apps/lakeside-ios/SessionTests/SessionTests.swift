@@ -1,4 +1,5 @@
 import XCTest
+import LakesideCore
 @testable import LakesideAsk
 
 @MainActor final class SessionTests: XCTestCase {
@@ -99,5 +100,94 @@ import XCTest
         let app = session()
         do { try await app.accept(cookie); XCTFail("Unrelated domain accepted") } catch {}
         XCTAssertFalse(app.signedIn)
+    }
+    // MARK: - Research trail
+
+    private func step(_ state: String, id: Double = 1, name: String = "search_code",
+                      verb: String = "Searched the source", kind: String = "source",
+                      icon: String = "search", target: String = "dividend tax") -> JSONValue {
+        .object(["id": .number(id), "name": .string(name), "state": .string(state),
+                 "verb": .string(verb), "kind": .string(kind), "icon": .string(icon), "target": .string(target)])
+    }
+
+    private func completion(id: Double = 1, ms: Double = 412, ok: Bool = true,
+                            summary: String = "5 excerpts from 3 files") -> JSONValue {
+        .object(["id": .number(id), "state": .string("end"), "ms": .number(ms), "ok": .bool(ok), "summary": .string(summary)])
+    }
+
+    func testResearchTrailCorrelatesStartAndCompletion() {
+        var trail = ResearchTrail()
+        let start = Date(timeIntervalSince1970: 1_000)
+        trail.apply(step("start"), at: start)
+        XCTAssertEqual(trail.steps.count, 1)
+        XCTAssertEqual(trail.steps[0].status, .running)
+        XCTAssertEqual(trail.steps[0].title, "Searched the source")
+        XCTAssertEqual(trail.steps[0].target, "dividend tax")
+        XCTAssertEqual(trail.steps[0].phase, "search")
+        XCTAssertEqual(trail.steps[0].symbol, "magnifyingglass")
+        XCTAssertEqual(trail.startedAt, start)
+
+        trail.apply(completion(), at: start.addingTimeInterval(0.4))
+        XCTAssertEqual(trail.steps[0].status, .done)
+        XCTAssertEqual(trail.steps[0].summary, "5 excerpts from 3 files")
+        XCTAssertEqual(trail.steps[0].milliseconds, 412)
+        XCTAssertEqual(trail.steps[0].durationText, "412ms")
+        XCTAssertFalse(trail.steps[0].missed)
+        XCTAssertEqual(trail.durationText(at: start.addingTimeInterval(4.2)), "4.2s")
+    }
+
+    func testResearchTrailSettlesAnOrphanCompletion() {
+        // A completion whose start never arrived still becomes a done row, so a
+        // dropped frame cannot leave a step running forever.
+        var trail = ResearchTrail()
+        trail.apply(completion(id: 9, ms: 731, summary: "read live data"))
+        XCTAssertEqual(trail.steps.count, 1)
+        XCTAssertEqual(trail.steps[0].status, .done)
+        XCTAssertEqual(trail.steps[0].summary, "read live data")
+    }
+
+    func testResearchTrailAcceptsALegacySingleShotEvent() {
+        // Older servers send one event with the old `tool(query)` label.
+        var trail = ResearchTrail()
+        trail.apply(.object(["name": .string("search_code"), "label": .string("search_code(dividend tax)")]))
+        XCTAssertEqual(trail.steps.count, 1)
+        XCTAssertEqual(trail.steps[0].status, .done)
+        XCTAssertEqual(trail.steps[0].title, "search_code(dividend tax)")
+        XCTAssertEqual(trail.steps[0].symbol, "magnifyingglass")
+    }
+
+    func testResearchTrailTallyAndGroupsFollowTheSteps() {
+        var trail = ResearchTrail()
+        trail.apply(step("start", id: 1, kind: "source"), at: Date())
+        trail.apply(completion(id: 1), at: Date())
+        trail.apply(step("start", id: 2, name: "read_file", verb: "Read the file", kind: "file", icon: "file", target: "gdp.ts"), at: Date())
+        trail.apply(completion(id: 2, ms: 96, summary: "read 2 parts"), at: Date())
+        trail.apply(step("start", id: 3, name: "trace_corp", verb: "Looked up the corporation", kind: "live", icon: "corp", target: "Lakeside"), at: Date())
+        trail.apply(completion(id: 3, ms: 731, summary: "read live data"), at: Date())
+
+        XCTAssertEqual(trail.tally.searches, 1)
+        XCTAssertEqual(trail.tally.files, 1)
+        XCTAssertEqual(trail.tally.live, 1)
+        XCTAssertEqual(trail.tally.steps, 3)
+        XCTAssertEqual(trail.tally.line, "1 search · 1 file read · 1 live read")
+        XCTAssertEqual(trail.groups.map(\.phase), ["search", "read", "live"])
+        XCTAssertEqual(trail.groups.first?.steps.count, 1)
+    }
+
+    func testResearchTrailCountsAMissAsAFindingOfNothing() {
+        var trail = ResearchTrail()
+        trail.apply(step("start", id: 1, name: "grep_code", verb: "Searched exact symbols"))
+        trail.apply(completion(id: 1, ms: 88, ok: false, summary: "nothing found"))
+        XCTAssertTrue(trail.steps[0].missed)
+        XCTAssertEqual(trail.tally.misses, 1)
+        XCTAssertEqual(trail.steps[0].accessibilityLabel, "Searched exact symbols, dividend tax, nothing found")
+    }
+
+    func testResearchTrailStopsAtItsLimit() {
+        var trail = ResearchTrail()
+        for index in 0..<(ResearchTrail.limit + 5) {
+            trail.apply(step("start", id: Double(index)))
+        }
+        XCTAssertEqual(trail.steps.count, ResearchTrail.limit)
     }
 }
