@@ -1,4 +1,5 @@
 import XCTest
+import LakesideCore
 @testable import LakesideAsk
 
 @MainActor final class SessionTests: XCTestCase {
