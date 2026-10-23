@@ -52,35 +52,38 @@ struct AskResearchConsole: View {
                             .foregroundStyle(Brand.sky)
                             .padding(.horizontal, 7).padding(.vertical, 2)
                             .background(Brand.sky.opacity(0.14), in: Capsule())
+                            .fixedSize()
                     }
                     if !hasAnswer, let label = status.nonempty {
-                        LoadingShimmer(text: label).font(.footnote).lineLimit(1)
+                        LoadingShimmer(text: label).font(.footnote).lineLimit(1).truncationMode(.tail)
                     } else if hasAnswer {
                         Text("Research").font(.footnote.weight(.semibold)).foregroundStyle(Brand.ink)
                     } else {
                         Text("Researching…").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                TimelineView(.periodic(from: Date(), by: 1)) { context in
-                    Text(counterLine(at: context.date))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                HStack(spacing: 8) {
+                    TimelineView(.periodic(from: Date(), by: 1)) { context in
+                        Text(counterLine(at: context.date))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 4)
+                    Button {
+                        withAnimation(motion) { expanded.toggle() }
+                    } label: {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(expanded ? "Hide research steps" : "Show research steps")
                 }
             }
-            Spacer(minLength: 4)
-            Button {
-                withAnimation(motion) { expanded.toggle() }
-            } label: {
-                Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .frame(width: 30, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel(expanded ? "Hide research steps" : "Show research steps")
         }
         .padding(12)
     }

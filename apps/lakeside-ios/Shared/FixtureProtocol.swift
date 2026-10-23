@@ -246,7 +246,7 @@ event: action
 data: {"id":2,"name":"trace_corp","label":"trace_corp(Lakeside)","state":"start","verb":"Looked up the corporation","kind":"live","icon":"corp","target":"Lakeside"}
 
 """#
-            deliver(Data(live.utf8), url: url, status: 200, type: "text/event-stream", finish: false); return
+            deliver(Data((live + "\n").utf8), url: url, status: 200, type: "text/event-stream", finish: false); return
         case "/api/ask" where ProcessInfo.processInfo.arguments.contains("--uitest-research"):
             // A whole research pass followed by the answer: the receipt remains
             // under the answer and opens to the trail.
@@ -279,7 +279,7 @@ event: done
 data: {"convId":"fixture-conversation","answerId":43,"answer":"Verified final answer from the server.","usage":{"used":47,"limit":200,"remaining":153,"mcpLimit":40,"mcpRemaining":11,"vizLimit":10,"vizRemaining":8},"citations":[{"label":"Verified source","url":"https://example.test/source"}]}
 
 """#
-            deliver(Data(body.utf8), url: url, status: 200, type: "text/event-stream"); return
+            deliver(Data((body + "\n").utf8), url: url, status: 200, type: "text/event-stream"); return
         case "/api/ask" where ProcessInfo.processInfo.arguments.contains("--uitest-quota"):
             status = 429
             value = ["error": "You've used all 200 questions for today.", "quota": true, "usage": ["used": 200, "limit": 200, "remaining": 0]]

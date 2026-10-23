@@ -508,12 +508,12 @@ final class LaunchTests: XCTestCase {
         let receipt = app.buttons["ask-research-receipt"]
         XCTAssertTrue(receipt.waitForExistence(timeout: 5), "A finished answer keeps its research receipt")
         reveal(receipt, in: app)
-        XCTAssertTrue(text(containing: "Researched 2 steps", in: app).exists)
+        XCTAssertTrue(text(containing: "Researched 2 steps", in: app).waitForExistence(timeout: 5))
         capture(app, "Ask research receipt")
         receipt.tap()
         XCTAssertTrue(text(containing: "Searched the source", in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).exists)
-        XCTAssertTrue(text(containing: "5 excerpts from 3 files", in: app).exists)
+        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: "5 excerpts from 3 files", in: app).waitForExistence(timeout: 5))
         capture(app, "Ask research trail expanded")
     }
     func testNativeAskResearchConsoleRuns() throws {
@@ -524,7 +524,7 @@ final class LaunchTests: XCTestCase {
         let console = app.descendants(matching: .any).matching(identifier: "ask-research-console").firstMatch
         XCTAssertTrue(console.waitForExistence(timeout: 10), "The live console appears while Ask works")
         XCTAssertTrue(text(containing: "Searched the source", in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).exists)
+        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).waitForExistence(timeout: 5))
         capture(app, "Ask live research console")
     }
 }
