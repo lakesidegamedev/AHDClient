@@ -297,9 +297,18 @@ struct ResearchTrail: Equatable {
     }
 
     func durationText(at now: Date = Date()) -> String? {
-        guard let startedAt else { return nil }
-        let seconds = max(0, (finishedAt ?? now).timeIntervalSince(startedAt))
-        return ResearchTrail.duration(seconds)
+        let measured: TimeInterval
+        if let startedAt {
+            measured = max(0, (finishedAt ?? now).timeIntervalSince(startedAt))
+        } else {
+            measured = 0
+        }
+        // Calls run in parallel, but the pass can never have taken less than its
+        // longest single call. Without this floor a burst-delivered event stream
+        // can claim "0.2s" beside a 731ms step.
+        let longest = steps.map { Double($0.milliseconds) / 1000 }.max() ?? 0
+        if startedAt == nil && longest <= 0 { return nil }
+        return ResearchTrail.duration(max(measured, longest))
     }
 
     static func duration(_ seconds: TimeInterval) -> String {

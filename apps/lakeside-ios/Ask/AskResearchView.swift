@@ -45,7 +45,7 @@ struct AskResearchConsole: View {
             leading
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    if !phaseTitle.isEmpty {
+                    if !hasAnswer, !phaseTitle.isEmpty {
                         Text(phaseTitle.uppercased())
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .tracking(0.8)
