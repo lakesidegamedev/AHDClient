@@ -114,11 +114,13 @@ struct AskEvidenceView: View {
     var body: some View {
         if !turn.citations.isEmpty || !turn.liveSources.isEmpty || !turn.conflicts.isEmpty || !turn.research.steps.isEmpty || !turn.trail.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
+                // The receipt comes first: what Ask went and checked is the
+                // context for the answer, not an appendix after the sources.
+                if !turn.research.steps.isEmpty { AskResearchReceipt(research: turn.research) }
+                else if !turn.trail.isEmpty { legacyTrail }
                 if !turn.citations.isEmpty { sources }
                 if !turn.liveSources.isEmpty { liveReads }
                 if !turn.conflicts.isEmpty { conflicts }
-                if !turn.research.steps.isEmpty { AskResearchReceipt(research: turn.research) }
-                else if !turn.trail.isEmpty { legacyTrail }
             }
             .padding(.top, 2)
             .overlay(alignment: .top) { Rectangle().fill(Brand.ink.opacity(0.08)).frame(height: 1).offset(y: -6) }
