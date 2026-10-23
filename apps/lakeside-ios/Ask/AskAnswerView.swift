@@ -32,7 +32,9 @@ struct AskTurnView: View {
                 NativeMarkdown(text: turn.answer, streaming: streaming)
                     .font(.body).lineSpacing(2)
             }
-            if streaming { streamingStatus }
+            if streaming {
+                AskResearchConsole(research: turn.research, status: status, hasAnswer: !turn.answer.isEmpty)
+            }
             if let stopped = turn.stopped { stoppedNote(stopped) }
             if turn.local && !streaming && !turn.answer.isEmpty { onDeviceFooter }
             if !streaming { AskEvidenceView(turn: turn, base: base) }
@@ -61,16 +63,6 @@ struct AskTurnView: View {
         .background(Brand.raised, in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("You asked: \(turn.question)")
-    }
-
-    private var streamingStatus: some View {
-        HStack(spacing: 8) {
-            ProgressView().controlSize(.small)
-            LoadingShimmer(text: status.nonempty ?? "Thinking…").font(.footnote)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(status.nonempty ?? "Thinking")
-        .accessibilityAddTraits(.updatesFrequently)
     }
 
     @ViewBuilder private func stoppedNote(_ outcome: ChatTurn.StopOutcome) -> some View {
@@ -120,12 +112,13 @@ struct AskEvidenceView: View {
     private let collapsedCount = 4
 
     var body: some View {
-        if !turn.citations.isEmpty || !turn.liveSources.isEmpty || !turn.conflicts.isEmpty || !turn.trail.isEmpty || !turn.actions.isEmpty {
+        if !turn.citations.isEmpty || !turn.liveSources.isEmpty || !turn.conflicts.isEmpty || !turn.research.steps.isEmpty || !turn.trail.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 if !turn.citations.isEmpty { sources }
                 if !turn.liveSources.isEmpty { liveReads }
                 if !turn.conflicts.isEmpty { conflicts }
-                if !turn.trail.isEmpty || !turn.actions.isEmpty { trail }
+                if !turn.research.steps.isEmpty { AskResearchReceipt(research: turn.research) }
+                else if !turn.trail.isEmpty { legacyTrail }
             }
             .padding(.top, 2)
             .overlay(alignment: .top) { Rectangle().fill(Brand.ink.opacity(0.08)).frame(height: 1).offset(y: -6) }
@@ -193,11 +186,13 @@ struct AskEvidenceView: View {
         }
     }
 
-    private var trail: some View {
+    /// Older servers only narrate phases, with no tool calls. Keep that account
+    /// rather than showing an empty receipt.
+    private var legacyTrail: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { showTrail.toggle() } label: {
                 HStack(spacing: 6) {
-                    AskLabel(text: "Research trail · \(max(turn.trail.count, turn.actions.count)) steps")
+                    AskLabel(text: "Research trail · \(turn.trail.count) steps")
                     Image(systemName: showTrail ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(.secondary)
                 }
             }.buttonStyle(.plain).accessibilityValue(showTrail ? "Expanded" : "Collapsed")
@@ -207,9 +202,6 @@ struct AskEvidenceView: View {
                         Text("\(index + 1)").font(.caption2.monospacedDigit()).foregroundStyle(Brand.mint).frame(minWidth: 16, alignment: .trailing)
                         Text(label).font(.caption)
                     }
-                }
-                ForEach(Array(turn.actions.enumerated()), id: \.offset) { _, action in
-                    Label(action["label"].string.nonempty ?? action["name"].string, systemImage: "wrench.and.screwdriver").font(.caption2.monospaced()).foregroundStyle(.secondary)
                 }
             }
         }

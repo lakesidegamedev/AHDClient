@@ -499,4 +499,32 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(signIn.waitForExistence(timeout: 5))
         XCTAssertEqual(app.webViews.count, 0)
     }
+    func testNativeAskResearchReceipt() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-research"]; app.launch()
+        guard openAskConversation(app) else { throw XCTSkip("Ask research receipt") }
+        ask("How does inflation work?", in: app)
+        allowOutsideAI(app)
+        XCTAssertTrue(app.staticTexts["Verified final answer from the server."].waitForExistence(timeout: 10))
+        let receipt = app.buttons["ask-research-receipt"]
+        XCTAssertTrue(receipt.waitForExistence(timeout: 5), "A finished answer keeps its research receipt")
+        reveal(receipt, in: app)
+        XCTAssertTrue(text(containing: "Researched 2 steps", in: app).exists)
+        capture(app, "Ask research receipt")
+        receipt.tap()
+        XCTAssertTrue(text(containing: "Searched the source", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).exists)
+        XCTAssertTrue(text(containing: "5 excerpts from 3 files", in: app).exists)
+        capture(app, "Ask research trail expanded")
+    }
+    func testNativeAskResearchConsoleRuns() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--uitest-fixtures", "--uitest-research-live"]; app.launch()
+        guard openAskConversation(app) else { throw XCTSkip("Ask research console") }
+        ask("How does inflation work?", in: app)
+        allowOutsideAI(app)
+        let console = app.descendants(matching: .any).matching(identifier: "ask-research-console").firstMatch
+        XCTAssertTrue(console.waitForExistence(timeout: 10), "The live console appears while Ask works")
+        XCTAssertTrue(text(containing: "Searched the source", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: "Looked up the corporation", in: app).exists)
+        capture(app, "Ask live research console")
+    }
 }

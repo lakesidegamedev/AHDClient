@@ -408,12 +408,22 @@ struct AskConversation: View {
                         status = data["label"].string.nonempty ?? status
                         let model = ChatTurn.modelLabel(data)
                         if !model.isEmpty { turns[index].model = model }
-                        if !data["label"].string.isEmpty && turns[index].trail.count < 80 { turns[index].trail.append(data["label"].string) }
+                        if let phase = data["phase"].string.nonempty { turns[index].research.phase = phase }
+                        if let label = data["label"].string.nonempty, turns[index].trail.count < 80 { turns[index].trail.append(label) }
                     case "action":
-                        status = data["label"].string.nonempty ?? status
-                        if turns[index].actions.count < 80 { turns[index].actions.append(data) }
-                    case "delta": turns[index].answer += data.string
+                        // Start and completion arrive under one id. The model
+                        // correlates them, so the view never has to guess which
+                        // row a late result belongs to. The narration line stays
+                        // the server's phase sentence, not a raw tool label.
+                        turns[index].research.apply(data)
+                    case "delta":
+                        if turns[index].research.finishedAt == nil { turns[index].research.finishedAt = Date() }
+                        turns[index].answer += data.string
                     case "done":
+                        // Research ends when writing began; if the server never
+                        // sent a delta (cached or short answers) the done event
+                        // closes it instead.
+                        if turns[index].research.finishedAt == nil { turns[index].research.finishedAt = Date() }
                         attachments.items.removeAll()
                         session.updateUsage(data["usage"])
                         if !data["convId"].string.isEmpty { conversationID = data["convId"].string }

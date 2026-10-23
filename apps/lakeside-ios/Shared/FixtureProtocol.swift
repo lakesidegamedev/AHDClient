@@ -230,6 +230,56 @@ xychart-beta
         case "/api/ask/stop":
             let body = bodyObject() ?? [:]
             value = ["ok": (body["reqId"] as? String)?.isEmpty == false]
+        case "/api/ask" where ProcessInfo.processInfo.arguments.contains("--uitest-research-live"):
+            // Start events with no completion: the console is still working.
+            let live = #"""
+event: meta
+data: {"convId":"fixture-conversation","reqId":"fixture-request","status":"Vector-searching code & docs…"}
+
+event: status
+data: {"phase":"search","label":"Vector-searching code & docs…"}
+
+event: action
+data: {"id":1,"name":"search_code","label":"search_code(inflation)","state":"start","verb":"Searched the source","kind":"source","icon":"search","target":"inflation"}
+
+event: action
+data: {"id":2,"name":"trace_corp","label":"trace_corp(Lakeside)","state":"start","verb":"Looked up the corporation","kind":"live","icon":"corp","target":"Lakeside"}
+
+"""#
+            deliver(Data(live.utf8), url: url, status: 200, type: "text/event-stream", finish: false); return
+        case "/api/ask" where ProcessInfo.processInfo.arguments.contains("--uitest-research"):
+            // A whole research pass followed by the answer: the receipt remains
+            // under the answer and opens to the trail.
+            let body = #"""
+event: meta
+data: {"convId":"fixture-conversation","reqId":"fixture-request","status":"Vector-searching code & docs…"}
+
+event: status
+data: {"phase":"search","label":"Vector-searching code & docs…"}
+
+event: action
+data: {"id":1,"name":"search_code","label":"search_code(inflation)","state":"start","verb":"Searched the source","kind":"source","icon":"search","target":"inflation"}
+
+event: action
+data: {"id":1,"name":"search_code","state":"end","ms":412,"ok":true,"summary":"5 excerpts from 3 files"}
+
+event: action
+data: {"id":2,"name":"trace_corp","label":"trace_corp(Lakeside)","state":"start","verb":"Looked up the corporation","kind":"live","icon":"corp","target":"Lakeside"}
+
+event: action
+data: {"id":2,"name":"trace_corp","state":"end","ms":731,"ok":true,"summary":"read live data"}
+
+event: status
+data: {"phase":"write","label":"Drafting with Fixture…"}
+
+event: delta
+data: "Verified final answer from the server."
+
+event: done
+data: {"convId":"fixture-conversation","answerId":43,"answer":"Verified final answer from the server.","usage":{"used":47,"limit":200,"remaining":153,"mcpLimit":40,"mcpRemaining":11,"vizLimit":10,"vizRemaining":8},"citations":[{"label":"Verified source","url":"https://example.test/source"}]}
+
+"""#
+            deliver(Data(body.utf8), url: url, status: 200, type: "text/event-stream"); return
         case "/api/ask" where ProcessInfo.processInfo.arguments.contains("--uitest-quota"):
             status = 429
             value = ["error": "You've used all 200 questions for today.", "quota": true, "usage": ["used": 200, "limit": 200, "remaining": 0]]
