@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [2.7.0] - 2026-10-29
 
 - Launcher: your account, Briefing, Settings and Ask now sit in their own bar at the top instead of floating over the title. On iPad and in narrow desktop windows they used to cover the game name.
 - iPhone and Android: the top bar holds just your account and Settings. Briefing and Ask moved down next to Enter multiplayer, where your thumb already is.
