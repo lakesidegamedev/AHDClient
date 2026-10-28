@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SettingsMenu } from "./SettingsMenu.js";
 import { DEFAULT_SETTINGS } from "./settings.js";
 
@@ -15,12 +15,12 @@ vi.mock("./PushControl.js", () => ({
 describe("SettingsMenu", () => {
   afterEach(cleanup);
 
-  it("sections desktop settings into Launcher, Game, Notifications, Updates and Support", () => {
+  it("sections desktop settings into General, Notifications, Singleplayer, Updates and Support", () => {
     render(
       <SettingsMenu open settings={DEFAULT_SETTINGS} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
     );
-    expect(screen.getByRole("heading", { name: "Launcher" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Game" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "General" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Singleplayer" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Updates" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Support" })).toBeTruthy();
     expect(screen.getByText("Separate gameplay window")).toBeTruthy();
@@ -53,5 +53,33 @@ describe("SettingsMenu", () => {
     expect(screen.queryByText("Anonymous simulation statistics")).toBeNull();
     expect(screen.queryByText("Technical startup logs")).toBeNull();
     expect(screen.queryByText("Desktop updates")).toBeNull();
+    // Store builds update through the store: no Updates section to act on.
+    expect(screen.queryByRole("heading", { name: "Updates" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Notifications" })).toBeTruthy();
+  });
+
+  it("names the client version and keeps English copy in English", () => {
+    render(
+      <SettingsMenu mobile open settings={DEFAULT_SETTINGS} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    expect(document.querySelector(".client-settings-kicker")?.textContent).toMatch(/^AHDClient \d+\.\d+\.\d+$/);
+    expect(document.body.textContent).not.toMatch(/Kontrollraum|Einstellungen/);
+  });
+
+  it("switches rows to German", () => {
+    render(
+      <SettingsMenu open settings={{ ...DEFAULT_SETTINGS, language: "de" }} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    expect(screen.getByRole("heading", { name: "Einstellungen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Problem melden" })).toBeTruthy();
+  });
+
+  it("reports each switch change as a settings patch", () => {
+    const onChange = vi.fn();
+    render(
+      <SettingsMenu open settings={DEFAULT_SETTINGS} onChange={onChange} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /Separate gameplay window/ }));
+    expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_SETTINGS, separateWindow: true });
   });
 });

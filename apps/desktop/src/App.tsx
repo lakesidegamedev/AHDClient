@@ -628,9 +628,12 @@ export function App(): JSX.Element {
       Ask
     </button>
   );
+  const briefingControl = (
+    <button className="client-settings-trigger" type="button" onClick={() => setScreen("briefing")}>
+      Briefing
+    </button>
+  );
   const settingsControl = (
-    <>
-    <button className="client-settings-trigger" type="button" onClick={() => setScreen("briefing")}>Briefing</button>
     <button
       className="client-settings-trigger"
       type="button"
@@ -638,7 +641,6 @@ export function App(): JSX.Element {
     >
       Settings
     </button>
-    </>
   );
   const accountControl = (
     <AccountControl
@@ -909,6 +911,7 @@ export function App(): JSX.Element {
         settingsControl={settingsControl}
         accountControl={accountControl}
         askControl={askControl}
+        briefingControl={briefingControl}
         gameVersionControl={mobile ? undefined : <GameVersionBar language={settings.language} />}
         onPhotoSource={(eraId) => {
           void online.help(`help.era-photo-${eraId}`).catch(fail);

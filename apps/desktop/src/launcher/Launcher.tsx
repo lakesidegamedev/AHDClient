@@ -29,6 +29,8 @@ interface Props {
   settingsControl?: ReactNode;
   accountControl?: ReactNode;
   askControl?: ReactNode;
+  /** Multiplayer briefing. Phones show it beside Ask under the main action. */
+  briefingControl?: ReactNode;
   gameVersionControl?: ReactNode;
   onPhotoSource?: (eraId: string) => void;
   onNewWorld: (eraId: string, worldsim?: boolean) => void;
@@ -74,6 +76,7 @@ export function Launcher({
   settingsControl,
   accountControl,
   askControl,
+  briefingControl,
   gameVersionControl,
   onPhotoSource,
   onNewWorld,
@@ -133,6 +136,12 @@ export function Launcher({
   const latestRunning =
     latestWorld !== null && runningSlot === latestWorld.slot;
   const selectedPhoto = selectedEra ? ERA_PHOTOS[selectedEra.id] : undefined;
+  // Phones keep the top bar to identity and Settings; Briefing and Ask are
+  // things to do, so they sit with the main action where a thumb reaches.
+  const topControls = mobile
+    ? [accountControl, settingsControl]
+    : [accountControl, briefingControl, settingsControl, askControl];
+  const quickControls = mobile ? [briefingControl, askControl].filter(Boolean) : [];
 
   return (
     <main
@@ -148,6 +157,12 @@ export function Launcher({
         <div className="launcher-nebula" />
       </div>
 
+      {topControls.some(Boolean) && (
+        <nav className="launcher-topbar" aria-label="Client">
+          {topControls.map((control, index) => (control ? <span key={index}>{control}</span> : null))}
+        </nav>
+      )}
+
       <section className="launcher-stage" aria-labelledby="launcher-title">
         <header className="launcher-mast">
           <img className="launcher-logo" src={ahdLogo} alt="" />
@@ -158,13 +173,6 @@ export function Launcher({
               {de ? "Eine historische politische Simulation" : "A historical political simulation"}
             </p>
           </div>
-          {(accountControl || settingsControl || askControl) && (
-            <div className="launcher-settings">
-              {accountControl}
-              {settingsControl}
-              {askControl}
-            </div>
-          )}
         </header>
 
         <div className="launcher-console">
@@ -331,6 +339,11 @@ export function Launcher({
                   {mode === "sandbox" ? "Enter sandbox" : "Enter multiplayer"}{" "}
                   <span aria-hidden="true">&#8599;</span>
                 </button>
+                {quickControls.length > 0 && (
+                  <div className="launcher-quick">
+                    {quickControls.map((control, index) => <span key={index}>{control}</span>)}
+                  </div>
+                )}
               </>
             ) : (
               <>

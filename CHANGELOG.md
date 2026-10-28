@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Launcher: your account, Briefing, Settings and Ask now sit in their own bar at the top instead of floating over the title. On iPad and in narrow desktop windows they used to cover the game name.
+- iPhone and Android: the top bar holds just your account and Settings. Briefing and Ask moved down next to Enter multiplayer, where your thumb already is.
+- Settings is easier to read. Each option shows its name and explanation on the left with its switch on the right, instead of a grey title with the switch centred underneath. It opens as a sheet from the bottom on phones.
+- Settings is grouped into General, Notifications, Singleplayer, Updates and Support on every platform, and shows your AHDClient version at the top. Phones now have a Notifications heading like desktop, and the Updates section no longer appears on phones, where updates come from the store.
+- Fixed: the phone Settings header showed German text with English selected. Settings is now fully translated when you choose Deutsch.
+- Headings across the launcher, world setup, Briefing and desktop Ask use the same clean sans-serif type as the rest of the app.
+- The Singleplayer and Worldsim Beta tags stay on one line inside the mode switch.
+- The account menu closes when you tap or click anywhere else, and Escape closes it without opening Settings.
+- Keyboard focus is now visible on switches, dropdowns and menus in Settings and the account menu.
+- Android: the bar behind the Back, Home and Recents buttons stays dark when your phone uses a light theme, instead of showing a pale strip under the game.
+
 ## [2.6.2] - 2026-10-14
 
 - Desktop: links to outside sites open safely in your browser again.

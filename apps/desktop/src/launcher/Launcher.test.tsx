@@ -124,6 +124,37 @@ describe("Launcher", () => {
     await userEvent.click(screen.getByRole("button", { name: /Enter sandbox/ }));
     expect(props.onPlayOnline).toHaveBeenCalledWith("sandbox");
   });
+  it("keeps every client control in the top bar on desktop", () => {
+    renderLauncher({
+      accountControl: <button>Account</button>,
+      briefingControl: <button>Briefing</button>,
+      settingsControl: <button>Settings</button>,
+      askControl: <button>Ask</button>,
+    });
+    const bar = screen.getByRole("navigation", { name: "Client" });
+    expect([...bar.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      "Account",
+      "Briefing",
+      "Settings",
+      "Ask",
+    ]);
+    expect(document.querySelector(".launcher-quick")).toBeNull();
+  });
+
+  it("moves Briefing and Ask beside the main action on phones", () => {
+    renderLauncher({
+      mobile: true,
+      accountControl: <button>Account</button>,
+      briefingControl: <button>Briefing</button>,
+      settingsControl: <button>Settings</button>,
+      askControl: <button>Ask</button>,
+    });
+    const bar = screen.getByRole("navigation", { name: "Client" });
+    expect([...bar.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Account", "Settings"]);
+    const quick = document.querySelector(".launcher-actions .launcher-quick")!;
+    expect([...quick.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Briefing", "Ask"]);
+  });
+
   it("offers only the online modes on mobile and defaults to multiplayer", async () => {
     localStorage.setItem("ahdclient.launcher.mode", "sp");
     const props = renderLauncher({ mobile: true });

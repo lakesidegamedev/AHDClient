@@ -14,6 +14,9 @@
   --warning: #eab308;
   --error: #ef4444;
   --shadow-panel: 0 4px 12px -1px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  /* One sans-serif family for headings and body across the client. */
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-ui);
 }
 
 * { box-sizing: border-box; }
@@ -22,7 +25,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font: 14px/1.5 var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
