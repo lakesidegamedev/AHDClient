@@ -1,6 +1,6 @@
 [package]
 name = "ahdclient-desktop"
-version = "2.6.2"
+version = "2.7.0"
 edition = "2021"
 description = "A House Divided desktop client: the real game, run locally"
 authors = ["Lakeside Games"]

@@ -1,7 +1,7 @@
 {
   "name": "ahdclient",
   "private": true,
-  "version": "2.6.2",
+  "version": "2.7.0",
   "description": "A House Divided client with local singleplayer and multiplayer entry points",
   "license": "UNLICENSED",
   "type": "module",
