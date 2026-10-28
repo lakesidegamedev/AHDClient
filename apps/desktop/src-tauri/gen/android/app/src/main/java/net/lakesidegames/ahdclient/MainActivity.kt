@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.graphics.Color
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -149,7 +151,15 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     // Edge-to-edge is cosmetic. Some old vendor builds throw while applying
     // it, and that must not turn a launcher startup into an app crash.
-    CompanionSafety.run("edge-to-edge setup") { enableEdgeToEdge() }
+    // The app is always dark, so both bars use the dark style whatever the
+    // phone's theme: the default followed light mode and laid a pale scrim
+    // behind the three-button navigation, under the game's dark status bar.
+    CompanionSafety.run("edge-to-edge setup") {
+      enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+      )
+    }
     super.onCreate(savedInstanceState)
   }
 

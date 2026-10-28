@@ -190,7 +190,7 @@ export function CommandGlobe({ eraId, live = false }: Props): JSX.Element {
       }
       ctx!.globalAlpha = 1;
 
-      ctx!.font = "600 9px Georgia, 'Times New Roman', serif";
+      ctx!.font = "600 9px ui-sans-serif, system-ui, sans-serif";
       for (const c of CAPITALS) {
         const lon = c.lon * DEG + rot;
         const lat = c.lat * DEG;

@@ -54,4 +54,20 @@ describe("AccountControl", () => {
     expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
     expect(screen.getByRole("button", { name: "Link account" })).toBeTruthy();
   });
+  it("closes the menu on an outside tap and on Escape without letting Escape through", () => {
+    const windowKeys = vi.fn();
+    window.addEventListener("keydown", windowKeys);
+    render(<AccountControl checked linked displayName="Ada" supporter={false} {...handlers} />);
+    const menu = document.querySelector("details.client-account-menu") as HTMLDetailsElement;
+    menu.open = true;
+    fireEvent.pointerDown(document.body);
+    expect(menu.open).toBe(false);
+    menu.open = true;
+    fireEvent.pointerDown(screen.getByRole("menuitem", { name: "View profile" }));
+    expect(menu.open).toBe(true);
+    fireEvent.keyDown(screen.getByRole("menuitem", { name: "View profile" }), { key: "Escape" });
+    expect(menu.open).toBe(false);
+    expect(windowKeys).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", windowKeys);
+  });
 });

@@ -1,5 +1,5 @@
-/* Native Ask panel. Mirrors the Ask service's own look (paper/ink/brass,
-   Fraunces display + Inter body) so answers read the same here as on the web. */
+/* Native Ask panel. Mirrors the Ask service's own look (paper/ink/brass)
+   in the client's sans-serif family. */
 
 .askview {
   --av-ink: #14141c;
@@ -53,7 +53,7 @@
 }
 
 .av-brand {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 1.9rem;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -184,7 +184,7 @@
 .av-turn { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
 
 .av-q .av-qt {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 1.15rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -216,7 +216,7 @@
 .av-answer { font-size: 0.9rem; line-height: 1.62; color: var(--av-ink); min-width: 0; }
 
 .av-answer p { margin: 0 0 0.7em; overflow-wrap: anywhere; }
-.av-answer h2 { font-family: "Fraunces", Georgia, serif; font-size: 1.15rem; margin: 1em 0 0.4em; letter-spacing: -0.01em; }
+.av-answer h2 { font-family: var(--font-ui); font-size: 1.15rem; margin: 1em 0 0.4em; letter-spacing: -0.01em; }
 .av-answer h3 { font-size: 0.98rem; margin: 0.9em 0 0.35em; }
 .av-answer h4 { font-size: 0.9rem; margin: 0.8em 0 0.3em; }
 .av-answer ul, .av-answer ol { margin: 0 0 0.7em; padding-left: 1.3em; }

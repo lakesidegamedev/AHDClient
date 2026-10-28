@@ -48,10 +48,11 @@ describe("iPad enablement", () => {
   it("applies safe-area insets to the launcher above the phone breakpoint", () => {
     const wide = css.slice(css.lastIndexOf("@media (min-width: 701px)"));
     expect(wide).toMatch(
-      /\.launcher-stage\s*\{[^}]*env\(safe-area-inset-top\)[^}]*env\(safe-area-inset-left\)/,
+      /\.launcher-stage\s*\{[^}]*env\(safe-area-inset-right\)[^}]*env\(safe-area-inset-left\)/,
     );
-    expect(wide).toMatch(
-      /\.launcher-settings\s*\{[^}]*env\(safe-area-inset-right\)/,
+    // The top bar carries the top inset for every width, iPad included.
+    expect(css).toMatch(
+      /\.launcher-topbar\s*\{[^}]*env\(safe-area-inset-top\)[^}]*env\(safe-area-inset-right\)/,
     );
     expect(wide).toMatch(
       /\.launcher-footer\s*\{[^}]*env\(safe-area-inset-bottom\)/,
