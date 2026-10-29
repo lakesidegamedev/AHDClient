@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [2.7.0] - 2026-10-29
 
 - iPhone, iPad and Android: a tab bar along the bottom of the screen replaces the round AHD button. Game, Briefing, Inbox, Ask and More are always one tap away, and the page now ends above the bar so the game's bottom status bar is never covered.
 - Tapping Game takes you back to the page you were reading. Tap it again to go to the game's home page.
@@ -9,11 +9,8 @@
 - iPad with a keyboard: Cmd+1 to Cmd+5 switch tabs, Cmd+K opens Ask, Cmd+R reloads the page, and Cmd+[ and Cmd+] go back and forward. Hold Cmd to see the list.
 - Settings has a Send test button under Notifications. On a phone it asks the game to send one alert to that phone; on a computer it shows one straight away. It then says plainly whether it worked and, if not, what to do: sign in, allow notifications, or wait for the phone to connect.
 - Fewer, clearer alerts: phones and computers now only get alerts you need to act on or that are about you, such as votes to cast, offers to answer, races won or lost and attacks on your company. Routine company reports and crises in your home state stay in the inbox. This comes from the game and applies to every version of the app.
-
-## [2.7.0] - 2026-10-29
-
 - Launcher: your account, Briefing, Settings and Ask now sit in their own bar at the top instead of floating over the title. On iPad and in narrow desktop windows they used to cover the game name.
-- iPhone and Android: the top bar holds just your account and Settings. Briefing and Ask moved down next to Enter multiplayer, where your thumb already is.
+- iPhone and Android: the launcher's top bar holds just your account and Settings; Briefing and Ask live in the new tab bar.
 - Settings is easier to read. Each option shows its name and explanation on the left with its switch on the right, instead of a grey title with the switch centred underneath. It opens as a sheet from the bottom on phones.
 - Settings is grouped into General, Notifications, Singleplayer, Updates and Support on every platform, and shows your AHDClient version at the top. Phones now have a Notifications heading like desktop, and the Updates section no longer appears on phones, where updates come from the store.
 - Fixed: the phone Settings header showed German text with English selected. Settings is now fully translated when you choose Deutsch.
