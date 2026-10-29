@@ -16,10 +16,24 @@ interface Props {
   onOpenedPage?: () => void;
 }
 
+/** What each test verdict means for the player. */
+const TEST_RESULT: Record<string, string> = {
+  sent: "Sent. It should appear within a few seconds. If it does not, check that notifications are allowed for the app in your device settings.",
+  not_registered: "This device is not connected for alerts yet. Wait a minute after turning them on, then try again.",
+  signed_out: "Sign in to multiplayer first, then try again.",
+  rate_limited: "Too many tests in a row. Try again in a minute.",
+  permission_denied: "Notifications are blocked for AHDClient in your system settings.",
+  retry: "The alert service did not answer. Try again shortly.",
+  invalid: "This device's alert connection expired. Turn alerts off and on again.",
+  error: "Could not send a test alert. Try again shortly.",
+};
+
 export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element {
   const [status, setStatus] = useState<PushStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState("");
   useEffect(() => {
     let active = true;
     let pending = false;
@@ -43,6 +57,14 @@ export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element
     catch { setError("Could not change notification settings. Please try again."); }
     finally { setBusy(false); }
   }
+  async function sendTest() {
+    setTesting(true); setTestResult("");
+    try {
+      const { result } = await invoke<{ result: string }>("send_test_push");
+      setTestResult(TEST_RESULT[result] ?? TEST_RESULT.error!);
+    } catch { setTestResult(TEST_RESULT.error!); }
+    finally { setTesting(false); }
+  }
   async function chooseTypes() {
     setError("");
     try { await invoke("open_game_page", { path: "/settings" }); onOpenedPage?.(); }
@@ -62,6 +84,12 @@ export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element
         aria-pressed={status?.enabled ?? false}>{busy ? "Updating..." : status?.enabled ? "Turn off" : "Turn on"}</button>
     </div>
     <p role="status" className="client-push-status">{error || status?.message || "Checking notification settings..."}</p>
+    {status?.enabled && (
+      <div className="client-support-control">
+        <div><strong>Test alert</strong><small>{testResult || (mobile ? "Send one alert to this phone to check that alerts arrive." : "Show one alert to check how they look on this computer.")}</small></div>
+        <button type="button" onClick={() => void sendTest()} disabled={testing}>{testing ? "Sending..." : "Send test"}</button>
+      </div>
+    )}
     <p className="client-push-status">{detail}</p>
     <div className="client-support-control">
       <div><strong>Alert types</strong><small>Mute the kinds of alerts you do not want under Game in the site settings. Mutes and snoozes apply to {mobile ? "push" : "desktop"} alerts too.</small></div>

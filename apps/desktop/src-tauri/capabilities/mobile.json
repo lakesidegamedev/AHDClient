@@ -19,7 +19,8 @@
     "allow-link-account",
     "allow-submit-diagnostics",
     "allow-get-push-status",
-    "allow-configure-push"
+    "allow-configure-push",
+    "allow-send-test-push"
   ],
   "webviews": [
     "main"

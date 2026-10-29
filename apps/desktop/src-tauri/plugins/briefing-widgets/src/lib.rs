@@ -32,6 +32,10 @@ impl<R: Runtime> NativeCompanion<R> {
   pub fn status<T: for<'de> Deserialize<'de>>(&self) -> Result<T, String> {
     self.0.run_mobile_plugin("pushStatus", ()).map_err(|_| "Could not read push settings".to_string())
   }
+  /// Ask the game to send this phone one test alert now.
+  pub fn send_test<T: for<'de> Deserialize<'de>>(&self) -> Result<T, String> {
+    self.0.run_mobile_plugin("sendTestPush", ()).map_err(|_| "Could not send a test alert".to_string())
+  }
   pub fn configure<T: for<'de> Deserialize<'de>>(&self, enabled: bool) -> Result<T, String> {
     self.0.run_mobile_plugin("configurePush", serde_json::json!({ "enabled": enabled }))
       .map_err(|_| "Could not update push settings".to_string())

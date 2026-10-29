@@ -912,6 +912,7 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .invoke_handler(tauri::generate_handler![
       crate::desktop_alerts::get_push_status,
       crate::desktop_alerts::configure_push,
+      crate::desktop_alerts::send_test_push,
       crate::briefing::get_briefing,
       crate::briefing::open_briefing_page,
       crate::briefing::open_game_page,

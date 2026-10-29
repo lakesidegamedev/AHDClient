@@ -53,4 +53,18 @@ describe("desktop alert controls", () => {
     await waitFor(() => expect(opened).toHaveBeenCalledOnce());
     expect(invoke).toHaveBeenCalledWith("open_game_page", { path: "/settings" });
   });
+  it("sends a test alert and explains the result", async () => {
+    vi.mocked(invoke).mockImplementation(async (command: string) =>
+      command === "send_test_push" ? { result: "not_registered" } : { ...off, enabled: true, message: "Push alerts are on." },
+    );
+    render(<PushControl />);
+    fireEvent.click(await screen.findByRole("button", { name: "Send test" }));
+    await screen.findByText(/not connected for alerts yet/);
+    expect(invoke).toHaveBeenCalledWith("send_test_push");
+  });
+  it("hides the test while alerts are off", async () => {
+    render(<PushControl />);
+    await screen.findByText("Push alerts are off.");
+    expect(screen.queryByRole("button", { name: "Send test" })).toBeNull();
+  });
 });
