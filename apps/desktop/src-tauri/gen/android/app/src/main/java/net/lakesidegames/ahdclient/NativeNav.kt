@@ -118,7 +118,11 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       // shows both, which still leaves every action reachable.
       val flag = "window.__ahdclientNativeTabs = true;"
       if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-        WebViewCompat.addDocumentStartJavaScript(webView, flag, SITE_HOSTS.split('|').map { "https://$it" }.toSet())
+        // The launcher reads the flag too, to drop its own Briefing and Ask
+        // buttons while the bar shows them.
+        WebViewCompat.addDocumentStartJavaScript(
+          webView, flag, SITE_HOSTS.split('|').map { "https://$it" }.toSet() + "http://tauri.localhost"
+        )
       }
       webView.evaluateJavascript(flag, null)
     }

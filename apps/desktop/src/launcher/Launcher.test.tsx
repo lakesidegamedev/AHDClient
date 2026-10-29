@@ -141,6 +141,23 @@ describe("Launcher", () => {
     expect(document.querySelector(".launcher-quick")).toBeNull();
   });
 
+  it("leaves Briefing and Ask to the native tab bar once it is attached", () => {
+    (window as { __ahdclientNativeTabs?: boolean }).__ahdclientNativeTabs = true;
+    try {
+      renderLauncher({
+        mobile: true,
+        accountControl: <button>Account</button>,
+        briefingControl: <button>Briefing</button>,
+        settingsControl: <button>Settings</button>,
+        askControl: <button>Ask</button>,
+      });
+      expect(document.querySelector(".launcher-quick")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Briefing" })).toBeNull();
+    } finally {
+      delete (window as { __ahdclientNativeTabs?: boolean }).__ahdclientNativeTabs;
+    }
+  });
+
   it("moves Briefing and Ask beside the main action on phones", () => {
     renderLauncher({
       mobile: true,

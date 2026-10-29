@@ -136,12 +136,17 @@ export function Launcher({
   const latestRunning =
     latestWorld !== null && runningSlot === latestWorld.slot;
   const selectedPhoto = selectedEra ? ERA_PHOTOS[selectedEra.id] : undefined;
-  // Phones keep the top bar to identity and Settings; Briefing and Ask are
-  // things to do, so they sit with the main action where a thumb reaches.
+  // Phones keep the top bar to identity and Settings. Briefing and Ask are
+  // tabs in the native tab bar there (2.7), so the launcher does not repeat
+  // them; the quick row only remains for a phone whose tab bar failed to
+  // attach, which marks nothing on the page.
+  const nativeTabs =
+    mobile && typeof window !== "undefined" &&
+    (window as { __ahdclientNativeTabs?: boolean }).__ahdclientNativeTabs === true;
   const topControls = mobile
     ? [accountControl, settingsControl]
     : [accountControl, briefingControl, settingsControl, askControl];
-  const quickControls = mobile ? [briefingControl, askControl].filter(Boolean) : [];
+  const quickControls = mobile && !nativeTabs ? [briefingControl, askControl].filter(Boolean) : [];
 
   return (
     <main
