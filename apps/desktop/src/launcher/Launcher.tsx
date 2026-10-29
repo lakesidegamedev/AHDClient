@@ -252,7 +252,7 @@ export function Launcher({
                   {mode === "sandbox"
                     ? "A separate world for trying things out. Nothing here touches the main game."
                     : mobile
-                      ? "Your session stays in the app. Tap the AHD mark on any page to come back here."
+                      ? "Your session stays in the app. Use the tabs at the bottom to move between the game, your briefing, inbox and Ask."
                       : "Your account and session stay together in the app."}
                 </small>
               </span>
