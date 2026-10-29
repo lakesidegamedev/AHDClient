@@ -148,6 +148,13 @@ object BriefingWidgets {
     }
   }
 
+  /** Unread inbox count and when it was fetched, for the tab bar badge. */
+  fun inbox(context: Context): Pair<Int, Long>? = CompanionSafety.get("inbox count read", null) {
+    val data = read(context) ?: return@get null
+    val unread = data.optJSONObject("inbox")?.optDouble("unread", 0.0) ?: 0.0
+    Pair(unread.coerceIn(0.0, 99_999.0).toInt(), data.optLong("updatedAt", 0L))
+  }
+
   private fun session(): String = (CookieManager.getInstance().getCookie("$ORIGIN/api/client-status") ?: "")
     .split(';').map { it.trim() }.filter {
       val name = it.substringBefore('=')

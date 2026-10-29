@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- iPhone, iPad and Android: a tab bar along the bottom of the screen replaces the round AHD button. Game, Briefing, Inbox, Ask and More are always one tap away, and the page now ends above the bar so the game's bottom status bar is never covered.
+- Tapping Game takes you back to the page you were reading. Tap it again to go to the game's home page.
+- The Inbox tab shows how many unread messages you have.
+- More takes you back to the launcher, where Settings and your account are.
+- iPad with a keyboard: Cmd+1 to Cmd+5 switch tabs, Cmd+K opens Ask, Cmd+R reloads the page, and Cmd+[ and Cmd+] go back and forward. Hold Cmd to see the list.
+
 ## [2.7.0] - 2026-10-29
 
 - Launcher: your account, Briefing, Settings and Ask now sit in their own bar at the top instead of floating over the title. On iPad and in narrow desktop windows they used to cover the game name.
