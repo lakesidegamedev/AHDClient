@@ -20,8 +20,72 @@ describe("mobile native companion safety", () => {
     const activity = read(
       "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/MainActivity.kt",
     );
-    expect(activity).toContain("params.setMargins(bars.left, bars.top, bars.right, bars.bottom)");
+    expect(activity).toContain("params.setMargins(bars.left, bars.top, bars.right, bottom)");
     expect(activity).toContain("ViewCompat.requestApplyInsets(webView)");
+  });
+
+  it("ends the Android WebView above the tab bar, and gives the page the room when the keyboard is up", () => {
+    const activity = read(
+      "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/MainActivity.kt",
+    );
+    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    // One insets listener places both views, so the bar never covers the
+    // game's fixed bottom status bar.
+    expect(activity).toMatch(/keyboard -> ime\.bottom\s+tabs > 0 -> tabs\s+else -> bars\.bottom/);
+    expect(activity).toContain('CompanionSafety.run("tab bar setup")');
+    expect(nav).toContain("val height = (BAR_HEIGHT_DP * activity.resources.displayMetrics.density).toInt() + bottom");
+    expect(nav).toContain("return if (keyboard) 0 else height");
+    // A bar that never attached must not leave a gap under the page.
+    expect(nav).toContain("if (bar.parent == null) return 0");
+    expect(nav).toContain("ViewCompat.setOnApplyWindowInsetsListener(bar) { _, insets -> insets }");
+  });
+
+  it("gives every old in-game menu item a home in the native tab bar on both phones", () => {
+    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
+      expect(nav).toContain(`"${tab}"`);
+      expect(ios).toContain(`return "${tab}"`);
+    }
+    // Game home, Inbox, Briefing, Ask and Launcher were the menu's five items.
+    for (const source of [nav, ios]) {
+      expect(source).toContain("/notifications");
+      expect(source).toContain("?screen=briefing");
+      expect(source).toContain("NativeAskController");
+      expect(source).toMatch(/#briefing/);
+    }
+    // The launcher marks its Briefing screen so the bar can highlight it.
+    expect(read("App.tsx")).toContain('const wanted = screen === "briefing" ? "#briefing" : "";');
+    expect(nav).toContain('private const val LAUNCHER = "http://tauri.localhost/"');
+    expect(ios).toContain('static let launcher = "tauri://localhost/"');
+  });
+
+  it("keeps the floating AHD button only as a fallback for a tab bar that did not attach", () => {
+    const mobile = read("../src-tauri/src/mobile.rs");
+    const mount = mobile.indexOf("function mount()");
+    const guard = mobile.indexOf("if (window.__ahdclientNativeTabs) return;");
+    const button = mobile.indexOf("createElement('button')");
+    expect(mount).toBeGreaterThan(0);
+    expect(guard).toBeGreaterThan(mount);
+    expect(button).toBeGreaterThan(guard);
+    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    expect(nav).toContain('val flag = "window.__ahdclientNativeTabs = true;"');
+    expect(ios).toContain('let flag = "window.__ahdclientNativeTabs = true;"');
+    // Set only after the bar is in the view tree.
+    expect(nav.indexOf("content.addView(bar")).toBeLessThan(nav.indexOf("val flag ="));
+    expect(ios.indexOf("host.addSubview(bar)")).toBeLessThan(ios.indexOf("let flag ="));
+  });
+
+  it("attaches the iOS tab bar from the plugin with iPad keyboard shortcuts", () => {
+    const plugin = read("../src-tauri/plugins/briefing-widgets/ios/Sources/BriefingWidgetsPlugin.swift");
+    const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    expect(plugin).toContain("NativeNavController.shared.attach(webview)");
+    expect(ios).toContain("webView.bottomAnchor.constraint(equalTo: bar.topAnchor)");
+    expect(ios).toContain("bar.bottomAnchor.constraint(equalTo: host.bottomAnchor)");
+    expect(ios).toContain("UISelectionFeedbackGenerator");
+    for (const input of ['"k"', '"r"', '"["', '"]"']) expect(ios).toContain(`input: ${input}`);
+    expect(ios).toContain("input: String(index + 1)");
   });
 
   it("files each Android alert under its inbox category channel", () => {

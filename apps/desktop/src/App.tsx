@@ -77,6 +77,14 @@ export function App(): JSX.Element {
     history.replaceState(null, "", location.pathname);
     return "briefing";
   });
+  // The phone tab bar reads the page address to highlight Briefing or More,
+  // so the Briefing screen marks itself with #briefing. A reload still lands
+  // on the launcher: only ?screen=briefing opens the briefing.
+  useEffect(() => {
+    if (!mobile) return;
+    const wanted = screen === "briefing" ? "#briefing" : "";
+    if (location.hash !== wanted) history.replaceState(null, "", location.pathname + location.search + wanted);
+  }, [screen]);
   const [allWorlds, setAllWorlds] = useState<WorldMeta[]>([]);
   const [info, setInfo] = useState<GameInfo>(IDLE);
   const [pendingWorldsim, setPendingWorldsim] = useState(false);

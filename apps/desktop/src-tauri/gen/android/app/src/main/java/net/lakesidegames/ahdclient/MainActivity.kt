@@ -16,6 +16,7 @@ class MainActivity : TauriActivity() {
   private var gameView: WebView? = null
   private val widgetHandler = Handler(Looper.getMainLooper())
   private var widgetNavigation: Runnable? = null
+  private var nav: NativeNav? = null
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
@@ -26,10 +27,12 @@ class MainActivity : TauriActivity() {
   override fun onResume() {
     super.onResume()
     CompanionSafety.run("widget deep link") { openWidgetPage() }
+    CompanionSafety.run("tab bar resume") { nav?.resume() }
     refreshWidgetsSafely()
   }
 
   override fun onPause() {
+    CompanionSafety.run("tab bar pause") { nav?.pause() }
     refreshWidgetsSafely()
     super.onPause()
   }
@@ -173,26 +176,46 @@ class MainActivity : TauriActivity() {
       // normal Android WebView.
       webView.settings.userAgentString =
         webView.settings.userAgentString + " AHDClient-Mobile/" + BuildConfig.VERSION_NAME
-      // Keep the page out from under the system bars and the keyboard. Both the
-      // launcher and the site draw their own headers and the site pins its
-      // character bar to the bottom, so nothing may sit behind either bar.
-      // Margins, not padding: a WebView keeps drawing its content under its
-      // own padding, which put the bottom bar under the three-button
-      // navigation (ticket 1462).
+    }
+    // The tab bar is optional chrome: if it cannot attach, the WebView still
+    // fills the window above the system bars as before.
+    CompanionSafety.run("tab bar setup") {
+      nav = NativeNav(this, webView).also { bar ->
+        webView.post { CompanionSafety.run("tab bar attach") { bar.attach(); bar.resume() } }
+      }
+    }
+    CompanionSafety.run("mobile WebView insets") {
+      // Keep the page out from under the system bars, the tab bar and the
+      // keyboard. Both the launcher and the site draw their own headers and
+      // the site pins its character bar to the bottom, so nothing may sit
+      // behind any of them. Margins, not padding: a WebView keeps drawing its
+      // content under its own padding, which put the bottom bar under the
+      // three-button navigation (ticket 1462). One listener lays out both the
+      // WebView and the tab bar, so older Androids, which stop handing insets
+      // to siblings once one view consumes them, still place the bar.
       ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
         val bars = insets.getInsets(
           WindowInsetsCompat.Type.systemBars() or
-            WindowInsetsCompat.Type.displayCutout() or
-            WindowInsetsCompat.Type.ime()
+            WindowInsetsCompat.Type.displayCutout()
         )
+        val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+        val keyboard = ime.bottom > bars.bottom
+        val tabs = nav?.let { bar ->
+          CompanionSafety.get("tab bar layout", 0) { bar.layout(bars.left, bars.right, bars.bottom, keyboard) }
+        } ?: 0
+        val bottom = when {
+          keyboard -> ime.bottom
+          tabs > 0 -> tabs
+          else -> bars.bottom
+        }
         (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
           if (params.leftMargin != bars.left || params.topMargin != bars.top ||
-            params.rightMargin != bars.right || params.bottomMargin != bars.bottom) {
-            params.setMargins(bars.left, bars.top, bars.right, bars.bottom)
+            params.rightMargin != bars.right || params.bottomMargin != bottom) {
+            params.setMargins(bars.left, bars.top, bars.right, bottom)
             view.layoutParams = params
           }
           view.setPadding(0, 0, 0, 0)
-        } ?: view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+        } ?: view.setPadding(bars.left, bars.top, bars.right, bottom)
         WindowInsetsCompat.CONSUMED
       }
       // The WebView can attach after the window dispatched its first insets.

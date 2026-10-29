@@ -15,6 +15,7 @@ final class BriefingWidgetsPlugin: Plugin, WKHTTPCookieStoreObserver {
     JSDialogDelegate.install(on: webview)
     NativePush.shared.attach(webview)
     NativeAskController.shared.attach(webview)
+    NativeNavController.shared.attach(webview)
     webview.configuration.websiteDataStore.httpCookieStore.add(self)
     for name in [UIApplication.didBecomeActiveNotification, UIApplication.willResignActiveNotification] {
       observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.sync(); NativePush.shared.refreshPermission() })

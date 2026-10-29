@@ -5,9 +5,9 @@
 //! live site, which is how the site's cookie-backed session (and its OAuth
 //! callbacks) stay inside the app. Remote pages never receive Tauri IPC: the
 //! mobile capability is scoped to the app origin and Tauri exposes nothing to
-//! other origins. The only way back is the `ahdclient://launcher` navigation
-//! that the injected control below triggers and `on_navigation` intercepts;
-//! Android's system back button walks the same history.
+//! other origins. The way back is the native tab bar (NativeNav.kt and
+//! NativeNav.swift), which loads the launcher page directly; Android's system
+//! back button walks the same history.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -34,13 +34,17 @@ struct LinkWatch(AtomicU64);
 const LINK_POLL: Duration = Duration::from_millis(2500);
 const LINK_DEADLINE: Duration = Duration::from_secs(10 * 60);
 
-/// A small fixed control on remote pages that returns to the launcher. It is
-/// mounted after `load` (so hydration has finished) and re-mounted if the
+/// Fallback only. The native tab bar replaced this floating AHD button and its
+/// menu in 2.7; once the bar attaches it marks every page with
+/// `window.__ahdclientNativeTabs` and this script stays silent. It is kept so
+/// a phone whose bar failed to attach still has a way back to the launcher.
+/// Mounted after `load` (so hydration has finished) and re-mounted if the
 /// site's router ever drops it. Nothing on the app's own pages.
 const LAUNCHER_CONTROL_SCRIPT: &str = r#"
 (function () {
   if (location.protocol === 'tauri:' || location.hostname === 'tauri.localhost') return;
   function mount() {
+    if (window.__ahdclientNativeTabs) return;
     if (!document.body || document.getElementById('ahdclient-launcher')) return;
     var bottom = 'max(14px,env(safe-area-inset-bottom))';
     var menu = document.createElement('div');
