@@ -68,6 +68,18 @@ class BriefingPlugin(private val activity: Activity) : Plugin(activity), Applica
     invoke.resolve(JSObject(statusSafely().toString()))
   }
   @Command
+  fun sendTestPush(invoke: Invoke) {
+    val app = activity.applicationContext
+    // Network I/O: never on the main thread.
+    val started = NativeSafety.run("push test scheduling") {
+      Thread {
+        val result = NativePush.sendTest(app)
+        invoke.resolve(JSObject().apply { put("result", result) })
+      }.start()
+    }
+    if (!started) invoke.resolve(JSObject().apply { put("result", "error") })
+  }
+  @Command
   fun configurePush(invoke: Invoke) {
     val enabled = NativeSafety.get("push argument parsing", false) {
       invoke.parseArgs(PushOptions::class.java).enabled

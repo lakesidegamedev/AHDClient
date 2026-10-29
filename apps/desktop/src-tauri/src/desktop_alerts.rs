@@ -230,6 +230,22 @@ pub(crate) async fn configure_push(app: AppHandle, enabled: bool) -> Result<serd
   Ok(status(&app))
 }
 
+/// Desktop alerts are local system notifications, so the test is too: it
+/// shows one straight away and says whether the system allowed it.
+#[tauri::command]
+pub(crate) fn send_test_push(app: AppHandle) -> serde_json::Value {
+  if matches!(app.notification().permission_state(), Ok(tauri::plugin::PermissionState::Denied)) {
+    return serde_json::json!({ "result": "permission_denied" });
+  }
+  let shown = app
+    .notification()
+    .builder()
+    .title("Test alert")
+    .body("Alerts from your inbox will appear like this while AHDClient is open.")
+    .show();
+  serde_json::json!({ "result": if shown.is_ok() { "sent" } else { "error" } })
+}
+
 #[cfg(test)]
 mod tests {
   use super::{clean, notifications_for, Feed, FeedItem};

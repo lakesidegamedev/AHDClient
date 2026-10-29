@@ -54,6 +54,12 @@ final class BriefingWidgetsPlugin: Plugin, WKHTTPCookieStoreObserver {
     invoke.resolve(NativePush.shared.status())
   }
 
+  @objc public func sendTestPush(_ invoke: Invoke) {
+    DispatchQueue.main.async {
+      NativePush.shared.sendTest { invoke.resolve(["result": $0]) }
+    }
+  }
+
   @objc public func configurePush(_ invoke: Invoke) throws {
     struct Options: Decodable { let enabled: Bool }
     let options = try invoke.parseArgs(Options.self)

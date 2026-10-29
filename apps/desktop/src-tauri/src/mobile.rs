@@ -462,6 +462,13 @@ pub(crate) async fn get_push_status(app: AppHandle) -> Result<serde_json::Value,
 }
 
 #[tauri::command]
+pub(crate) async fn send_test_push(app: AppHandle) -> Result<serde_json::Value, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    app.state::<tauri_plugin_briefing_widgets::NativeCompanion<tauri::Wry>>().send_test()
+  }).await.map_err(|_| "Could not send a test alert".to_string())?
+}
+
+#[tauri::command]
 pub(crate) async fn configure_push(app: AppHandle, enabled: bool) -> Result<serde_json::Value, String> {
   tauri::async_runtime::spawn_blocking(move || {
     app.state::<tauri_plugin_briefing_widgets::NativeCompanion<tauri::Wry>>().configure(enabled)
@@ -475,6 +482,7 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .invoke_handler(tauri::generate_handler![
       get_push_status,
       configure_push,
+      send_test_push,
       crate::briefing::get_briefing,
       crate::briefing::open_briefing_page,
       crate::briefing::open_game_page,

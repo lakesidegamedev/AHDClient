@@ -7,6 +7,8 @@
 - The Inbox tab shows how many unread messages you have.
 - More takes you back to the launcher, where Settings and your account are.
 - iPad with a keyboard: Cmd+1 to Cmd+5 switch tabs, Cmd+K opens Ask, Cmd+R reloads the page, and Cmd+[ and Cmd+] go back and forward. Hold Cmd to see the list.
+- Settings has a Send test button under Notifications. On a phone it asks the game to send one alert to that phone; on a computer it shows one straight away. It then says plainly whether it worked and, if not, what to do: sign in, allow notifications, or wait for the phone to connect.
+- Fewer, clearer alerts: phones and computers now only get alerts you need to act on or that are about you, such as votes to cast, offers to answer, races won or lost and attacks on your company. Routine company reports and crises in your home state stay in the inbox. This comes from the game and applies to every version of the app.
 
 ## [2.7.0] - 2026-10-29
 

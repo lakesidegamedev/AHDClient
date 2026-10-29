@@ -359,6 +359,7 @@ describe("desktop security configuration", () => {
         "allow-submit-diagnostics",
         "allow-get-push-status",
         "allow-configure-push",
+        "allow-send-test-push",
         "allow-get-briefing",
         "allow-open-briefing-page",
         "allow-open-game-page",

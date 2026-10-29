@@ -182,6 +182,34 @@ object NativePush {
       }
     }
   }
+  /**
+   * Ask the game to send this phone one test alert now. Blocking: call it off
+   * the main thread. Returns the server's verdict ("sent", "not_registered",
+   * "retry", "invalid") or a local one ("signed_out", "rate_limited", "error").
+   */
+  fun sendTest(context: Context): String = NativeSafety.get("push test", "error") {
+    val state = synchronized(lock) { read(context.applicationContext) }
+    val header = session()
+    if (header.isEmpty()) return@get "signed_out"
+    if (!state.has("installation")) return@get "not_registered"
+    val connection = URL("$ORIGIN/api/push/test").openConnection() as HttpURLConnection
+    try {
+      connection.requestMethod = "POST"; connection.instanceFollowRedirects = false
+      connection.connectTimeout = 8000; connection.readTimeout = 12000; connection.doOutput = true
+      connection.setRequestProperty("Content-Type", "application/json")
+      connection.setRequestProperty("Cookie", header)
+      connection.outputStream.use {
+        it.write(JSONObject().put("installation", state.getString("installation")).toString().toByteArray())
+      }
+      when (val code = connection.responseCode) {
+        200 -> JSONObject(connection.inputStream.bufferedReader().use { it.readText() }).optString("result", "error")
+        401, 403 -> "signed_out"
+        429 -> "rate_limited"
+        else -> if (code >= 500) "retry" else "error"
+      }
+    } finally { connection.disconnect() }
+  }
+
   private fun send(method: String, body: JSONObject, header: String): Int = NativeSafety.get("push request", 0) {
     val connection = URL("$ORIGIN/api/push/device").openConnection() as HttpURLConnection
     try {

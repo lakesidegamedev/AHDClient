@@ -222,6 +222,28 @@ final class NativePush: NSObject, UNUserNotificationCenterDelegate, URLSessionTa
       }
     }.resume()
   }
+  /// Ask the game to send this phone one test alert now. Completes on main.
+  func sendTest(_ completion: @escaping (String) -> Void) {
+    let session = BriefingStore.session() ?? ""
+    guard !session.isEmpty else { completion("signed_out"); return }
+    guard let secret = installation() else { completion("not_registered"); return }
+    var request = URLRequest(url: URL(string: origin + "/api/push/test")!)
+    request.httpMethod = "POST"
+    request.timeoutInterval = 15
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(session, forHTTPHeaderField: "Cookie")
+    request.httpBody = try? JSONSerialization.data(withJSONObject: ["installation": secret])
+    client.dataTask(with: request) { data, response, _ in
+      let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+      var result = code == 401 || code == 403 ? "signed_out" : code == 429 ? "rate_limited" : code >= 500 ? "retry" : "error"
+      if code == 200, let data,
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let verdict = json["result"] as? String {
+        result = verdict
+      }
+      DispatchQueue.main.async { completion(result) }
+    }.resume()
+  }
   func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
