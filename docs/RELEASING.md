@@ -119,8 +119,14 @@ cp -r apps/desktop/dist/. <publish dir>/
 Every native bundle needs two things that are not in this repository: a Node
 runtime as a Tauri sidecar and the AHDGame singleplayer build as a resource.
 `scripts/prepare-game.mjs` stages both. The release workflow checks out
-`Egg3901/AHDGame` at `main` (override with the `AHDGAME_REF` repository
-variable) and runs it before `tauri build`. Locally:
+`lakesidegamedev/AHDGame` at the commit in `game-ref.json` and runs it before
+`tauri build`. A tagged release fails unless that commit is on the game's
+`main` and no more than `maxAgeDays` older than its tip, so singleplayer cannot
+silently fall behind multiplayer. Bump the pin in its own PR, after running the
+game's singleplayer smoke (`npm run singleplayer:package && npm run
+singleplayer:smoke` in AHDGame) at that commit, and say what changed for
+singleplayer players in the changelog. A manual run can pass `game_ref` for a
+test build. Locally:
 
 ```
 node scripts/prepare-game.mjs --game-dir ../AHDGame
