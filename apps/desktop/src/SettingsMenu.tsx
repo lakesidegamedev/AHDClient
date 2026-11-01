@@ -1,5 +1,6 @@
 import desktopPackage from "../package.json";
 import { PushControl } from "./PushControl.js";
+import { AUTOSAVE_CHOICES } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
 import { UpdateControl } from "./UpdateControl.js";
 import "./settings.css";
@@ -78,6 +79,27 @@ export function SettingsMenu({ mobile = false, open, settings, onChange, onClose
           </Section>
           {!mobile && (
             <Section id="client-settings-game" title={de ? "Einzelspieler" : "Singleplayer"}>
+              <label className="client-settings-row">
+                <span>
+                  <strong>{de ? "Automatisch speichern" : "Autosave"}</strong>
+                  <small>{de ? "Behält die letzten 3 Autospeicherstände. Damit lässt sich eine schlechte Runde zurücknehmen." : "Keeps the last 3 autosaves, so a bad turn can be rolled back."}</small>
+                </span>
+                <select
+                  aria-label={de ? "Automatisch speichern" : "Autosave"}
+                  value={AUTOSAVE_CHOICES.some((n) => n === settings.autosaveEvery) ? settings.autosaveEvery : 1}
+                  onChange={(event) => set({ autosaveEvery: Number(event.target.value) })}
+                >
+                  {AUTOSAVE_CHOICES.map((n) => (
+                    <option key={n} value={n}>
+                      {n === 0
+                        ? (de ? "Aus" : "Off")
+                        : n === 1
+                          ? (de ? "Jede Runde" : "Every turn")
+                          : (de ? `Alle ${n} Runden` : `Every ${n} turns`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Toggle
                 title={de ? "Anonyme Simulationsstatistik" : "Anonymous simulation statistics"}
                 detail={de ? "Teilt Welteinstellungen und Gesamtergebnisse. Nie Kontodaten, Charakternamen oder Spielstände." : "Share world settings and overall outcomes. Never account details, character names or saves."}

@@ -8,6 +8,8 @@ interface Props {
   worldsim: boolean;
   onLauncher: () => void;
   onSaveAndStop: () => void;
+  /** Open the saves dialog for this world. */
+  onOpenSaves: () => void;
   /** Open the player Q&A panel beside the game. */
   onOpenAsk: () => void;
   /** Worldsim only: return to the world statistics screen. */
@@ -53,6 +55,7 @@ export function GameToolbar({
   worldsim,
   onLauncher,
   onSaveAndStop,
+  onOpenSaves,
   onOpenAsk,
   onViewStats,
   onTurnAdvanced,
@@ -234,6 +237,15 @@ export function GameToolbar({
             onClick={() => void togglePause()}
           >
             {pauseBusy ? "Working" : paused ? "Resume world" : "Pause world"}
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            disabled={endingTurn}
+            title={endingTurn ? "Saves are available when the turn finishes." : "Save the world, or go back to an earlier save."}
+            onClick={onOpenSaves}
+          >
+            Saves
           </button>
           <button role="menuitem" type="button" onClick={onSaveAndStop}>
             Save and stop

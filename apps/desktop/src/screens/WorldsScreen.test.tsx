@@ -30,11 +30,40 @@ describe("WorldsScreen private hosting", () => {
         onPlay={vi.fn()}
         onHost={onHost}
         onDelete={vi.fn()}
+        onSaves={vi.fn()}
         onBack={vi.fn()}
       />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Host" }));
     expect(onHost).toHaveBeenCalledWith("private-1953");
+  });
+
+  it("opens the saves for a world", async () => {
+    const onSaves = vi.fn();
+    render(
+      <WorldsScreen
+        worlds={[{
+          slot: "private-1953",
+          name: "Private 1953",
+          preset: "1953-default",
+          createdAt: "2026-09-14T00:00:00Z",
+          lastPlayedAt: "2026-09-14T00:00:00Z",
+          turn: 1,
+          character: null,
+        }]}
+        runningSlot={null}
+        busy={false}
+        error={null}
+        onPlay={vi.fn()}
+        onHost={vi.fn()}
+        onDelete={vi.fn()}
+        onSaves={onSaves}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Saves" }));
+    expect(onSaves).toHaveBeenCalledWith("private-1953");
   });
 });

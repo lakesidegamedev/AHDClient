@@ -17,6 +17,30 @@ export interface WorldMeta {
   setup?: SetupOptions | null;
 }
 
+export type SaveKind = "manual" | "auto" | "safety";
+
+/** One entry of a world's save list, as the game wrote it. */
+export interface SaveMeta {
+  id: string;
+  kind: SaveKind;
+  name: string;
+  turn: number | null;
+  preset: string | null;
+  mode: string | null;
+  characterName: string | null;
+  createdAt: string;
+  sizeBytes: number;
+}
+
+export interface SavesOverview {
+  saves: SaveMeta[];
+  settings: { autosaveEvery: number };
+  /** Plain-words reason the last autosave failed, or null. */
+  autosaveError: string | null;
+  /** What happened the last time a save was loaded into this world. */
+  lastLoad: { at: string; ok: boolean; message: string; saveName?: string } | null;
+}
+
 export interface GameInfo {
   running: boolean;
   hosted: boolean;
@@ -241,6 +265,19 @@ export const worlds = {
   remove: (slot: string) => invoke<void>("delete_world", { slot }),
 };
 
+/**
+ * Saves read from disk, so they work with the world stopped. Creating a save
+ * needs the running game (`game.saveNow`); loading one stops the world,
+ * queues the load here and starts the world again.
+ */
+export const worldSaves = {
+  list: (slot: string) => invoke<SaveMeta[]>("list_world_saves", { slot }),
+  remove: (slot: string, id: string) =>
+    invoke<void>("delete_world_save", { slot, id }),
+  requestLoad: (slot: string, id: string) =>
+    invoke<SaveMeta>("request_world_save_load", { slot, id }),
+};
+
 export const game = {
   start: (slot: string, hosted = false) =>
     invoke<GameInfo>("game_start", { slot, hosted }),
@@ -307,6 +344,19 @@ export const game = {
       "POST",
       "/api/singleplayer/operator/availability",
       { availability },
+    ),
+  /** Save the running world now. Takes a few seconds on a big world. */
+  saveNow: (name: string) =>
+    game.request<{ save: SaveMeta }>("POST", "/api/singleplayer/saves", {
+      name,
+    }),
+  saves: () => game.request<SavesOverview>("GET", "/api/singleplayer/saves"),
+  /** 0 turns autosave off. Kept with the world, so it also applies after a load. */
+  setAutosaveEvery: (autosaveEvery: number) =>
+    game.request<{ autosaveEvery: number }>(
+      "PUT",
+      "/api/singleplayer/saves/settings",
+      { autosaveEvery },
     ),
   newGame: (preset: string, displayName?: string) =>
     game.request<{ ok: boolean }>("POST", "/api/singleplayer/new-game", {

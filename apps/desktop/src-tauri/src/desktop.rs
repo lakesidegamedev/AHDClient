@@ -195,6 +195,125 @@ pub(crate) fn delete_world(app: AppHandle, game: State<'_, Game>, slot: String) 
 }
 
 // ---------------------------------------------------------------------------
+// Save slots
+//
+// The game writes saves into `<world>/saves/<id>/` (a `save.json` the list
+// reads and the database dump it describes). Listing, deleting and queueing a
+// load work straight from disk so they also work while the world is stopped,
+// which is when the worlds screen offers them. Loading never touches the
+// database from here: it leaves a marker, and the next start of the world
+// applies it before the game opens.
+// ---------------------------------------------------------------------------
+
+const RESTORE_MARKER: &str = "restore-pending.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveMeta {
+  id: String,
+  kind: String,
+  name: String,
+  #[serde(default)]
+  turn: Option<i64>,
+  #[serde(default)]
+  preset: Option<String>,
+  #[serde(default)]
+  mode: Option<String>,
+  #[serde(default)]
+  character_name: Option<String>,
+  created_at: String,
+  #[serde(default)]
+  size_bytes: u64,
+}
+
+/// `YYYYMMDDTHHMMSSZ-xxxxxx`, the id shape the game mints. Anything else is
+/// never joined onto a path.
+fn valid_save_id(id: &str) -> bool {
+  let bytes = id.as_bytes();
+  bytes.len() == 23
+    && bytes[..8].iter().all(u8::is_ascii_digit)
+    && bytes[8] == b'T'
+    && bytes[9..15].iter().all(u8::is_ascii_digit)
+    && bytes[15] == b'Z'
+    && bytes[16] == b'-'
+    && bytes[17..].iter().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b))
+}
+
+fn read_save_meta(saves: &std::path::Path, id: &str) -> Option<SaveMeta> {
+  let dir = saves.join(id);
+  if !dir.join("world.ahdsave").is_file() {
+    return None;
+  }
+  let meta: SaveMeta = serde_json::from_str(&fs::read_to_string(dir.join("save.json")).ok()?).ok()?;
+  (meta.id == id).then_some(meta)
+}
+
+fn list_saves_in(world: &std::path::Path) -> Vec<SaveMeta> {
+  let saves = world.join("saves");
+  let mut out: Vec<SaveMeta> = fs::read_dir(&saves)
+    .into_iter()
+    .flatten()
+    .flatten()
+    .filter_map(|entry| entry.file_name().into_string().ok())
+    .filter(|id| valid_save_id(id))
+    .filter_map(|id| read_save_meta(&saves, &id))
+    .collect();
+  out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+  out
+}
+
+fn pending_load(world: &std::path::Path) -> Option<String> {
+  let raw = fs::read_to_string(world.join(RESTORE_MARKER)).ok()?;
+  serde_json::from_str::<serde_json::Value>(&raw).ok()?.get("saveId")?.as_str().map(str::to_string)
+}
+
+fn delete_save_in(world: &std::path::Path, id: &str) -> Result<(), String> {
+  if !valid_save_id(id) {
+    return Err(format!("invalid save id {id:?}"));
+  }
+  if pending_load(world).as_deref() == Some(id) {
+    return Err("That save is about to be loaded.".into());
+  }
+  let dir = world.join("saves").join(id);
+  if !dir.is_dir() {
+    return Err("That save no longer exists.".into());
+  }
+  fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+}
+
+fn queue_load_in(world: &std::path::Path, id: &str) -> Result<SaveMeta, String> {
+  if !valid_save_id(id) {
+    return Err(format!("invalid save id {id:?}"));
+  }
+  let meta = read_save_meta(&world.join("saves"), id).ok_or("That save no longer exists.")?;
+  let marker = serde_json::json!({ "saveId": id, "requestedAt": now_iso() });
+  let tmp = world.join(format!("{RESTORE_MARKER}.tmp"));
+  fs::write(&tmp, serde_json::to_vec_pretty(&marker).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+  fs::rename(&tmp, world.join(RESTORE_MARKER)).map_err(|e| e.to_string())?;
+  Ok(meta)
+}
+
+#[tauri::command]
+pub(crate) fn list_world_saves(app: AppHandle, slot: String) -> Result<Vec<SaveMeta>, String> {
+  Ok(list_saves_in(&world_dir(&app, &slot)?))
+}
+
+#[tauri::command]
+pub(crate) fn delete_world_save(app: AppHandle, slot: String, id: String) -> Result<(), String> {
+  delete_save_in(&world_dir(&app, &slot)?, &id)
+}
+
+/// Queue a save to be loaded on the next start of this world. The caller stops
+/// the world first (if it is running) and starts it again afterwards.
+#[tauri::command]
+pub(crate) fn request_world_save_load(app: AppHandle, game: State<'_, Game>, slot: String, id: String) -> Result<SaveMeta, String> {
+  if game.0.lock().map_err(|_| "game state poisoned")?.slot.as_deref() == Some(slot.as_str()) {
+    return Err("stop the world before loading a save into it".into());
+  }
+  queue_load_in(&world_dir(&app, &slot)?, &id)
+}
+
+// ---------------------------------------------------------------------------
 // The game process
 // ---------------------------------------------------------------------------
 
@@ -942,6 +1061,9 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       create_world,
       touch_world,
       delete_world,
+      list_world_saves,
+      delete_world_save,
+      request_world_save_load,
       list_game_versions,
       install_game_version,
       select_game_version,
@@ -972,7 +1094,7 @@ pub(crate) fn on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-  use super::{acquire_world_lease, is_local_game_url, refresh_target, valid_slot, EMBEDDED_LABELS};
+  use super::{acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
 
   #[test]
@@ -1040,5 +1162,68 @@ mod tests {
     drop(first);
     assert!(acquire_world_lease(&dir).is_ok());
     let _ = std::fs::remove_dir_all(dir);
+  }
+
+  fn scratch_world(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("ahd-saves-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  fn write_save(world: &std::path::Path, id: &str, created_at: &str, turn: i64) {
+    let dir = world.join("saves").join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("world.ahdsave"), b"x").unwrap();
+    let meta = format!(
+      r#"{{"id":"{id}","kind":"manual","name":"Turn {turn}","turn":{turn},"preset":"1991-default","mode":null,"characterName":null,"createdAt":"{created_at}","sizeBytes":1}}"#
+    );
+    std::fs::write(dir.join("save.json"), meta).unwrap();
+  }
+
+  #[test]
+  fn save_ids_are_the_shape_the_game_mints() {
+    assert!(valid_save_id("20261101T120000Z-abc123"));
+    assert!(!valid_save_id(""));
+    assert!(!valid_save_id("../../20261101T120000Z-abc123"));
+    assert!(!valid_save_id("20261101T120000Z-ABC123"));
+    assert!(!valid_save_id("20261101T120000Z-abc12"));
+  }
+
+  #[test]
+  fn saves_list_newest_first_and_skip_unfinished_ones() {
+    let world = scratch_world("list");
+    write_save(&world, "20261101T120000Z-aaaaaa", "2026-11-01T12:00:00.000Z", 1);
+    write_save(&world, "20261101T130000Z-bbbbbb", "2026-11-01T13:00:00.000Z", 2);
+    std::fs::create_dir_all(world.join("saves").join(".tmp-20261101T140000Z-cccccc")).unwrap();
+    std::fs::create_dir_all(world.join("saves").join("20261101T150000Z-dddddd")).unwrap();
+    let turns: Vec<_> = list_saves_in(&world).iter().map(|s| s.turn).collect();
+    assert_eq!(turns, vec![Some(2), Some(1)]);
+    let _ = std::fs::remove_dir_all(world);
+  }
+
+  #[test]
+  fn a_load_leaves_a_marker_and_protects_its_save_from_deletion() {
+    let world = scratch_world("load");
+    let id = "20261101T120000Z-aaaaaa";
+    write_save(&world, id, "2026-11-01T12:00:00.000Z", 1);
+    assert!(queue_load_in(&world, "20261101T120000Z-ffffff").is_err());
+    queue_load_in(&world, id).unwrap();
+    let marker = std::fs::read_to_string(world.join("restore-pending.json")).unwrap();
+    assert!(marker.contains(id));
+    assert!(delete_save_in(&world, id).unwrap_err().contains("about to be loaded"));
+    assert!(delete_save_in(&world, "../x").is_err());
+    let _ = std::fs::remove_dir_all(world);
+  }
+
+  #[test]
+  fn deleting_a_save_removes_only_that_save() {
+    let world = scratch_world("delete");
+    write_save(&world, "20261101T120000Z-aaaaaa", "2026-11-01T12:00:00.000Z", 1);
+    write_save(&world, "20261101T130000Z-bbbbbb", "2026-11-01T13:00:00.000Z", 2);
+    delete_save_in(&world, "20261101T120000Z-aaaaaa").unwrap();
+    assert_eq!(list_saves_in(&world).len(), 1);
+    assert!(delete_save_in(&world, "20261101T120000Z-aaaaaa").is_err());
+    let _ = std::fs::remove_dir_all(world);
   }
 }
