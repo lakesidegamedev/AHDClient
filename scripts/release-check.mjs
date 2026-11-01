@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readGameRef } from "./game-ref.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 // Git for Windows can check text files out with CRLF. Normalize once so every
@@ -57,6 +58,8 @@ for (const workspacePackage of workspacePackages) {
 if (!/^publish\s*=\s*false$/m.test(cargoManifest) || !/^license-file\s*=\s*"\.\.\/\.\.\/\.\.\/LICENSE\.md"$/m.test(cargoManifest)) {
   errors.push("Rust crate must be unpublished and use the repository proprietary license");
 }
+
+errors.push(...readGameRef(resolve(root, "game-ref.json")).errors);
 
 if (errors.length > 0) {
   console.error("Release check failed:");
