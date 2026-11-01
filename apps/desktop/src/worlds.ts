@@ -241,6 +241,47 @@ export const worlds = {
   remove: (slot: string) => invoke<void>("delete_world", { slot }),
 };
 
+/** Why a multi-turn advance ended early. Absent when every requested turn ran. */
+export interface BatchStop {
+  kind: "character" | "office" | "election" | "vote" | "crisis" | "offer" | "error" | "requested";
+  message: string;
+  turn: number | null;
+  details: string[];
+}
+
+export interface BatchDigest {
+  startTurn: number | null;
+  endTurn: number | null;
+  turnsPlayed: number;
+  funds: { before: number; after: number; delta: number };
+  actions: { before: number; after: number; delta: number };
+  office: { before: string | null; after: string | null };
+  officesWon: string[];
+  officesLost: string[];
+  inbox: {
+    total: number;
+    actionRequired: number;
+    groups: Array<{ category: string; count: number; actionRequired: number; titles: string[] }>;
+  };
+  worldEvents: Array<{ turn: number; title: string }>;
+  warnings: string[];
+}
+
+/** Progress and result of a multi-turn advance, as the game reports it. */
+export interface TurnBatch {
+  id: string;
+  status: "running" | "finished";
+  requested: number;
+  completed: number;
+  runningTurn: number | null;
+  startTurn: number | null;
+  stopRequested: boolean;
+  /** One entry per turn the batch has committed so far. */
+  turns: Array<{ turn: number; fundsDelta: number; actionsDelta: number; durationSeconds: number }>;
+  stop: BatchStop | null;
+  digest: BatchDigest | null;
+}
+
 export const game = {
   start: (slot: string, hosted = false) =>
     invoke<GameInfo>("game_start", { slot, hosted }),
@@ -280,6 +321,14 @@ export const game = {
       "POST",
       "/api/singleplayer/turn/advance",
     ),
+  /** Start playing several turns in the background; poll `batchStatus` for progress. */
+  startBatch: (turns: number) =>
+    game.request<{ success: boolean; batch: TurnBatch }>("POST", "/api/singleplayer/turn/batch", { turns }),
+  batchStatus: () =>
+    game.request<{ batch: TurnBatch | null }>("GET", "/api/singleplayer/turn/batch"),
+  /** Stop after the turn that is running now. */
+  stopBatch: () =>
+    game.request<{ success: boolean; batch: TurnBatch }>("DELETE", "/api/singleplayer/turn/batch"),
   /**
    * Worldsim runs playerless, so it is exempt from the character gate on the
    * player turn endpoint and advances one turn at a time here instead. The
