@@ -20,7 +20,11 @@ const mocks = vi.hoisted(() => ({
     advanceWorldsim: vi.fn(),
     worldAvailability: vi.fn(),
     setWorldAvailability: vi.fn(),
+    setAutosaveEvery: vi.fn(),
+    saves: vi.fn(),
+    saveNow: vi.fn(),
   },
+  worldSaves: { list: vi.fn(), remove: vi.fn(), requestLoad: vi.fn() },
   worlds: { list: vi.fn(), create: vi.fn(), touch: vi.fn(), remove: vi.fn() },
   online: { account: vi.fn(), open: vi.fn(), link: vi.fn() },
   ask: { open: vi.fn() },
@@ -38,6 +42,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("./worlds.js", () => ({
   game: mocks.game,
   worlds: mocks.worlds,
+  worldSaves: mocks.worldSaves,
   online: mocks.online,
   ask: mocks.ask,
   eraById: (id: string) =>
@@ -187,6 +192,22 @@ function prepare(status = normalStatus) {
   mocks.game.setWorldAvailability.mockImplementation(async (next: "open" | "sealed") =>
     ({ availability: next, mode: "off" }),
   );
+  mocks.game.setAutosaveEvery.mockResolvedValue({ autosaveEvery: 1 });
+  mocks.game.saves.mockResolvedValue({ saves: [], settings: { autosaveEvery: 1 }, autosaveError: null, lastLoad: null });
+  mocks.worldSaves.list.mockResolvedValue([
+    {
+      id: "20261101T120000Z-aaaaaa",
+      kind: "manual",
+      name: "Before the vote",
+      turn: 7,
+      preset: "1953-default",
+      mode: "normal",
+      characterName: "Ada",
+      createdAt: "2026-11-01T12:00:00.000Z",
+      sizeBytes: 9_000_000,
+    },
+  ]);
+  mocks.worldSaves.requestLoad.mockResolvedValue({});
   mocks.stats.captureStatistics.mockResolvedValue(undefined);
   mocks.stats.flushStatistics.mockResolvedValue(undefined);
   mocks.stats.setStatisticsConsent.mockResolvedValue(undefined);
@@ -354,6 +375,51 @@ describe("App singleplayer integration", () => {
     await waitFor(() =>
       expect(mocks.game.setEmbeddedVisible).toHaveBeenCalledWith(true),
     );
+  });
+
+  it("hands the autosave interval from Settings to the running world", async () => {
+    localStorage.setItem("ahdclient.settings.v1", JSON.stringify({ autosaveEvery: 5 }));
+    prepare({ ...normalStatus, hasCharacter: true, characterName: "Ada" });
+    await bootToEmbeddedPlaying();
+    await waitFor(() => expect(mocks.game.setAutosaveEvery).toHaveBeenCalledWith(5));
+  });
+
+  async function openSavesAndLoad() {
+    await bootToEmbeddedPlaying();
+    const saves = [...document.querySelectorAll<HTMLButtonElement>(".client-toolbar-overflow [role='menuitem']")].find(
+      (button) => button.textContent === "Saves",
+    )!;
+    fireEvent.click(saves);
+    await userEvent.click(await screen.findByRole("button", { name: "Load" }));
+    await userEvent.click(screen.getByRole("button", { name: "Load it" }));
+  }
+
+  it("loads a save by stopping the world, queueing the load and starting it again", async () => {
+    prepare({ ...normalStatus, hasCharacter: true, characterName: "Ada" });
+    mocks.game.status.mockResolvedValue(running);
+    await openSavesAndLoad();
+    await waitFor(() =>
+      expect(mocks.worldSaves.requestLoad).toHaveBeenCalledWith("test-world", "20261101T120000Z-aaaaaa"),
+    );
+    expect(mocks.game.stop).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.game.start).toHaveBeenCalledTimes(2));
+    expect(mocks.game.start).toHaveBeenLastCalledWith("test-world", false);
+    // The stop happens before the load is queued: a running world cannot take one.
+    expect(mocks.game.stop.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.worldSaves.requestLoad.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("stops and says why when the game reports the load failed", async () => {
+    prepare({ ...normalStatus, hasCharacter: true, characterName: "Ada" });
+    mocks.game.saves.mockResolvedValue({
+      saves: [],
+      settings: { autosaveEvery: 1 },
+      autosaveError: null,
+      lastLoad: { at: "now", ok: false, message: "That save could not be loaded and your world is unchanged." },
+    });
+    await openSavesAndLoad();
+    expect((await screen.findByRole("alert")).textContent).toContain("your world is unchanged");
   });
 
   it("keeps the setup form on a create-time refusal with a link CTA", async () => {

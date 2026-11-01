@@ -408,9 +408,18 @@ export function App(): JSX.Element {
       if (cancelled.current || generation !== bootId.current) return;
       if (loadingSave.current) {
         loadingSave.current = false;
-        const outcome = (await game.saves().catch(() => null))?.lastLoad;
+        let outcome: Awaited<ReturnType<typeof game.saves>>["lastLoad"] = null;
+        try {
+          outcome = (await game.saves()).lastLoad;
+        } catch {
+          // No answer means no news; the world opened.
+        }
         if (outcome && !outcome.ok) {
-          setInfo(await game.stop().catch(() => IDLE));
+          try {
+            setInfo(await game.stop());
+          } catch {
+            setInfo(IDLE);
+          }
           throw new Error(outcome.message);
         }
       }
@@ -588,7 +597,11 @@ export function App(): JSX.Element {
     const wasRunning = info.running && info.slot === slot;
     const hosted = wasRunning && info.hosted;
     if (wasRunning) {
-      await game.closeEmbedded().catch(() => {});
+      try {
+        await game.closeEmbedded();
+      } catch {
+        // Stopping the world below closes its windows anyway.
+      }
       setEmbedded(false);
       setInfo(await game.stop());
     }
