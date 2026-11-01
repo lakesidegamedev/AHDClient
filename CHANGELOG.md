@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.8.0] - 2026-11-01
+
+- Singleplayer now runs the current game. Earlier desktop versions carried a copy of the game from September, so local worlds were missing everything the live game gained since: the 1991 world, the newest computer-controlled politicians (V6) and the autumn economy changes.
+- Fixed: starting a new singleplayer world on the recommended V6 politicians failed with an "Invalid option" message. V6 now works.
+- Your existing singleplayer worlds keep working. When you open one, the game brings its data up to date with this version before you play. If one update cannot be applied, the world still opens and the game tries again next time.
+- New 1991 worlds start with their opening bond markets in place.
+- Fixed: charts saved as images in singleplayer failed to generate.
+- Each release now records exactly which version of the game it carries, and a release can no longer go out with a game more than two weeks older than the live one.
+
 ## [2.7.0] - 2026-10-29
 
 - iPhone, iPad and Android: a tab bar along the bottom of the screen replaces the round AHD button. Game, Briefing, Inbox, Ask and More are always one tap away, and the page now ends above the bar so the game's bottom status bar is never covered.
