@@ -76,6 +76,29 @@ describe("prepare-game payload allowlist", () => {
     assertStagedGame(root, "x86_64-unknown-linux-gnu");
   });
 
+  it("fails when a scoped server external alias is missing", () => {
+    const root = mkdtempSync(path.join(process.env.TMPDIR || tmpdir(), "ahd-stage-alias-"));
+    scratch.push(root);
+    touch(root, "server.js");
+    touch(root, "launch.mjs");
+    touch(root, ".next/static/app.js");
+    touch(
+      root,
+      ".next/server/chunks/ssr.js",
+      'require("mongodb-438b504308ffa4be");require("@sentry/server-runtime-injection-e7acc8d92084955d/register");'
+    );
+    touch(root, "public/logo.png");
+    touch(root, "node_modules/mongodb/package.json", "{}");
+    touch(root, "node_modules/mongodb-438b504308ffa4be/package.json", "{}");
+    touch(root, "node_modules/@sentry/server-runtime-injection/package.json", "{}");
+    // The ff6c015c bundle shipped exactly this gap and failed every request.
+    expect(() => assertStagedGame(root, "x86_64-unknown-linux-gnu")).toThrow(
+      /@sentry\/server-runtime-injection-e7acc8d92084955d/
+    );
+    touch(root, "node_modules/@sentry/server-runtime-injection-e7acc8d92084955d/register.js");
+    assertStagedGame(root, "x86_64-unknown-linux-gnu");
+  });
+
   it("fails when the Windows sharp native is missing", () => {
     const root = mkdtempSync(path.join(process.env.TMPDIR || tmpdir(), "ahd-stage-win-"));
     scratch.push(root);

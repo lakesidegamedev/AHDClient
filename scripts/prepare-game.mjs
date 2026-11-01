@@ -288,7 +288,13 @@ export function pruneStagedGame(root) {
   return dropped;
 }
 
-const ALIAS_PATTERN = /require\("([a-z0-9][a-z0-9-]+-[a-f0-9]{16})"\)/g;
+// Hashed server externals, optionally scoped and with a subpath, referenced by
+// any Turbopack loader: require("mongodb-<hash>"),
+// require("@sentry/server-runtime-injection-<hash>/register"), e.y("sharp-<hash>").
+// A quoted hashed name counts when its base package is installed. A bundle
+// missing one fails at runtime, so staging refuses it.
+const ALIAS_PATTERN =
+  /["']((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*-[a-f0-9]{16})(?:\/[^"']*)?["']/g;
 
 export function assertStagedGame(root, triple) {
   const missing = [];
@@ -301,10 +307,13 @@ export function assertStagedGame(root, triple) {
     for (const entry of readdirSync(chunkDir)) {
       if (!entry.endsWith(".js")) continue;
       const source = readFileSync(path.join(chunkDir, entry), "utf8");
-      for (const match of source.matchAll(ALIAS_PATTERN)) aliases.add(match[1]);
+      for (const match of source.matchAll(ALIAS_PATTERN)) {
+        const base = match[1].replace(/-[a-f0-9]{16}$/, "");
+        if (existsSync(path.join(root, "node_modules", ...base.split("/")))) aliases.add(match[1]);
+      }
     }
     for (const alias of aliases) {
-      if (!existsSync(path.join(root, "node_modules", alias))) missing.push(`node_modules/${alias}`);
+      if (!existsSync(path.join(root, "node_modules", ...alias.split("/")))) missing.push(`node_modules/${alias}`);
     }
   }
   if (!existsSync(path.join(root, "node_modules", "mongodb"))) missing.push("node_modules/mongodb");
