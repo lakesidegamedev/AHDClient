@@ -209,3 +209,13 @@ html[data-animations="off"] .client-toolbar-spinner { animation: none; }
 .client-settings-advanced > summary:focus-visible,
 .client-account-menu > summary:focus-visible,
 .client-toolbar-overflow > summary:focus-visible { outline: 2px solid #f87171; outline-offset: 2px; }
+.client-toolbar-count { padding: 8px 6px; border: 1px solid #50505b; border-radius: 5px; background: #272735; color: #f5f5fa; font: inherit; }
+.client-toolbar-count:disabled { opacity: .6; }
+.client-toolbar-digest { position: relative; }
+.client-toolbar-digest > summary { list-style: none; cursor: pointer; padding: 8px 10px; border: 1px solid #50505b; border-radius: 5px; background: #272735; }
+.client-toolbar-digest > summary::-webkit-details-marker { display: none; }
+.client-toolbar-digest > div { position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: 360px; max-height: 70vh; overflow: auto; padding: 12px; border: 1px solid #50505b; border-radius: 10px; background: #1d1d2a; box-shadow: 0 18px 50px #0009; font-size: 13px; line-height: 1.4; }
+.client-toolbar-digest p { margin: 0 0 8px; }
+.client-toolbar-digest ul { margin: 0 0 8px; padding-left: 18px; }
+.client-toolbar-digest button { padding: 6px 10px; border: 1px solid #50505b; border-radius: 5px; background: #272735; color: #f5f5fa; cursor: pointer; }
+.client-toolbar-digest > summary:focus-visible, .client-toolbar-count:focus-visible { outline: 2px solid #f87171; outline-offset: 2px; }

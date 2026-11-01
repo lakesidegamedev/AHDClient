@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   advanceWorldsim: vi.fn(),
   worldAvailability: vi.fn(),
   setWorldAvailability: vi.fn(),
+  startBatch: vi.fn(),
+  batchStatus: vi.fn(),
+  stopBatch: vi.fn(),
 }));
 
 vi.mock("./worlds.js", () => ({
@@ -18,7 +21,11 @@ vi.mock("./worlds.js", () => ({
     advanceWorldsim: mocks.advanceWorldsim,
     worldAvailability: mocks.worldAvailability,
     setWorldAvailability: mocks.setWorldAvailability,
+    startBatch: mocks.startBatch,
+    batchStatus: mocks.batchStatus,
+    stopBatch: mocks.stopBatch,
   },
+  BATCH_TURN_CHOICES: [1, 3, 5, 10],
 }));
 
 import { GameToolbar } from "./GameToolbar.js";
@@ -34,6 +41,7 @@ function prepare(status: unknown, availability: "open" | "sealed" = "open") {
   mocks.singleplayerStatus.mockResolvedValue(status);
   mocks.advanceTurn.mockResolvedValue({ success: true, turn: 2, message: "Turn 2" });
   mocks.advanceWorldsim.mockResolvedValue({ success: true, turn: 41 });
+  mocks.batchStatus.mockResolvedValue({ batch: null });
   mocks.worldAvailability.mockResolvedValue({ availability, mode: availability === "open" ? "off" : "full" });
   mocks.setWorldAvailability.mockImplementation(async (next: "open" | "sealed") =>
     ({ availability: next, mode: next === "open" ? "off" : "full" }),
@@ -298,5 +306,178 @@ describe("GameToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask about the game" }));
     expect(onOpenAsk).toHaveBeenCalledTimes(1);
     expect(mocks.advanceTurn).not.toHaveBeenCalled();
+  });
+
+  describe("multi-turn advance", () => {
+    const running = (completed: number) => ({
+      id: "b1",
+      status: "running" as const,
+      requested: 5,
+      completed,
+      runningTurn: 10 + completed + 1,
+      startTurn: 10,
+      stopRequested: false,
+      turns: Array.from({ length: completed }, (_, i) => ({
+        turn: 11 + i,
+        fundsDelta: 100,
+        actionsDelta: 1,
+        durationSeconds: 1,
+      })),
+      stop: null,
+      digest: null,
+    });
+    const digest = {
+      startTurn: 10,
+      endTurn: 13,
+      turnsPlayed: 3,
+      funds: { before: 1000, after: 1750, delta: 750 },
+      actions: { before: 10, after: 4, delta: -6 },
+      office: { before: null, after: null },
+      officesWon: [],
+      officesLost: [],
+      inbox: {
+        total: 2,
+        actionRequired: 1,
+        groups: [{ category: "legislation", count: 2, actionRequired: 1, titles: ["Budget vote"] }],
+      },
+      worldEvents: [{ turn: 12, title: "New leader" }],
+      warnings: [],
+    };
+
+    it("offers turn counts in a normal world and none in worldsim", async () => {
+      prepare({ hasWorld: true, turn: 10, hasCharacter: true, characterName: "Ada", mode: "normal" });
+      const { unmount } = render(<GameToolbar {...base} worldsim={false} />);
+      const select = (await screen.findByRole("combobox", { name: "Turns to play" })) as HTMLSelectElement;
+      expect(Array.from(select.options).map((o) => o.value)).toEqual(["1", "3", "5", "10"]);
+      unmount();
+      prepare({ hasWorld: true, turn: 10, hasCharacter: false, characterName: null, mode: "worldsim" });
+      render(<GameToolbar {...base} worldsim />);
+      await screen.findByRole("button", { name: "End turn" });
+      expect(screen.queryByRole("combobox", { name: "Turns to play" })).toBeNull();
+    });
+
+    it("keeps the single-turn path when the count is 1", async () => {
+      prepare({ hasWorld: true, turn: 10, hasCharacter: true, characterName: "Ada", mode: "normal" });
+      render(<GameToolbar {...base} worldsim={false} />);
+      const button = await screen.findByRole("button", { name: "End turn" });
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+      await userEvent.click(button);
+      await waitFor(() => expect(mocks.advanceTurn).toHaveBeenCalledTimes(1));
+      expect(mocks.startBatch).not.toHaveBeenCalled();
+    });
+
+    it("runs a batch, shows turn k of N, and ends with the stop reason and summary", async () => {
+      vi.useFakeTimers();
+      try {
+        const onTurnAdvanced = vi.fn();
+        prepare({ hasWorld: true, turn: 10, hasCharacter: true, characterName: "Ada", mode: "normal" });
+        mocks.startBatch.mockResolvedValue({ success: true, batch: running(0) });
+        render(<GameToolbar {...base} worldsim={false} onTurnAdvanced={onTurnAdvanced} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        fireEvent.change(screen.getByRole("combobox", { name: "Turns to play" }), { target: { value: "5" } });
+        const button = screen.getByRole("button", { name: "End 5 turns" });
+        await act(async () => {
+          fireEvent.click(button);
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(mocks.startBatch).toHaveBeenCalledWith(5);
+        expect(mocks.advanceTurn).not.toHaveBeenCalled();
+        expect(screen.getByText("Turn 1 of 5")).toBeTruthy();
+
+        mocks.batchStatus.mockResolvedValue({ batch: running(2) });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_000);
+        });
+        expect(screen.getByText("Turn 3 of 5")).toBeTruthy();
+        expect(onTurnAdvanced).toHaveBeenCalledWith(11);
+        expect(onTurnAdvanced).toHaveBeenCalledWith(12);
+
+        mocks.batchStatus.mockResolvedValue({
+          batch: {
+            ...running(3),
+            status: "finished",
+            runningTurn: null,
+            stop: { kind: "vote", message: "A vote is waiting for you.", turn: 13, details: ["Budget vote"] },
+            digest,
+          },
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_000);
+        });
+        expect(screen.queryByRole("status", { name: "Running turn" })).toBeNull();
+        expect(screen.getByText("Played 3 of 5 turns. A vote is waiting for you.", { selector: "small" })).toBeTruthy();
+        expect(screen.getByText(/Campaign funds \+750, actions -6/)).toBeTruthy();
+        expect(screen.getByText(/Legislation: 2/)).toBeTruthy();
+        expect(screen.getByText("Turn 12: New leader")).toBeTruthy();
+        expect((screen.getByRole("button", { name: "End 5 turns" }) as HTMLButtonElement).disabled).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("lets the player stop after the current turn", async () => {
+      vi.useFakeTimers();
+      try {
+        prepare({ hasWorld: true, turn: 10, hasCharacter: true, characterName: "Ada", mode: "normal" });
+        mocks.startBatch.mockResolvedValue({ success: true, batch: running(1) });
+        mocks.stopBatch.mockResolvedValue({ success: true, batch: { ...running(1), stopRequested: true } });
+        render(<GameToolbar {...base} worldsim={false} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        fireEvent.change(screen.getByRole("combobox", { name: "Turns to play" }), { target: { value: "5" } });
+        await act(async () => {
+          fireEvent.click(screen.getByRole("button", { name: "End 5 turns" }));
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByRole("button", { name: "Stop after this turn" }));
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(mocks.stopBatch).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("button", { name: "Stopping" })).toBeTruthy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("shows the refusal when the game will not start a batch", async () => {
+      vi.useFakeTimers();
+      try {
+        prepare({ hasWorld: true, turn: 10, hasCharacter: true, characterName: "Ada", mode: "normal" });
+        mocks.startBatch.mockRejectedValue(new Error("Resume the world before ending a turn."));
+        render(<GameToolbar {...base} worldsim={false} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        fireEvent.change(screen.getByRole("combobox", { name: "Turns to play" }), { target: { value: "3" } });
+        await act(async () => {
+          fireEvent.click(screen.getByRole("button", { name: "End 3 turns" }));
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(screen.getByRole("alert").textContent).toContain("Resume the world");
+        expect((screen.getByRole("button", { name: "End 3 turns" }) as HTMLButtonElement).disabled).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("picks a running batch back up after the toolbar remounts", async () => {
+      vi.useFakeTimers();
+      try {
+        prepare({ hasWorld: true, turn: 12, hasCharacter: true, characterName: "Ada", mode: "normal" });
+        mocks.batchStatus.mockResolvedValue({ batch: running(2) });
+        render(<GameToolbar {...base} worldsim={false} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(screen.getByText("Turn 3 of 5")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Stop after this turn" })).toBeTruthy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
