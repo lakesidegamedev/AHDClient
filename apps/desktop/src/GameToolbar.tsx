@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BATCH_TURN_CHOICES, game } from "./worlds.js";
+import { game } from "./worlds.js";
 import type { BatchDigest, SingleplayerStatus, TurnBatch } from "./worlds.js";
+
+/** Turn counts the End turn control offers in a normal world. */
+export const BATCH_TURN_CHOICES = [1, 3, 5, 10] as const;
 
 interface Props {
   worldName: string;

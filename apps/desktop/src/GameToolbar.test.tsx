@@ -25,7 +25,6 @@ vi.mock("./worlds.js", () => ({
     batchStatus: mocks.batchStatus,
     stopBatch: mocks.stopBatch,
   },
-  BATCH_TURN_CHOICES: [1, 3, 5, 10],
 }));
 
 import { GameToolbar } from "./GameToolbar.js";

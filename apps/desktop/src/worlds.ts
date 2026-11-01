@@ -282,9 +282,6 @@ export interface TurnBatch {
   digest: BatchDigest | null;
 }
 
-/** Turn counts the End turn control offers in a normal world. */
-export const BATCH_TURN_CHOICES = [1, 3, 5, 10] as const;
-
 export const game = {
   start: (slot: string, hosted = false) =>
     invoke<GameInfo>("game_start", { slot, hosted }),
