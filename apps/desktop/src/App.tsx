@@ -7,11 +7,12 @@ import { BootScreen } from "./screens/BootScreen.js";
 import { WorldsimScreen } from "./screens/WorldsimScreen.js";
 import type { SetupOptions } from "./screens/setupOptions.js";
 import { PlayingScreen } from "./screens/PlayingScreen.js";
-import { ask, eraById, game, online, slugForWorld, worlds } from "./worlds.js";
+import { ask, eraById, game, online, slugForWorld, worldSaves, worlds } from "./worlds.js";
 import type {
   GameInfo,
   LinkedAccount,
   OnlineTarget,
+  SaveMeta,
   SetupProgress,
   WorldMeta,
 } from "./worlds.js";
@@ -32,6 +33,7 @@ import { UpdateNotice } from "./UpdateNotice.js";
 import { AccountControl } from "./AccountControl.js";
 import { clearCachedAskSession } from "./ask/session.js";
 import { GameToolbar } from "./GameToolbar.js";
+import { SavesDialog } from "./SavesDialog.js";
 import { GameVersionBar } from "./GameVersionBar.js";
 import { DiagnosticPrompt } from "./DiagnosticPrompt.js";
 import { DiagnosticPanel } from "./DiagnosticPanel.js";
@@ -111,6 +113,10 @@ export function App(): JSX.Element {
   const [embedded, setEmbedded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  /** Slot whose saves dialog is open, if any. */
+  const [savesFor, setSavesFor] = useState<string | null>(null);
+  /** Set while a save is being loaded, so the next boot can report how it went. */
+  const loadingSave = useRef(false);
   /**
    * The embedded child webview sits above launcher DOM, so open launcher
    * dialogs (settings, diagnostics) must hide it to be usable. The view is
@@ -119,7 +125,7 @@ export function App(): JSX.Element {
    * closes. Derived from the union, so the settings to diagnostics handoff
    * never flashes the game back. Mobile has no embedded views to hide.
    */
-  const dialogOpen = settingsOpen || diagnosticsOpen;
+  const dialogOpen = settingsOpen || diagnosticsOpen || savesFor != null;
   useEffect(() => {
     if (mobile || !embedded) return;
     void game.setEmbeddedVisible(!dialogOpen).catch(() => {});
@@ -146,11 +152,18 @@ export function App(): JSX.Element {
       if (event.key !== "Escape") return;
       event.preventDefault();
       if (screen === "briefing") { setScreen("launcher"); return; }
+      if (savesFor) { setSavesFor(null); return; }
       setSettingsOpen((open) => !open);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [screen]);
+  }, [screen, savesFor]);
+  // The autosave interval is a client setting but lives with each world, so
+  // it is handed to whichever world is running whenever it starts or changes.
+  useEffect(() => {
+    if (mobile || !info.running) return;
+    void game.setAutosaveEvery(settings.autosaveEvery).catch(() => {});
+  }, [info.running, info.slot, settings.autosaveEvery]);
   const changeSettings = (next: ClientSettings) => {
     // Clear pending data before saving an opt-out so a storage error cannot
     // leave previously queued reports available for transmission.
@@ -393,6 +406,23 @@ export function App(): JSX.Element {
         status = await game.singleplayerStatus();
       }
       if (cancelled.current || generation !== bootId.current) return;
+      if (loadingSave.current) {
+        loadingSave.current = false;
+        let outcome: Awaited<ReturnType<typeof game.saves>>["lastLoad"] = null;
+        try {
+          outcome = (await game.saves()).lastLoad;
+        } catch {
+          // No answer means no news; the world opened.
+        }
+        if (outcome && !outcome.ok) {
+          try {
+            setInfo(await game.stop());
+          } catch {
+            setInfo(IDLE);
+          }
+          throw new Error(outcome.message);
+        }
+      }
       await worlds.touch(slot, status.turn, status.characterName);
       const simulation =
         status.mode === "worldsim" || fresh?.setup.mode === "worldsim";
@@ -413,6 +443,7 @@ export function App(): JSX.Element {
       setScreen("playing");
       void captureStatistics(slot, true);
     } catch (e) {
+      loadingSave.current = false;
       if (!cancelled.current && generation === bootId.current) {
         try {
           setInfo(await game.stop());
@@ -552,6 +583,32 @@ export function App(): JSX.Element {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  /**
+   * Load a save into a world: stop it if it is running, queue the load, then
+   * start it again. The start applies the load before the game opens, so the
+   * boot screen covers the wait. The world as it stood is kept by the game as
+   * one extra save, so this can be undone.
+   */
+  const handleLoadSave = async (slot: string, save: SaveMeta) => {
+    const entitled = await checkSingleplayerEntitlement();
+    if (!entitled.ok) throw new Error(entitlementError(entitled));
+    const wasRunning = info.running && info.slot === slot;
+    const hosted = wasRunning && info.hosted;
+    if (wasRunning) {
+      try {
+        await game.closeEmbedded();
+      } catch {
+        // Stopping the world below closes its windows anyway.
+      }
+      setEmbedded(false);
+      setInfo(await game.stop());
+    }
+    await worldSaves.requestLoad(slot, save.id);
+    setSavesFor(null);
+    loadingSave.current = true;
+    void boot(slot, null, hosted);
   };
 
   const handleStop = async () => {
@@ -706,9 +763,20 @@ export function App(): JSX.Element {
       }}
     />
   );
+  const savesWorld = savesFor ? allWorlds.find((w) => w.slot === savesFor) : null;
+  const savesDialog = savesFor ? (
+    <SavesDialog
+      slot={savesFor}
+      worldName={savesWorld?.name ?? savesFor}
+      running={info.running && info.slot === savesFor}
+      onLoad={(save) => handleLoadSave(savesFor, save)}
+      onClose={() => setSavesFor(null)}
+    />
+  ) : null;
   const withSettings = (content: JSX.Element) => (
     <>
       {content}
+      {savesDialog}
       {settingsMenu}
       {diagnosticPanel}
       {diagnosticPrompt}
@@ -736,6 +804,7 @@ export function App(): JSX.Element {
               worldsim={runningWorldsim}
               onLauncher={() => void returnToLauncher().catch(fail)}
               onSaveAndStop={() => void handleStop().catch(fail)}
+              onOpenSaves={() => setSavesFor(info.slot)}
               onOpenAsk={() => void ask.open().catch(fail)}
               onViewStats={
                 runningWorldsim
@@ -763,6 +832,7 @@ export function App(): JSX.Element {
               }
             />
           </main>
+          {savesDialog}
           {settingsMenu}
           {diagnosticPanel}
           {diagnosticPrompt}
@@ -862,6 +932,7 @@ export function App(): JSX.Element {
         onPlay={handleContinue}
         onHost={handleHost}
         onDelete={handleDelete}
+        onSaves={setSavesFor}
         onBack={() => setScreen("launcher")}
       />,
     );

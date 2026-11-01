@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Singleplayer worlds have saves. Open Saves from the menu in the game bar, or from Your worlds, to save under a name, go back to any save, or delete one. Loading a save keeps where you were as one extra save first, so it can be undone.
+- The game autosaves after every turn and keeps the last three, so a bad turn can be rolled back. Settings, under Singleplayer, can change it to every 2nd, 5th or 10th turn, or turn it off.
+- Saves live in the world's own folder, so deleting a world deletes its saves. Older saves are brought up to date as they load, the same way an older world is.
+
 ## [2.8.1] - 2026-11-01
 
 - Fixed: in 2.8.0 a singleplayer world opened only the first time. After closing the app, it failed to load on every later start. Worlds open every time again, including any that stopped opening.

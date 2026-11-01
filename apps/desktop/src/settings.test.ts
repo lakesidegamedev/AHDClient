@@ -15,4 +15,13 @@ describe("client preferences", () => {
     localStorage.setItem("ahdclient.settings.v1", '{"separateWindow":"false","accountToken":"secret","animations":false}');
     expect(readSettings()).toEqual({ ...DEFAULT_SETTINGS, animations: false });
   });
+  it("defaults to an autosave every turn and only accepts a whole number from 0 to 100", () => {
+    expect(readSettings().autosaveEvery).toBe(1);
+    for (const [stored, expected] of [[0, 0], [5, 5], [101, 1], [-1, 1], [2.5, 1]] as const) {
+      localStorage.setItem("ahdclient.settings.v1", JSON.stringify({ autosaveEvery: stored }));
+      expect(readSettings().autosaveEvery).toBe(expected);
+    }
+    localStorage.setItem("ahdclient.settings.v1", '{"autosaveEvery":"5"}');
+    expect(readSettings().autosaveEvery).toBe(1);
+  });
 });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-world-saves"
+description = "Enables the list_world_saves command without any pre-configured scope."
+commands.allow = ["list_world_saves"]
+
+[[permission]]
+identifier = "deny-list-world-saves"
+description = "Denies the list_world_saves command without any pre-configured scope."
+commands.deny = ["list_world_saves"]

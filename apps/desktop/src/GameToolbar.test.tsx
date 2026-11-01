@@ -33,6 +33,7 @@ const base = {
   worldName: "Cold War dawn, 1953",
   onLauncher: vi.fn(),
   onSaveAndStop: vi.fn(),
+  onOpenSaves: vi.fn(),
   onOpenAsk: vi.fn(),
 };
 
@@ -279,6 +280,7 @@ describe("GameToolbar", () => {
     prepare({ hasWorld: true, turn: 1, hasCharacter: true, characterName: "Ada", mode: "normal" });
     const handlers = {
       onSaveAndStop: vi.fn(),
+      onOpenSaves: vi.fn(),
     };
     render(<GameToolbar {...base} {...handlers} worldsim={false} />);
 
@@ -291,9 +293,12 @@ describe("GameToolbar", () => {
     // the launcher and the Escape shortcut.
     expect(overflow.map((button) => button.textContent)).toEqual([
       "Pause world",
+      "Saves",
       "Save and stop",
     ]);
     fireEvent.click(overflow[1]!);
+    expect(handlers.onOpenSaves).toHaveBeenCalledTimes(1);
+    fireEvent.click(overflow[2]!);
     expect(handlers.onSaveAndStop).toHaveBeenCalledTimes(1);
   });
 
