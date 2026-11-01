@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { game } from "./worlds.js";
-import type { SingleplayerStatus } from "./worlds.js";
+import type { BatchDigest, SingleplayerStatus, TurnBatch } from "./worlds.js";
+
+/** Turn counts the End turn control offers in a normal world. */
+export const BATCH_TURN_CHOICES = [1, 3, 5, 10] as const;
 
 interface Props {
   worldName: string;
@@ -40,6 +43,85 @@ async function readTurnState(): Promise<TurnState | null> {
 
 /** How often the toolbar re-reads turn and pause state while the game runs. */
 const STATUS_POLL_MS = 10_000;
+/** How often a running multi-turn advance is checked for progress. */
+const BATCH_POLL_MS = 1_000;
+/** A batch is given up on after this many unanswered progress checks in a row. */
+const BATCH_POLL_MAX_FAILURES = 5;
+
+const signed = (value: number) => `${value >= 0 ? "+" : ""}${value.toLocaleString()}`;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  crisis: "Crises",
+  legislation: "Legislation",
+  election: "Elections",
+  party: "Party",
+  standing: "Standing",
+  treasury: "Money and business",
+  system: "Other",
+};
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** One calm line for the toolbar: what the batch did and, if it ended early, why. */
+function batchLine(batch: TurnBatch): string {
+  const played = `Played ${batch.completed} of ${plural(batch.requested, "turn")}`;
+  return batch.stop && batch.stop.kind !== "requested" ? `${played}. ${batch.stop.message}` : `${played}.`;
+}
+
+function BatchDigestPanel({ batch, onDismiss }: { batch: TurnBatch; onDismiss: () => void }): JSX.Element {
+  const digest: BatchDigest | null = batch.digest;
+  return (
+    <details className="client-toolbar-digest">
+      <summary>Summary</summary>
+      <div role="region" aria-label="Turn summary">
+        <p><b>{batchLine(batch)}</b></p>
+        {batch.stop && batch.stop.details.length > 0 && (
+          <ul>
+            {batch.stop.details.map((detail) => <li key={detail}>{detail}</li>)}
+          </ul>
+        )}
+        {digest && (
+          <>
+            <p>
+              Turns {digest.startTurn ?? "?"} to {digest.endTurn ?? "?"}. Campaign funds {signed(digest.funds.delta)}, actions {signed(digest.actions.delta)}.
+            </p>
+            {(digest.officesWon.length > 0 || digest.officesLost.length > 0) && (
+              <p>
+                {digest.officesWon.length > 0 && <>Won: {digest.officesWon.join(", ")}. </>}
+                {digest.officesLost.length > 0 && <>Lost: {digest.officesLost.join(", ")}.</>}
+              </p>
+            )}
+            {digest.inbox.total > 0 && (
+              <>
+                <p>
+                  Inbox: {plural(digest.inbox.total, "new item")}
+                  {digest.inbox.actionRequired > 0 ? `, ${digest.inbox.actionRequired} waiting for you` : ""}.
+                </p>
+                <ul>
+                  {digest.inbox.groups.map((group) => (
+                    <li key={group.category}>
+                      {CATEGORY_LABELS[group.category] ?? group.category}: {group.count}
+                      {group.titles.length > 0 ? ` (${group.titles.join("; ")})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {digest.worldEvents.length > 0 && (
+              <>
+                <p>In the world:</p>
+                <ul>
+                  {digest.worldEvents.map((event) => <li key={`${event.turn}-${event.title}`}>Turn {event.turn}: {event.title}</li>)}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+        <button type="button" onClick={onDismiss}>Dismiss</button>
+      </div>
+    </details>
+  );
+}
 
 /**
  * The singleplayer shell: Launcher | End turn | world name | overflow. End
@@ -67,6 +149,8 @@ export function GameToolbar({
   const [pauseBusy, setPauseBusy] = useState(false);
   const [turnBriefing, setTurnBriefing] = useState<string | null>(null);
   const [turnError, setTurnError] = useState<string | null>(null);
+  const [batchCount, setBatchCount] = useState<number>(1);
+  const [batch, setBatch] = useState<TurnBatch | null>(null);
   /** Guards the interval against overlapping reads on a slow local server. */
   const refreshing = useRef(false);
   const lastTurn = useRef<number | null>(null);
@@ -117,14 +201,95 @@ export function GameToolbar({
     };
   }, [refreshTurn, refreshAvailability]);
 
+  const advancedRef = useRef(onTurnAdvanced);
+  advancedRef.current = onTurnAdvanced;
+  const batchRunning = batch?.status === "running";
+  const batchId = batch?.id ?? null;
+
+  // Watch a running batch. The game does the work in the background; this only
+  // reads progress, so a toolbar that remounts mid-batch picks it back up below.
+  useEffect(() => {
+    if (!batchRunning) return;
+    let failures = 0;
+    let stopped = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const { batch: next } = await game.batchStatus();
+        failures = 0;
+        if (stopped || !next) return;
+        setBatch(next);
+        for (const done of next.turns) {
+          if (lastTurn.current == null || done.turn > lastTurn.current) {
+            lastTurn.current = done.turn;
+            advancedRef.current?.(done.turn);
+          }
+        }
+        if (next.status === "finished") {
+          setEndingTurn(false);
+          await refreshTurn();
+          await refreshAvailability();
+        }
+      } catch (error) {
+        failures += 1;
+        if (failures >= BATCH_POLL_MAX_FAILURES && !stopped) {
+          setEndingTurn(false);
+          setBatch(null);
+          setTurnError(error instanceof Error ? error.message : String(error));
+        }
+      }
+    }, BATCH_POLL_MS);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [batchRunning, batchId, refreshTurn, refreshAvailability]);
+
+  useEffect(() => {
+    if (worldsim) return;
+    void (async () => {
+      try {
+        const { batch: current } = await game.batchStatus();
+        if (current?.status === "running") {
+          setBatch(current);
+          setEndingTurn(true);
+        }
+      } catch {
+        // No batch to resume, or the game is not answering yet.
+      }
+    })();
+  }, [worldsim]);
+
+  const startBatch = async () => {
+    setBatch(null);
+    try {
+      const { batch: started } = await game.startBatch(batchCount);
+      setBatch(started);
+    } catch (error) {
+      setEndingTurn(false);
+      setTurnError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const stopBatch = async () => {
+    try {
+      const { batch: stopping } = await game.stopBatch();
+      setBatch(stopping);
+    } catch {
+      // It finished while the request was on its way; the next progress check shows the result.
+    }
+  };
+
   const endTurn = async () => {
     if (endingTurn) return;
     setEndingTurn(true);
     setTurnError(null);
+    if (!worldsim && batchCount > 1) {
+      await startBatch();
+      return;
+    }
     try {
       const result = worldsim ? await game.advanceWorldsim() : await game.advanceTurn();
       const briefing = result.briefing;
-      const signed = (value: number) => `${value >= 0 ? "+" : ""}${value.toLocaleString()}`;
       setTurnBriefing(briefing
         ? `Turn ${result.turn}: funds ${signed(briefing.fundsDelta)}, actions ${signed(briefing.actionsDelta)}`
         : `Turn ${result.turn} complete`);
@@ -167,7 +332,10 @@ export function GameToolbar({
         ? "Checking for your character"
         : !worldsim && !turnState.hasCharacter
           ? "Create a character in the game to enable End turn"
-          : "Advance the world by one turn";
+          : !worldsim && batchCount > 1
+            ? `Advance the world by ${batchCount} turns, stopping early if something needs you`
+            : "Advance the world by one turn";
+  const batchTurnNumber = batch && batchRunning ? Math.min(batch.completed + 1, batch.requested) : null;
   const headOfState = turnState?.mode === "head-of-state";
 
   return (
@@ -184,8 +352,21 @@ export function GameToolbar({
         onClick={() => void endTurn()}
       >
         {endingTurn ? <span className="client-toolbar-spinner" aria-hidden="true" /> : <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m5 5 10 7L5 19ZM19 5v14" /></svg>}
-        {endingTurn ? "Running turn" : "End turn"}
+        {endingTurn ? "Running turn" : batchCount > 1 && !worldsim ? `End ${batchCount} turns` : "End turn"}
       </button>
+      {!worldsim && (
+        <select
+          className="client-toolbar-count"
+          aria-label="Turns to play"
+          value={batchCount}
+          disabled={endingTurn}
+          onChange={(event) => setBatchCount(Number(event.target.value))}
+        >
+          {BATCH_TURN_CHOICES.map((count) => (
+            <option key={count} value={count}>{plural(count, "turn")}</option>
+          ))}
+        </select>
+      )}
       <button
         type="button"
         className="client-toolbar-quiet"
@@ -197,7 +378,24 @@ export function GameToolbar({
         Ask
       </button>
       <strong title={worldName}>{worldName}</strong>
-      {endingTurn && <span className="client-toolbar-progress" role="status" aria-label="Running turn"><span className="client-toolbar-spinner" aria-hidden="true" /><span><b>Simulating</b><small className="client-toolbar-turn">Turn {turnState?.turn ?? ""}</small></span></span>}
+      {endingTurn && (
+        <span className="client-toolbar-progress" role="status" aria-label="Running turn">
+          <span className="client-toolbar-spinner" aria-hidden="true" />
+          <span>
+            <b>Simulating</b>
+            <small className="client-toolbar-turn">
+              {batchTurnNumber != null && batch ? `Turn ${batchTurnNumber} of ${batch.requested}` : `Turn ${turnState?.turn ?? ""}`}
+            </small>
+          </span>
+        </span>
+      )}
+      {batchRunning && (
+        <button type="button" className="client-toolbar-quiet" disabled={batch?.stopRequested} onClick={() => void stopBatch()}>
+          {batch?.stopRequested ? "Stopping" : "Stop after this turn"}
+        </button>
+      )}
+      {batch && !batchRunning && <small className="client-toolbar-briefing" role="status" title={batchLine(batch)}>{batchLine(batch)}</small>}
+      {batch && !batchRunning && <BatchDigestPanel batch={batch} onDismiss={() => setBatch(null)} />}
       {turnBriefing && <small className="client-toolbar-briefing" role="status" title={turnBriefing}>{turnBriefing}</small>}
       {headOfState && (
         <small
