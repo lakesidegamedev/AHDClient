@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.8.1] - 2026-11-01
+
+- Fixed: in 2.8.0 a singleplayer world opened only the first time. After closing the app, it failed to load on every later start. Worlds open every time again, including any that stopped opening.
+
 ## [2.8.0] - 2026-11-01
 
 - Singleplayer now runs the current game. Earlier desktop versions carried a copy of the game from September, so local worlds were missing everything the live game gained since: the 1991 world, the newest computer-controlled politicians (V6) and the autumn economy changes.
