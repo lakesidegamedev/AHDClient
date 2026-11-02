@@ -1,0 +1,21 @@
+name: ios dock typecheck (temporary)
+on:
+  push:
+    branches: [feat/mobile-dock-ios]
+    paths:
+      - "apps/desktop/src-tauri/plugins/briefing-widgets/ios/**"
+      - ".github/workflows/ios-dock-typecheck-tmp.yml"
+jobs:
+  typecheck:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcrun swiftc --version
+      - name: Typecheck the dock sources
+        run: |
+          d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeDock.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift

@@ -1,19 +1,21 @@
+import Combine
+import SwiftUI
 import UIKit
 import WebKit
-import WidgetKit
 
-/// The tab bar: Game, Briefing, Inbox, Ask and More, in place of the floating
-/// AHD button the site pages used to carry. One WKWebView still shows
-/// everything; each tab is a page in it (or the native Ask sheet), and the bar
-/// follows whatever page the webview is on, however the player got there.
+/// The dock: Game, Briefing, Inbox, Ask and More, plus the game's status
+/// strip, in place of the floating AHD button the site pages used to carry.
+/// One WKWebView still shows everything; each tab is a page in it (or the
+/// native Ask sheet), and the dock follows whatever page the webview is on,
+/// however the player got there. The dock itself is SwiftUI (NativeDock.swift).
 ///
-/// The webview is moved into a host view that stacks it above the bar, so the
-/// page (and the game's fixed bottom status bar) ends where the bar begins.
-/// The host is also where hardware keyboard shortcuts live: it sits in the
-/// responder chain above the webview, so Cmd+1 to Cmd+5 work while a page
-/// field has focus. iPad uses the same bar; with iOS 15 as the deployment
-/// target the iPadOS 18 floating tab bar is not available to a standalone bar.
-final class NativeNavController: NSObject, UITabBarDelegate {
+/// The webview is moved into a host view and ends where the dock begins, so
+/// the page ends above the dock at every inset. The dock layer covers the
+/// host but only takes touches on the dock, or everywhere while its sheet is
+/// open. The host is also where hardware keyboard shortcuts live: it sits in
+/// the responder chain above the webview, so Cmd+1 to Cmd+5 work while a page
+/// field has focus. iPad uses the same dock, centered with a maximum width.
+final class NativeNavController: NSObject {
   static let shared = NativeNavController()
 
   enum Destination: Int, CaseIterable {
@@ -59,21 +61,37 @@ final class NativeNavController: NSObject, UITabBarDelegate {
       let briefing = url.fragment == "briefing" || query.contains { $0.name == "screen" && $0.value == "briefing" }
       return briefing ? .briefing : .more
     }
-    guard url.scheme == "https", ["ahousedividedgame.com", "www.ahousedividedgame.com", sandboxHost].contains(host) else { return nil }
+    guard url.scheme == "https", gameHosts.contains(host) else { return nil }
     let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
     return path == "/notifications" ? .inbox : .game
   }
 
+  /// The tell the game keys on to hide its own web status footer. Only an app
+  /// that actually attached the dock sends it, so an older app, or a dock that
+  /// never attached, keeps the web footer.
+  static let statusMarker = "AHDClientNativeStatus/1"
+  static let gameHosts = ["ahousedividedgame.com", "www.ahousedividedgame.com", sandboxHost]
+  /// Pages the web status footer is not drawn on; the strip follows suit.
+  private static let bareGamePaths: Set<String> = ["", "/login", "/register", "/banned"]
+
   private weak var webView: WKWebView?
   private weak var host: NativeNavHost?
-  private let bar = UITabBar()
+  private let model = DockModel()
   private let haptics = UISelectionFeedbackGenerator()
+  private let messages = DockMessageHandler()
+  private var slotConstraint: NSLayoutConstraint?
+  private var hosting: UIHostingController<DockView>?
+  private var cancellables = Set<AnyCancellable>()
   private var current: Destination?
   private var lastGameURL: URL?
+  private var lastURL: URL?
   private var inboxVisitedAt = Date.distantPast
   private var urlObservation: NSKeyValueObservation?
+  private var turnRefresh: DispatchWorkItem?
+  private var lastTurnSignal = Date.distantPast
   private var timers = [Timer]()
   private var observers = [NSObjectProtocol]()
+  private let preview = NativeDockPreview.requestedState()
 
   func attach(_ webView: WKWebView) {
     self.webView = webView
@@ -81,8 +99,8 @@ final class NativeNavController: NSObject, UITabBarDelegate {
   }
 
   /// wry adds the webview to its window's view after plugins load, so wait
-  /// for a superview. If the bar never attaches the webview stays full size,
-  /// exactly as it was before the bar existed.
+  /// for a superview. If the dock never attaches the webview stays full size,
+  /// exactly as it was before the dock existed.
   private func install(attempt: Int) {
     guard let webView else { return }
     guard let parent = webView.superview else {
@@ -102,78 +120,176 @@ final class NativeNavController: NSObject, UITabBarDelegate {
     webView.translatesAutoresizingMaskIntoConstraints = false
     host.addSubview(webView)
 
-    configureBar()
-    bar.translatesAutoresizingMaskIntoConstraints = false
-    host.addSubview(bar)
-    // Pinned to the host's bottom edge, not its safe area: UITabBar grows
-    // itself over the home indicator, as in other apps.
+    // The slot is the strip of screen the dock owns; the page ends above it.
+    // Its height follows what the dock reports, so the strip appearing on a
+    // game page or the sheet's base growing with Dynamic Type moves the page.
+    let slot = UILayoutGuide()
+    host.addLayoutGuide(slot)
+    let slotHeight = slot.heightAnchor.constraint(equalToConstant: model.slotHeight)
+    slotConstraint = slotHeight
+
+    let container = DockContainerView()
+    container.model = model
+    container.backgroundColor = .clear
+    container.translatesAutoresizingMaskIntoConstraints = false
+    host.addSubview(container)
+
+    let hosting = UIHostingController(rootView: DockView(model: model))
+    hosting.view.backgroundColor = .clear
+    hosting.view.translatesAutoresizingMaskIntoConstraints = false
+    hosting.overrideUserInterfaceStyle = .dark
+    // A hosting controller outside the view controller tree misses safe area
+    // and size updates; adopt it into the one that owns the window.
+    let owner = Self.owningController(of: host)
+    owner?.addChild(hosting)
+    container.addSubview(hosting.view)
+    if let owner { hosting.didMove(toParent: owner) }
+    self.hosting = hosting
+
+    // The page ends at the top of the slot, which is the top of the dock.
     NSLayoutConstraint.activate([
+      slot.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+      slot.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+      slot.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+      slotHeight,
       webView.topAnchor.constraint(equalTo: host.topAnchor),
       webView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-      webView.bottomAnchor.constraint(equalTo: bar.topAnchor),
-      bar.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-      bar.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-      bar.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+      webView.bottomAnchor.constraint(equalTo: slot.topAnchor),
+      container.topAnchor.constraint(equalTo: host.topAnchor),
+      container.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+      container.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+      container.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+      hosting.view.topAnchor.constraint(equalTo: container.topAnchor),
+      hosting.view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+      hosting.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      hosting.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
     ])
     self.host = host
+    host.layoutIfNeeded()
+
+    model.onSelect = { [weak self] tab in self?.open(tab) }
+    model.onOpenPath = { [weak self] path in self?.openGamePath(path) }
+    model.$slotHeight.removeDuplicates().dropFirst().receive(on: DispatchQueue.main).sink { [weak self] height in
+      self?.moveSlot(to: height)
+    }.store(in: &cancellables)
+    observers.append(NotificationCenter.default.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.model.reduceMotion = UIAccessibility.isReduceMotionEnabled
+    })
+
     // Silences the floating AHD button mobile.rs keeps as a fallback for a
-    // bar that never attached. The flag carries no data and no capability.
+    // dock that never attached. The flag carries no data and no capability.
     let flag = "window.__ahdclientNativeTabs = true;"
     webView.configuration.userContentController.addUserScript(
       WKUserScript(source: flag, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     webView.evaluateJavaScript(flag, completionHandler: nil)
 
+    bridgeTurnComplete(on: webView)
+    announceNativeStatus(on: webView)
+
+    if let preview {
+      applyPreview(preview)
+      return
+    }
+
     urlObservation = webView.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
       DispatchQueue.main.async { self?.follow(view.url) }
     }
     // The launcher's own screen changes are history updates; check now and
-    // then as well, and keep the inbox badge current.
+    // then as well.
     timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       guard let self else { return }
       self.follow(self.webView?.url)
     })
-    timers.append(Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { [weak self] _ in self?.fetchInbox() })
-    observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-      self?.fetchInbox()
+    // The status poll. BriefingStore also refuses to ask the network more
+    // than once a minute, so this and the other triggers cannot pile up.
+    timers.append(Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+      guard UIApplication.shared.applicationState == .active else { return }
+      self?.refreshStatus()
     })
-    fetchInbox()
+    observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.refreshStatus()
+    })
+    // Paint the last known figures at once, then ask for fresh ones.
+    apply(BriefingStore.read())
+    refreshStatus()
   }
 
-  private func configureBar() {
-    bar.delegate = self
-    bar.overrideUserInterfaceStyle = .dark
-    bar.tintColor = Self.accent
-    let appearance = UITabBarAppearance()
-    appearance.configureWithOpaqueBackground()
-    appearance.backgroundColor = Self.background
-    for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
-      layout.selected.iconColor = Self.accent
-      layout.selected.titleTextAttributes = [.foregroundColor: Self.accent]
-      layout.normal.iconColor = .secondaryLabel
-      layout.normal.titleTextAttributes = [.foregroundColor: UIColor.secondaryLabel]
-      layout.normal.badgeBackgroundColor = Self.accent
+  private static func owningController(of view: UIView) -> UIViewController? {
+    var responder: UIResponder? = view
+    while let next = responder?.next {
+      if let controller = next as? UIViewController { return controller }
+      responder = next
     }
-    bar.standardAppearance = appearance
-    bar.scrollEdgeAppearance = appearance
-    bar.items = Destination.allCases.map { tab in
-      let item = UITabBarItem(title: tab.title, image: UIImage(systemName: tab.symbol), selectedImage: UIImage(systemName: tab.selectedSymbol))
-      item.tag = tab.rawValue
-      item.accessibilityIdentifier = "ahdclient-tab-\(tab.title.lowercased())"
-      return item
+    return nil
+  }
+
+  private func moveSlot(to height: CGFloat) {
+    slotConstraint?.constant = height
+    guard let host else { return }
+    if model.reduceMotion {
+      host.layoutIfNeeded()
+      return
+    }
+    UIView.animate(withDuration: 0.28, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) { host.layoutIfNeeded() }
+  }
+
+  // MARK: Page bridge
+
+  /// The page announces a finished turn with a window event; this passes it
+  /// on so the figures refresh at once instead of at the next poll. The
+  /// handler accepts one fixed word, from the game's own pages only.
+  private func bridgeTurnComplete(on webView: WKWebView) {
+    messages.controller = self
+    let controller = webView.configuration.userContentController
+    controller.removeScriptMessageHandler(forName: DockMessageHandler.name)
+    controller.add(messages, name: DockMessageHandler.name)
+    let script = """
+      (function () {
+        if (window.__ahdDockTurn) return;
+        window.__ahdDockTurn = true;
+        window.addEventListener('ahd:turn-complete', function () {
+          try { window.webkit.messageHandlers.\(DockMessageHandler.name).postMessage('turn-complete'); } catch (e) {}
+        });
+      })();
+      """
+    controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    webView.evaluateJavaScript(script, completionHandler: nil)
+  }
+
+  /// Adds the marker to the webview's user agent. It applies from the next
+  /// navigation, so a game page already loaded is reloaded once to pick it up.
+  private func announceNativeStatus(on webView: WKWebView) {
+    func set(_ base: String) {
+      guard !base.contains(Self.statusMarker) else { return }
+      webView.customUserAgent = base + " " + Self.statusMarker
+      if let host = webView.url?.host, Self.gameHosts.contains(host) { webView.reload() }
+    }
+    if let agent = webView.customUserAgent, !agent.isEmpty {
+      set(agent)
+    } else {
+      webView.evaluateJavaScript("navigator.userAgent") { result, _ in
+        if let agent = result as? String, !agent.isEmpty { set(agent) }
+      }
     }
   }
 
-  func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-    guard let tab = Destination(rawValue: item.tag) else { return }
-    open(tab)
+  fileprivate func turnCompleted() {
+    guard Date().timeIntervalSince(lastTurnSignal) > 4 else { return }
+    lastTurnSignal = Date()
+    refreshStatus(maxAge: 3)
+    // The clock can lag the turn by a moment; look once more.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in self?.refreshStatus(maxAge: 3) }
   }
+
+  // MARK: Tabs
 
   /// Taps, keyboard shortcuts and the More list all land here.
   func open(_ tab: Destination) {
     guard let webView else { return }
     let again = tab == current
     if !again { haptics.selectionChanged() }
+    model.setExpanded(false)
     let site = siteOrigin()
     switch tab {
     case .game:
@@ -194,9 +310,17 @@ final class NativeNavController: NSObject, UITabBarDelegate {
     select(tab == .ask ? current : tab)
   }
 
+  /// A row in the status sheet: a game page, never anything off the site.
+  private func openGamePath(_ path: String) {
+    guard let webView, let safe = BriefingStore.gamePath(path), let url = URL(string: siteOrigin() + safe) else { return }
+    webView.load(URLRequest(url: url))
+  }
+
   func reload() { webView?.reload() }
   func goBack() { if webView?.canGoBack == true { webView?.goBack() } }
   func goForward() { if webView?.canGoForward == true { webView?.goForward() } }
+  func closeStatus() { model.setExpanded(false) }
+  var statusIsOpen: Bool { model.expanded }
 
   private func siteOrigin() -> String {
     webView?.url?.host == Self.sandboxHost ? "https://" + Self.sandboxHost : Self.site
@@ -205,34 +329,82 @@ final class NativeNavController: NSObject, UITabBarDelegate {
   private func follow(_ url: URL?) {
     guard let tab = Self.destination(for: url) else { return }
     if tab == .game { lastGameURL = url }
+    if url != lastURL {
+      lastURL = url
+      model.setExpanded(false)
+    }
+    let strip = Self.showsStatus(on: url, tab: tab)
+    if strip != model.onStripPage {
+      model.onStripPage = strip
+      // Back on a game page: look for fresh figures.
+      if strip { refreshStatus() }
+    }
     guard tab != current else { return }
     // The player just read the inbox; ask the site for the new count.
-    if current == .inbox { fetchInbox() }
+    if current == .inbox { refreshStatus() }
     if tab == .inbox { inboxVisitedAt = Date() }
     current = tab
     select(tab)
     refreshBadge()
   }
 
-  private func select(_ tab: Destination?) {
-    bar.selectedItem = tab.flatMap { tab in bar.items?.first { $0.tag == tab.rawValue } }
+  /// Game and Inbox pages carry the web status footer, except the bare ones.
+  static func showsStatus(on url: URL?, tab: Destination) -> Bool {
+    guard tab == .game || tab == .inbox, let url else { return false }
+    let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
+    return !bareGamePaths.contains(path)
   }
 
-  private func fetchInbox() {
-    BriefingStore.refresh { _ in
-      WidgetCenter.shared.reloadAllTimelines()
-      DispatchQueue.main.async { [weak self] in self?.refreshBadge() }
-    }
+  private func select(_ tab: Destination?) {
+    if model.selected != tab { model.selected = tab }
+  }
+
+  // MARK: Status
+
+  /// Never blocks the UI: BriefingStore answers from its saved copy when the
+  /// network is slow or down, and nothing here waits on it.
+  private func refreshStatus(maxAge: TimeInterval = 60) {
+    guard preview == nil else { return }
+    BriefingStore.refresh(maxAge: maxAge) { [weak self] saved in self?.apply(saved) }
+  }
+
+  private func apply(_ saved: SavedBriefing?) {
+    guard preview == nil else { return }
+    let next = saved.map { DockStatus($0.data) }
+    if model.status != next { model.status = next }
+    refreshBadge(saved)
+    scheduleTurnRefresh()
+  }
+
+  /// A look just after the turn clock runs out, so the new countdown shows
+  /// without waiting for the next poll.
+  private func scheduleTurnRefresh() {
+    turnRefresh?.cancel()
+    guard let next = model.status?.nextTurn else { return }
+    let wait = next.timeIntervalSinceNow + 4
+    guard wait > 0, wait < 6 * 3600 else { return }
+    let work = DispatchWorkItem { [weak self] in self?.refreshStatus(maxAge: 3) }
+    turnRefresh = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: work)
   }
 
   /// Unread count from the same snapshot the briefing and widgets use. Hidden
   /// on the Inbox itself and until a snapshot newer than the visit arrives.
-  private func refreshBadge() {
-    guard let item = bar.items?.first(where: { $0.tag == Destination.inbox.rawValue }) else { return }
-    let saved = BriefingStore.read()
-    let unread = Int(saved?.data.inbox?.unread ?? 0)
-    let fresh = (saved?.updatedAt ?? .distantPast) > inboxVisitedAt
-    item.badgeValue = unread > 0 && fresh && current != .inbox ? (unread > 99 ? "99+" : String(unread)) : nil
+  private func refreshBadge(_ snapshot: SavedBriefing? = BriefingStore.read()) {
+    let unread = Int(snapshot?.data.inbox?.unread ?? 0)
+    let fresh = (snapshot?.updatedAt ?? .distantPast) > inboxVisitedAt
+    let value = unread > 0 && fresh && current != .inbox ? unread : 0
+    if model.badge != value { model.badge = value }
+  }
+
+  private func applyPreview(_ state: String) {
+    model.selected = state == "briefing" ? .briefing : .game
+    model.onStripPage = state != "briefing"
+    model.status = state == "signedout" ? nil : DockStatus.sample()
+    model.badge = state == "signedout" ? 0 : 3
+    if state == "expanded" {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.model.setExpanded(true, animated: false) }
+    }
   }
 
   deinit {
@@ -241,7 +413,19 @@ final class NativeNavController: NSObject, UITabBarDelegate {
   }
 }
 
-/// Holds the webview and the tab bar, and answers hardware keyboard
+/// Receives the one message the page bridge can send.
+private final class DockMessageHandler: NSObject, WKScriptMessageHandler {
+  static let name = "ahdDock"
+  weak var controller: NativeNavController?
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard message.name == Self.name, message.frameInfo.isMainFrame, (message.body as? String) == "turn-complete",
+      let host = message.frameInfo.request.url?.host, NativeNavController.gameHosts.contains(host) else { return }
+    controller?.turnCompleted()
+  }
+}
+
+/// Holds the webview and the dock, and answers hardware keyboard
 /// shortcuts. Holding Cmd on iPad lists them.
 final class NativeNavHost: UIView {
   weak var controller: NativeNavController?
@@ -256,6 +440,12 @@ final class NativeNavHost: UIView {
     commands.append(command("Reload Page", input: "r", action: #selector(reloadPage)))
     commands.append(command("Back", input: "[", action: #selector(goBack)))
     commands.append(command("Forward", input: "]", action: #selector(goForward)))
+    // Esc closes the status sheet; it is only offered while the sheet is open.
+    if controller?.statusIsOpen == true {
+      let close = UIKeyCommand(title: "Close Status", action: #selector(closeStatus), input: UIKeyCommand.inputEscape)
+      close.wantsPriorityOverSystemBehavior = true
+      commands.append(close)
+    }
     return commands
   }
 
@@ -274,6 +464,7 @@ final class NativeNavHost: UIView {
   @objc private func reloadPage() { controller?.reload() }
   @objc private func goBack() { controller?.goBack() }
   @objc private func goForward() { controller?.goForward() }
+  @objc private func closeStatus() { controller?.closeStatus() }
 
   override func didMoveToWindow() {
     super.didMoveToWindow()

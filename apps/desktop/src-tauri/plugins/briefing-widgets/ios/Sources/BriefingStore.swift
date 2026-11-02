@@ -218,7 +218,10 @@ enum BriefingStore {
     SecItemAdd(record as CFDictionary, nil)
   }
 
-  static func refresh(_ completion: @escaping (SavedBriefing?) -> Void) {
+  /// `maxAge` is how old a saved copy may be before the network is asked.
+  /// The default keeps polls to one a minute; the dock passes a few seconds
+  /// right after a turn so the new figures are not served from before it.
+  static func refresh(maxAge: TimeInterval = 60, _ completion: @escaping (SavedBriefing?) -> Void) {
     queue.async {
       pending.append(completion)
       guard pending.count == 1 else { return }
@@ -228,7 +231,7 @@ enum BriefingStore {
         callbacks.forEach { callback in DispatchQueue.main.async { callback(value) } }
       }
       guard let cookie = session(), !cookie.isEmpty else { clear(); finish(nil); return }
-      if let saved = read(), saved.schema == currentSchema, Date().timeIntervalSince(saved.updatedAt) < 60 {
+      if let saved = read(), saved.schema == currentSchema, Date().timeIntervalSince(saved.updatedAt) < maxAge {
         finish(saved); return
       }
       let config = URLSessionConfiguration.ephemeral
