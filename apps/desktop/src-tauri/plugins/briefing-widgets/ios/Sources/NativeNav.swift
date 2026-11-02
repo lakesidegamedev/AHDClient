@@ -3,68 +3,29 @@ import SwiftUI
 import UIKit
 import WebKit
 
-/// The dock: Game, Briefing, Inbox, Ask and More, plus the game's status
-/// strip, in place of the floating AHD button the site pages used to carry.
-/// One WKWebView still shows everything; each tab is a page in it (or the
-/// native Ask sheet), and the dock follows whatever page the webview is on,
-/// however the player got there. The dock itself is SwiftUI (NativeDock.swift).
+/// The dock, in place of the floating AHD button the site pages used to carry.
+/// The game says what its tabs are (GET /api/mobile-dock); signed out, or on
+/// a game that does not answer, the dock falls back to Game, Briefing, Ask and
+/// More so nobody is stuck. One WKWebView still shows everything; a tab is a
+/// page in it, a native sheet, or the native Ask sheet, and the dock follows
+/// whatever page the webview is on, however the player got there. The dock
+/// itself is SwiftUI (NativeDock*.swift).
 ///
 /// The webview is moved into a host view and ends where the dock begins, so
 /// the page ends above the dock at every inset. The dock layer covers the
-/// host but only takes touches on the dock, or everywhere while its sheet is
+/// host but only takes touches on the dock, or everywhere while a panel is
 /// open. The host is also where hardware keyboard shortcuts live: it sits in
-/// the responder chain above the webview, so Cmd+1 to Cmd+5 work while a page
-/// field has focus. iPad uses the same dock, centered with a maximum width.
+/// the responder chain above the webview, so Cmd+1 to Cmd+5 (the dock's tabs,
+/// left to right) work while a page field has focus. iPad uses the same dock,
+/// centered with a maximum width.
 final class NativeNavController: NSObject {
   static let shared = NativeNavController()
-
-  enum Destination: Int, CaseIterable {
-    case game, briefing, inbox, ask, more
-
-    var title: String {
-      switch self {
-      case .game: return "Game"
-      case .briefing: return "Briefing"
-      case .inbox: return "Inbox"
-      case .ask: return "Ask"
-      case .more: return "More"
-      }
-    }
-
-    var symbol: String {
-      switch self {
-      case .game: return "building.columns"
-      case .briefing: return "newspaper"
-      case .inbox: return "tray"
-      case .ask: return "bubble.left.and.bubble.right"
-      case .more: return "ellipsis.circle"
-      }
-    }
-
-    var selectedSymbol: String {
-      self == .more ? "ellipsis.circle.fill" : symbol + ".fill"
-    }
-  }
 
   static let site = "https://ahousedividedgame.com"
   static let sandboxHost = "sandbox.ahousedividedgame.com"
   static let launcher = "tauri://localhost/"
   static let background = UIColor(red: 0x14 / 255, green: 0x14 / 255, blue: 0x1c / 255, alpha: 1)
   static let accent = UIColor(red: 0xdc / 255, green: 0x26 / 255, blue: 0x26 / 255, alpha: 1)
-
-  /// Which tab a webview address belongs to. Ask never is: it is a sheet.
-  static func destination(for url: URL?) -> Destination? {
-    guard let url, let host = url.host else { return nil }
-    if url.scheme == "tauri" && host == "localhost" {
-      // The launcher marks its Briefing screen with #briefing (App.tsx).
-      let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-      let briefing = url.fragment == "briefing" || query.contains { $0.name == "screen" && $0.value == "briefing" }
-      return briefing ? .briefing : .more
-    }
-    guard url.scheme == "https", gameHosts.contains(host) else { return nil }
-    let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
-    return path == "/notifications" ? .inbox : .game
-  }
 
   /// The tell the game keys on to hide its own web status footer. Only an app
   /// that actually attached the dock sends it, so an older app, or a dock that
@@ -82,7 +43,10 @@ final class NativeNavController: NSObject {
   private var slotConstraint: NSLayoutConstraint?
   private var hosting: UIHostingController<DockView>?
   private var cancellables = Set<AnyCancellable>()
-  private var current: Destination?
+  private var onInboxPage = false
+  private var layoutAccount: String?
+  private var layoutFetchedAt = Date.distantPast
+  private var layoutInFlight = false
   private var lastGameURL: URL?
   private var lastURL: URL?
   private var inboxVisitedAt = Date.distantPast
@@ -168,8 +132,14 @@ final class NativeNavController: NSObject {
     self.host = host
     host.layoutIfNeeded()
 
-    model.onSelect = { [weak self] tab in self?.open(tab) }
+    model.onTab = { [weak self] tab in self?.handle(tab) }
     model.onOpenPath = { [weak self] path in self?.openGamePath(path) }
+    model.onApp = { [weak self] app in self?.perform(app) }
+    // A new layout can move the page to a different tab; look again.
+    model.$layout.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in
+      guard let self else { return }
+      self.select(self.selection(for: self.lastURL))
+    }.store(in: &cancellables)
     model.$slotHeight.removeDuplicates().dropFirst().receive(on: DispatchQueue.main).sink { [weak self] height in
       self?.moveSlot(to: height)
     }.store(in: &cancellables)
@@ -209,8 +179,9 @@ final class NativeNavController: NSObject {
     })
     observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
       self?.refreshStatus()
+      self?.refreshLayout(maxAge: 30)
     })
-    // Paint the last known figures at once, then ask for fresh ones.
+    // Paint the last known figures and the cached tabs at once, then ask for fresh ones.
     apply(BriefingStore.read())
     refreshStatus()
   }
@@ -284,14 +255,40 @@ final class NativeNavController: NSObject {
 
   // MARK: Tabs
 
-  /// Taps, keyboard shortcuts and the More list all land here.
-  func open(_ tab: Destination) {
+  /// A tap on a tab, or a Cmd+number: the tab does what the game (or the app,
+  /// for its own tabs) says it does.
+  func handle(_ tab: DockTab) {
+    guard webView != nil else { return }
+    if model.displayedID != tab.id { haptics.selectionChanged() }
+    switch tab.kind {
+    case .sheet(let key):
+      model.toggleSheet(key)
+    case .page(let href):
+      model.close()
+      openGamePath(href)
+      // Highlight the tab at once; following the page corrects it if the
+      // navigation is refused.
+      select(tab.id)
+    case .app(let app):
+      model.close()
+      perform(app, from: tab)
+    }
+  }
+
+  /// Cmd+1 to Cmd+5: the dock's tabs, left to right.
+  func openTab(at index: Int) {
+    guard model.tabs.indices.contains(index) else { return }
+    handle(model.tabs[index])
+  }
+
+  var tabTitles: [String] { model.tabs.map { $0.label } }
+
+  /// The app's own destinations, from a tab or from the More sheet.
+  func perform(_ app: DockApp, from tab: DockTab? = nil) {
     guard let webView else { return }
-    let again = tab == current
-    if !again { haptics.selectionChanged() }
-    model.setExpanded(false)
+    let again = tab.map { $0.id == model.selectedID } ?? false
     let site = siteOrigin()
-    switch tab {
+    switch app {
     case .game:
       // Back to the page the player was last reading; Game again goes home.
       let target = again ? URL(string: site + "/") : lastGameURL ?? URL(string: site + "/")
@@ -302,15 +299,14 @@ final class NativeNavController: NSObject {
       if let url = URL(string: site + "/notifications") { webView.load(URLRequest(url: url)) }
     case .ask:
       NativeAskController.shared.present()
-    case .more:
-      if !again, let url = URL(string: Self.launcher) { webView.load(URLRequest(url: url)) }
+      return
+    case .launcher:
+      if let url = URL(string: Self.launcher) { webView.load(URLRequest(url: url)) }
     }
-    // Highlight the tab at once; following the page corrects it if the
-    // navigation is refused. Ask is a sheet, so the selection stays put.
-    select(tab == .ask ? current : tab)
+    if let tab { select(tab.id) }
   }
 
-  /// A row in the status sheet: a game page, never anything off the site.
+  /// A row in a sheet or the status: a game page, never anything off the site.
   private func openGamePath(_ path: String) {
     guard let webView, let safe = BriefingStore.gamePath(path), let url = URL(string: siteOrigin() + safe) else { return }
     webView.load(URLRequest(url: url))
@@ -319,44 +315,61 @@ final class NativeNavController: NSObject {
   func reload() { webView?.reload() }
   func goBack() { if webView?.canGoBack == true { webView?.goBack() } }
   func goForward() { if webView?.canGoForward == true { webView?.goForward() } }
-  func closeStatus() { model.setExpanded(false) }
-  var statusIsOpen: Bool { model.expanded }
+  func closePanel() { model.close() }
+  var panelIsOpen: Bool { model.expanded }
 
   private func siteOrigin() -> String {
     webView?.url?.host == Self.sandboxHost ? "https://" + Self.sandboxHost : Self.site
   }
 
+  private static func isOurPage(_ url: URL?) -> Bool {
+    guard let url, let host = url.host else { return false }
+    if url.scheme == "tauri" && host == "localhost" { return true }
+    return url.scheme == "https" && gameHosts.contains(host)
+  }
+
+  private func selection(for url: URL?) -> String? {
+    DockTabs.selection(for: url, tabs: model.tabs, usingGameTabs: model.usingGameTabs)
+  }
+
   private func follow(_ url: URL?) {
-    guard let tab = Self.destination(for: url) else { return }
-    if tab == .game { lastGameURL = url }
+    guard Self.isOurPage(url), let url else { return }
+    let isGame = url.scheme == "https"
+    let path = DockTabs.path(url)
+    let inbox = isGame && path == "/notifications"
+    if isGame && !inbox { lastGameURL = url }
     if url != lastURL {
       lastURL = url
-      model.setExpanded(false)
+      model.close()
     }
-    let strip = Self.showsStatus(on: url, tab: tab)
+    let strip = Self.showsStatus(on: url)
     if strip != model.onStripPage {
       model.onStripPage = strip
       // Back on a game page: look for fresh figures.
       if strip { refreshStatus() }
     }
-    guard tab != current else { return }
-    // The player just read the inbox; ask the site for the new count.
-    if current == .inbox { refreshStatus() }
-    if tab == .inbox { inboxVisitedAt = Date() }
-    current = tab
+    if inbox != onInboxPage {
+      // The player just read the inbox; ask the site for the new count.
+      if onInboxPage { refreshStatus() }
+      if inbox { inboxVisitedAt = Date() }
+      onInboxPage = inbox
+      refreshBadge()
+    }
+    let tab = selection(for: url)
+    guard tab != model.selectedID else { return }
+    // A new section of the game can change what the game wants in the dock.
+    if model.selectedID != nil { refreshLayout(maxAge: 300) }
     select(tab)
-    refreshBadge()
   }
 
-  /// Game and Inbox pages carry the web status footer, except the bare ones.
-  static func showsStatus(on url: URL?, tab: Destination) -> Bool {
-    guard tab == .game || tab == .inbox, let url else { return false }
-    let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
-    return !bareGamePaths.contains(path)
+  /// Game pages carry the web status footer, except the bare ones.
+  static func showsStatus(on url: URL?) -> Bool {
+    guard let url, url.scheme == "https", let host = url.host, gameHosts.contains(host) else { return false }
+    return !bareGamePaths.contains(DockTabs.path(url))
   }
 
-  private func select(_ tab: Destination?) {
-    if model.selected != tab { model.selected = tab }
+  private func select(_ id: String?) {
+    if model.selectedID != id { model.selectedID = id }
   }
 
   // MARK: Status
@@ -372,6 +385,7 @@ final class NativeNavController: NSObject {
     guard preview == nil else { return }
     let next = saved.map { DockStatus($0.data) }
     if model.status != next { model.status = next }
+    syncAccount(saved)
     refreshBadge(saved)
     scheduleTurnRefresh()
   }
@@ -388,22 +402,70 @@ final class NativeNavController: NSObject {
     DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: work)
   }
 
-  /// Unread count from the same snapshot the briefing and widgets use. Hidden
-  /// on the Inbox itself and until a snapshot newer than the visit arrives.
+  /// Unread count from the same snapshot the briefing and widgets use, shown
+  /// on More. Hidden on the Inbox itself and until a snapshot newer than the
+  /// visit arrives.
   private func refreshBadge(_ snapshot: SavedBriefing? = BriefingStore.read()) {
     let unread = Int(snapshot?.data.inbox?.unread ?? 0)
     let fresh = (snapshot?.updatedAt ?? .distantPast) > inboxVisitedAt
-    let value = unread > 0 && fresh && current != .inbox ? unread : 0
+    let value = unread > 0 && fresh && !onInboxPage ? unread : 0
     if model.badge != value { model.badge = value }
   }
 
+  // MARK: Layout
+
+  /// Which account the dock layout belongs to: the character's name, or the
+  /// session when the player has no character yet. Nil when signed out.
+  private func account(of saved: SavedBriefing?) -> String? {
+    guard let saved else { return nil }
+    return DockLayoutCache.accountKey(saved.data.name) ?? "s-" + String(saved.sessionId.prefix(16))
+  }
+
+  /// A different account (or none) swaps the dock to that account's cached
+  /// tabs, or to the app tabs, at once; a fresh copy is asked for behind it.
+  private func syncAccount(_ saved: SavedBriefing?) {
+    let next = account(of: saved)
+    guard next != layoutAccount else { return }
+    layoutAccount = next
+    layoutFetchedAt = .distantPast
+    model.setLayout(DockLayoutCache.load(account: next))
+    if next != nil { refreshLayout(maxAge: 0) }
+  }
+
+  /// Never blocks the UI. A failure keeps whatever the dock already has.
+  private func refreshLayout(maxAge: TimeInterval) {
+    guard preview == nil, !layoutInFlight, let account = layoutAccount,
+      Date().timeIntervalSince(layoutFetchedAt) >= maxAge,
+      let cookie = BriefingStore.session(), !cookie.isEmpty else { return }
+    layoutInFlight = true
+    layoutFetchedAt = Date()
+    DockLayoutClient.fetch(cookie: cookie) { [weak self] outcome in
+      guard let self else { return }
+      self.layoutInFlight = false
+      // The player may have switched account while the request was out.
+      guard self.layoutAccount == account else { return }
+      switch outcome {
+      case .layout(let layout, let bytes):
+        DockLayoutCache.save(bytes, account: account)
+        self.model.setLayout(layout)
+      case .signedOut:
+        self.model.setLayout(nil)
+      case .unavailable:
+        break
+      }
+    }
+  }
+
   private func applyPreview(_ state: String) {
-    model.selected = state == "briefing" ? .briefing : .game
-    model.onStripPage = state != "briefing"
-    model.status = state == "signedout" ? nil : DockStatus.sample()
-    model.badge = state == "signedout" ? 0 : 3
-    if state == "expanded" {
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.model.setExpanded(true, animated: false) }
+    let signedOut = state == "signedout" || state == "briefing"
+    model.setLayout(signedOut ? nil : DockFixture.layout)
+    select(state == "briefing" ? "briefing" : signedOut ? "game" : "state")
+    model.onStripPage = !signedOut
+    model.status = signedOut ? nil : DockStatus.sample()
+    model.badge = signedOut ? 0 : 3
+    let panel: DockPanel? = state == "expanded" ? .status : state == "sheet" ? .sheet("state") : state == "more" ? .sheet("more") : nil
+    if let panel {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.model.open(panel, animated: false) }
     }
   }
 
@@ -433,16 +495,17 @@ final class NativeNavHost: UIView {
   override var canBecomeFirstResponder: Bool { true }
 
   override var keyCommands: [UIKeyCommand]? {
-    var commands = NativeNavController.Destination.allCases.enumerated().map { index, tab in
-      command(tab.title, input: String(index + 1), action: #selector(openTab(_:)), tag: tab.rawValue)
+    // Cmd+1 to Cmd+5 are the dock's tabs, whatever the game or the fallback made them.
+    var commands = (controller?.tabTitles ?? []).prefix(9).enumerated().map { index, title in
+      command(title, input: String(index + 1), action: #selector(openTab(_:)), tag: index)
     }
     commands.append(command("Ask", input: "k", action: #selector(openAsk)))
     commands.append(command("Reload Page", input: "r", action: #selector(reloadPage)))
     commands.append(command("Back", input: "[", action: #selector(goBack)))
     commands.append(command("Forward", input: "]", action: #selector(goForward)))
-    // Esc closes the status sheet; it is only offered while the sheet is open.
-    if controller?.statusIsOpen == true {
-      let close = UIKeyCommand(title: "Close Status", action: #selector(closeStatus), input: UIKeyCommand.inputEscape)
+    // Esc closes the open panel; it is only offered while one is open.
+    if controller?.panelIsOpen == true {
+      let close = UIKeyCommand(title: "Close", action: #selector(closePanel), input: UIKeyCommand.inputEscape)
       close.wantsPriorityOverSystemBehavior = true
       commands.append(close)
     }
@@ -456,15 +519,15 @@ final class NativeNavHost: UIView {
   }
 
   @objc private func openTab(_ sender: UIKeyCommand) {
-    guard let raw = sender.propertyList as? Int, let tab = NativeNavController.Destination(rawValue: raw) else { return }
-    controller?.open(tab)
+    guard let index = sender.propertyList as? Int else { return }
+    controller?.openTab(at: index)
   }
 
-  @objc private func openAsk() { controller?.open(.ask) }
+  @objc private func openAsk() { controller?.perform(.ask) }
   @objc private func reloadPage() { controller?.reload() }
   @objc private func goBack() { controller?.goBack() }
   @objc private func goForward() { controller?.goForward() }
-  @objc private func closeStatus() { controller?.closeStatus() }
+  @objc private func closePanel() { controller?.closePanel() }
 
   override func didMoveToWindow() {
     super.didMoveToWindow()

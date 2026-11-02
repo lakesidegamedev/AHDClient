@@ -41,7 +41,7 @@ jobs:
       - name: Typecheck the dock sources
         run: |
           d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
-          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeDock.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
       - name: Screenshot the dock
         run: bash .github/scripts/ios-dock-screens.sh
       - uses: actions/upload-artifact@v4

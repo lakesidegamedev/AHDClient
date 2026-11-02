@@ -42,10 +42,11 @@ describe("mobile native companion safety", () => {
 
   it("gives every old in-game menu item a home in the native tab bar on both phones", () => {
     const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
-    const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    const iosDir = "../src-tauri/plugins/briefing-widgets/ios/Sources/";
+    const ios = ["NativeNav.swift", "NativeDockModel.swift", "NativeDockView.swift"].map((file) => read(iosDir + file)).join("\n");
     for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
       expect(nav).toContain(`"${tab}"`);
-      expect(ios).toContain(`return "${tab}"`);
+      expect(ios).toContain(`label: "${tab}"`);
     }
     // Game home, Inbox, Briefing, Ask and Launcher were the menu's five items.
     for (const source of [nav, ios]) {
