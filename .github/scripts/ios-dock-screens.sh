@@ -27,8 +27,13 @@ for runtime, devices in json.load(sys.stdin)['devices'].items():
 shot() { # udid file state
   xcrun simctl terminate "$1" "$bundle" >/dev/null 2>&1
   xcrun simctl launch "$1" "$bundle" -AHDDockPreview "$3" >/dev/null
-  sleep 4
-  xcrun simctl io "$1" screenshot "$out/$2.png" >/dev/null 2>&1 && echo "captured $2"
+  # A blank frame (app still starting) is a small PNG; look again a few times.
+  for _ in 1 2 3 4; do
+    sleep 5
+    xcrun simctl io "$1" screenshot "$out/$2.png" >/dev/null 2>&1
+    [ "$(wc -c < "$out/$2.png" 2>/dev/null || echo 0)" -gt 150000 ] && break
+  done
+  echo "captured $2"
 }
 for kind in iPhone iPad; do
   udid=$(pick "$kind"); [ -z "$udid" ] && { echo "no $kind simulator"; continue; }

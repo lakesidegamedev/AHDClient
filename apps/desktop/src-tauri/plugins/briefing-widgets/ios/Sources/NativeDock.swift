@@ -578,6 +578,9 @@ struct DockView: View {
     .padding(.horizontal, 4)
     .padding(.top, 2)
     .padding(.bottom, 4)
+    // Like the system tab bar, the row stops growing past the largest
+    // standard text size; the strip and the sheet keep scaling.
+    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     .animation(motion, value: model.selected)
   }
 
