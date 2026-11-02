@@ -72,7 +72,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     /** The sheet opened or closed, by tap, drag or code. */
     fun onExpandedChanged(expanded: Boolean)
 
-    /** The turn countdown ran out. Called at most every 30 seconds while it stays overdue. */
+    /** The turn countdown ran out. Called at most once a minute while it stays overdue. */
     fun onTurnDue()
   }
 
@@ -88,7 +88,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     private const val MAX_WIDTH_DP = 600
     private const val TAB_HEIGHT_DP = 56
     private const val STRIP_HEIGHT_DP = 48
-    private const val SHEET_SHARE = 0.62f
+    private const val SHEET_SHARE = 0.72f
   }
 
   private val density = resources.displayMetrics.density
@@ -165,7 +165,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
     visibility = View.VISIBLE
     panel.setPadding(left, 0, right, bottom)
-    val available = resources.displayMetrics.widthPixels
+    // The window's own width, which also holds in split screen; the display's until first layout.
+    val available = if (width > 0) width else resources.displayMetrics.widthPixels
     val width = min(available, dp(MAX_WIDTH_DP))
     (panel.layoutParams as LayoutParams).let { if (it.width != width) { it.width = width; panel.layoutParams = it } }
     val inner = max(0, width - left - right)
@@ -283,7 +284,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     val remaining = current.nextTurnAt?.minus(now)
     strip.setCountdown(current, remaining)
     sheet.setCountdown(current, remaining)
-    if (current.turnActive && remaining != null && remaining <= 0 && now - lastDueAt >= 30_000) {
+    if (current.turnActive && remaining != null && remaining <= 0 && now - lastDueAt >= 60_000) {
       lastDueAt = now
       listener.onTurnDue()
     }
@@ -456,7 +457,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
         }
         currentKeys = keys
       }
-      for (spec in specs) rows[spec.key]?.bind(spec, animate) { path -> setExpanded(false); listener.onOpenPath(path) }
+      // The countdown row ticks by itself; everything else crossfades when a figure changes.
+      for (spec in specs) rows[spec.key]?.bind(spec, animate && spec.key != "turn") { path -> setExpanded(false); listener.onOpenPath(path) }
       // Collapsed, the sheet stays measured at zero height so a drag knows its travel.
       visibility = if (rows.isEmpty()) View.GONE else View.VISIBLE
       requestLayout()
@@ -526,6 +528,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     private val label = TextView(context)
     private val value = FadeText(context, TEXT, 14f, bold = true)
     private val chevron = TextView(context)
+    private var boundPath: String? = null
 
     init {
       orientation = HORIZONTAL
@@ -538,8 +541,18 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       chevron.text = "›"
       chevron.setTextColor(MUTED)
       chevron.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-      addView(label, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-      addView(value, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+      if (resources.configuration.fontScale > 1.3f) {
+        // Large text: the label sits above its figure so neither is squeezed.
+        val stack = LinearLayout(context)
+        stack.orientation = VERTICAL
+        stack.addView(label)
+        value.gravity = Gravity.START
+        stack.addView(value)
+        addView(stack, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+      } else {
+        addView(label, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        addView(value, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+      }
       addView(chevron, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).also { it.marginStart = dp(10) })
       ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
@@ -555,13 +568,17 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       contentDescription = spec.spoken
       val path = spec.path
       chevron.visibility = if (path == null) View.GONE else View.VISIBLE
-      if (path == null) {
-        isClickable = false
-        background = null
-        setOnClickListener(null)
-      } else {
-        background = ripple()
-        setOnClickListener { open(path) }
+      // Only touch the ripple when the link changes, so a refresh never cuts a press short.
+      if (path != boundPath || background == null && path != null) {
+        boundPath = path
+        if (path == null) {
+          isClickable = false
+          background = null
+          setOnClickListener(null)
+        } else {
+          background = ripple()
+          setOnClickListener { open(path) }
+        }
       }
       isFocusable = true
     }
@@ -574,29 +591,32 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
   // ---- the strip -----------------------------------------------------------
 
-  /** Slim status line on top of the tab row. A tap or a drag opens the sheet. */
-  private inner class Strip(context: Context) : LinearLayout(context) {
+  /**
+   * Slim status line on top of the tab row. A tap or a drag opens the sheet.
+   * The turn clock, funds and actions share one row; when the phone is narrow
+   * or the font is large they wrap onto a second row instead of clipping.
+   */
+  private inner class Strip(context: Context) : ViewGroup(context) {
     private val grabber = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x40FFFFFF }
     private val turn = TextView(context)
     private val funds = FadeText(context, TEXT, 12f, bold = true)
     private val actions = FadeText(context, TEXT, 12f, bold = true)
     private val big = resources.configuration.fontScale > 1.2f
 
+    private val gap = dp(12)
+    private var rows: List<List<View>> = emptyList()
+
     init {
       setWillNotDraw(false)
-      orientation = HORIZONTAL
-      gravity = Gravity.CENTER_VERTICAL
       minimumHeight = dp(STRIP_HEIGHT_DP)
       setPadding(dp(18), dp(10), dp(18), dp(2))
       turn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
       turn.setTextColor(MUTED)
       turn.maxLines = if (big) 2 else 1
       turn.ellipsize = TextUtils.TruncateAt.END
-      funds.gravity = Gravity.CENTER
-      actions.gravity = Gravity.END
-      addView(turn, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
-      addView(funds, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).also { it.marginStart = dp(10); it.marginEnd = dp(10) })
-      addView(actions, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+      for (view in listOf(turn, funds, actions)) {
+        addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+      }
       background = ripple()
       isClickable = true
       isFocusable = true
@@ -624,6 +644,48 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       ViewCompat.setStateDescription(this, if (targetExpanded) "Expanded" else "Collapsed")
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+      val width = MeasureSpec.getSize(widthMeasureSpec)
+      val inner = max(0, width - paddingLeft - paddingRight)
+      val shown = listOf<View>(turn, funds, actions).filter { it.visibility != View.GONE }
+      val free = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+      for (view in shown) view.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), free)
+      // Fill a row until the next figure would not fit, then start another.
+      val flowed = ArrayList<MutableList<View>>()
+      var used = 0
+      for (view in shown) {
+        val need = view.measuredWidth + if (flowed.lastOrNull().isNullOrEmpty()) 0 else gap
+        if (flowed.isEmpty() || used + need > inner) {
+          flowed.add(mutableListOf(view)); used = view.measuredWidth
+        } else {
+          flowed.last().add(view); used += need
+        }
+      }
+      rows = flowed
+      var height = paddingTop + paddingBottom
+      flowed.forEachIndexed { index, row -> height += row.maxOf { it.measuredHeight } + if (index > 0) dp(2) else 0 }
+      setMeasuredDimension(width, max(height, suggestedMinimumHeight))
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+      val inner = (r - l) - paddingLeft - paddingRight
+      val heights = rows.map { row -> row.maxOf { it.measuredHeight } }
+      val content = heights.sum() + dp(2) * max(0, rows.size - 1)
+      var y = paddingTop + max(0, ((b - t) - paddingTop - paddingBottom - content) / 2)
+      rows.forEachIndexed { index, row ->
+        val widths = row.sumOf { it.measuredWidth }
+        // One figure sits in the middle; several spread edge to edge.
+        val space = if (row.size > 1) (inner - widths) / (row.size - 1) else 0
+        var x = paddingLeft + if (row.size == 1) (inner - widths) / 2 else 0
+        for (view in row) {
+          val top = y + (heights[index] - view.measuredHeight) / 2
+          view.layout(x, top, x + view.measuredWidth, top + view.measuredHeight)
+          x += view.measuredWidth + space
+        }
+        y += heights[index] + dp(2)
+      }
+    }
+
     override fun onDraw(canvas: Canvas) {
       super.onDraw(canvas)
       val half = dp(16).toFloat()
@@ -634,6 +696,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     fun bind(next: DockStatus?, animate: Boolean) {
       funds.visibility = if (next?.funds == null) View.GONE else View.VISIBLE
       actions.visibility = if (next?.actions == null) View.GONE else View.VISIBLE
+      requestLayout()
       next?.funds?.let { funds.setText(metricText(it), animate) }
       next?.actions?.let { actions.setText(it.value + " actions", animate) }
     }

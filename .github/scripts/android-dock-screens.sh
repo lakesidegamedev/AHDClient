@@ -56,7 +56,11 @@ preview() {
 
 a shell am start -W -n "$pkg/.MainActivity" >/dev/null
 sleep 12
-a shell input keyevent 111
+# The sign-in walk can leave the keyboard up; it rightly hides the dock.
+if a shell dumpsys input_method 2>/dev/null | grep -q "mInputShown=true"; then
+  a shell input keyevent 4
+  sleep 2
+fi
 a shell cmd uimode night yes >/dev/null 2>&1
 sleep 2
 
@@ -66,8 +70,9 @@ dump
 for tab in Game Briefing "Inbox, 3 unread" Ask More "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
 check "collapsed hides the sheet rows" absent "Campaign funds"
 
-# Drag the dock up the way a thumb would.
-a shell input swipe $((width / 2)) $((height - 140)) $((width / 2)) $((height * 40 / 100)) 350
+# Drag the dock up the way a thumb would, starting on its tab row.
+read -r gx gy < <(center "Game") || true
+a shell input swipe "$((width / 2))" "${gy:-$((height - 60))}" "$((width / 2))" "$((height * 35 / 100))" 350
 sleep 2
 shot 2-dragged-open
 dump
