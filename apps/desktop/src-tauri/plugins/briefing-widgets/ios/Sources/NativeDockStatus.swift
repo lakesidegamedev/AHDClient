@@ -13,7 +13,11 @@ struct DockStripContent: View {
   var body: some View {
     Group {
       if sizeCategory.isAccessibilityCategory {
+        // Large text stacks the figures; give the stack room so the last
+        // line is not cut by the rule above the tab row.
         VStack(alignment: .leading, spacing: 4) { chips }
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.vertical, 8)
           .frame(maxWidth: .infinity, alignment: .leading)
       } else {
         HStack(spacing: 12) {
