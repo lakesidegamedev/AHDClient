@@ -74,9 +74,10 @@ dump
 for tab in "Acme Corp" "New York" "United States" Actions "More, 3 unread" "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
 check "collapsed hides the sheet rows" absent "Campaign funds"
 
-# Drag the dock up the way a thumb would, starting on its tab row.
-read -r gx gy < <(center "Actions") || true
-a shell input swipe "$((width / 2))" "${gy:-$((height - 60))}" "$((width / 2))" "$((height * 35 / 100))" 350
+# Drag the dock up the way a thumb would. It starts on the status strip, clear
+# of the system gesture zone along the bottom edge (a swipe from there goes Home).
+read -r gx gy < <(center "Status.") || true
+a shell input swipe "$((width / 2))" "${gy:-$((height - 120))}" "$((width / 2))" "$((height * 35 / 100))" 350
 sleep 2
 shot 2-dragged-open
 dump

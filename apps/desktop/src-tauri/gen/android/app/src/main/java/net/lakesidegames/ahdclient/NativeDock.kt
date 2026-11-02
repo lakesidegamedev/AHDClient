@@ -726,6 +726,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       val menuRow = spec.link != null
       label.setTextColor(if (menuRow) TEXT else MUTED)
       value.setText(spec.value, animate)
+      // A row with no figure (a menu link) gives its space to the label.
+      value.visibility = if (spec.value.isEmpty()) View.GONE else View.VISIBLE
       contentDescription = spec.spoken
       icon.setIcon(spec.icon)
       icon.visibility = if (spec.icon != null) View.VISIBLE else View.GONE
@@ -750,6 +752,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
     fun bindValue(text: CharSequence, spoken: String, animate: Boolean) {
       value.setText(text, animate)
+      value.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
       contentDescription = spoken
     }
   }
@@ -1093,7 +1096,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       label.text = tab.label
       label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
       label.setTextColor(MUTED)
-      label.maxLines = 1
+      // Large text: names (a state, a company) wrap to a second line before they are cut.
+      label.maxLines = if (resources.configuration.fontScale > 1.3f) 2 else 1
       label.ellipsize = TextUtils.TruncateAt.END
       label.gravity = Gravity.CENTER
       label.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
