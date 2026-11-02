@@ -141,6 +141,21 @@ describe("Launcher", () => {
     expect(document.querySelector(".launcher-quick")).toBeNull();
   });
 
+  it("tells phone players what the bottom bar does, and keeps the desktop line", () => {
+    renderLauncher({ mobile: true });
+    expect(
+      screen.getByText(
+        "Your session stays in the app. The bar at the bottom moves between your company, state, nation and actions, and More holds Briefing, Inbox and Ask.",
+      ),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Use the tabs at the bottom");
+    cleanup();
+    localStorage.setItem("ahdclient.launcher.mode", "mp");
+    renderLauncher();
+    expect(screen.getByText("Your account and session stay together in the app.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("bar at the bottom");
+  });
+
   it("leaves Briefing and Ask to the native tab bar once it is attached", () => {
     (window as { __ahdclientNativeTabs?: boolean }).__ahdclientNativeTabs = true;
     try {

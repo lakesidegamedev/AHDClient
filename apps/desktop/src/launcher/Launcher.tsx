@@ -136,9 +136,9 @@ export function Launcher({
   const latestRunning =
     latestWorld !== null && runningSlot === latestWorld.slot;
   const selectedPhoto = selectedEra ? ERA_PHOTOS[selectedEra.id] : undefined;
-  // Phones keep the top bar to identity and Settings. Briefing and Ask are
-  // tabs in the native tab bar there (2.7), so the launcher does not repeat
-  // them; the quick row only remains for a phone whose tab bar failed to
+  // Phones keep the top bar to identity and Settings. Briefing and Ask live
+  // in the native dock's More sheet there (2.10), so the launcher does not
+  // repeat them; the quick row only remains for a phone whose dock failed to
   // attach, which marks nothing on the page.
   const nativeTabs =
     mobile && typeof window !== "undefined" &&
@@ -252,7 +252,7 @@ export function Launcher({
                   {mode === "sandbox"
                     ? "A separate world for trying things out. Nothing here touches the main game."
                     : mobile
-                      ? "Your session stays in the app. Use the tabs at the bottom to move between the game, your briefing, inbox and Ask."
+                      ? "Your session stays in the app. The bar at the bottom moves between your company, state, nation and actions, and More holds Briefing, Inbox and Ask."
                       : "Your account and session stay together in the app."}
                 </small>
               </span>
