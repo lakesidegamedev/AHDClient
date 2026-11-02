@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.10.0] - 2026-11-02
+
+- iPhone, iPad and Android: a new bottom bar. It has the game's own tabs (your company, your state, your nation, Actions and More) with the game's pixel icons, and the status bar is built into it: time to the next turn, your funds and what they changed by, and your actions, all on one line.
+- Drag the bar up or tap the status line to see your full status: funds, actions, company cash, influence, the next turn and unread messages. Tap any row to open that page.
+- Your state, your nation and More open a menu that grows out of the bar. More also holds Briefing, Inbox with its unread count, Ask and the way back to the launcher.
+- The bar follows the page you are on, slides smoothly between tabs and shows changing numbers as they update. With Reduce Motion on, it simply fades.
+- The game no longer shows its own status bar at the bottom inside the app, so there is one bar instead of two.
+- The bar's labels follow the language you chose in the game, and the nation tab follows the country you are looking at.
+- Help links such as the wiki, Discord and support email open in your browser.
+- iPad: Cmd+1 to Cmd+5 switch between the five tabs.
+- The desktop app is unchanged.
+
 ## [2.9.0] - 2026-11-02
 
 - Singleplayer worlds have saves. Open Saves from the menu in the game bar, or from Your worlds, to save under a name, go back to any save, or delete one. Loading a save keeps where you were as one extra save first, so it can be undone.
