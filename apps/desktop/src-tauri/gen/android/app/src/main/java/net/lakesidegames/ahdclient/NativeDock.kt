@@ -37,6 +37,7 @@ import android.widget.TextView
 import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.core.widget.TextViewCompat
 import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
@@ -192,6 +193,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       strip.measure(exact, free)
       height += strip.measuredHeight
     }
+    // The sheet's room depends on this height: a strip that just appeared must not leave it taller than the screen allows.
+    if (reportedHeight != height + bottom) requestLayout()
     reportedHeight = height + bottom
     return reportedHeight
   }
@@ -803,6 +806,11 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     /** Icon and text of each figure that is showing, left to right. */
     private var showing: List<Pair<View, View>> = emptyList()
 
+    /** Funds with and without the per-turn change; the change goes first when the line is too tight. */
+    private var fundsFull: CharSequence = ""
+    private var fundsValue: CharSequence? = null
+    private var compactFor = -1
+
     private fun glyph(icon: PixelIcon) = PixelIconView(context).also {
       it.setIcon(icon)
       it.setTint(MUTED)
@@ -856,8 +864,16 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       showing = shown
       val iconSpec = MeasureSpec.makeMeasureSpec(glyphSize, MeasureSpec.EXACTLY)
       for (view in listOf<View>(turnIcon, fundsIcon, actionsIcon, chevron)) view.measure(iconSpec, iconSpec)
+      // Decided once per width (and again after each new figure), never per frame, so measuring cannot loop.
+      if (fundsValue != null && compactFor != inner) {
+        compactFor = inner
+        funds.setText(fundsFull, animate = false)
+        for ((_, text) in shown) text.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), free)
+        val tight = shown.sumOf { (_, text) -> glyphSize + glyphGap + text.measuredWidth } + glyphSize + minGap * shown.size > inner
+        if (tight) funds.setText(fundsValue!!, animate = false)
+      }
       for ((_, text) in shown) text.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), free)
-      // One line only: when the figures do not fit, the funds amount gives way first, then the countdown.
+      // One line only: when the figures still do not fit, the funds amount gives way first, then the countdown.
       var overflow = shown.sumOf { (_, text) -> glyphSize + glyphGap + text.measuredWidth } + glyphSize +
         minGap * shown.size - inner
       for (target in listOf<View>(funds, turn, actions)) {
@@ -909,7 +925,12 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       actions.visibility = if (actionsOn) View.VISIBLE else View.GONE
       actionsIcon.visibility = if (actionsOn) View.VISIBLE else View.GONE
       requestLayout()
-      next?.funds?.let { funds.setText(metricText(it), animate) }
+      next?.funds?.let {
+        fundsFull = metricText(it)
+        fundsValue = if (it.change != null) it.value else null
+        compactFor = -1
+        funds.setText(fundsFull, animate)
+      }
       // "6/10": the glyph says what it counts.
       next?.actions?.let { actions.setText(it.value.replace(" / ", "/"), animate) }
     }
@@ -1142,6 +1163,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       // Large text: names (a state, a company) wrap to a second line before they are cut.
       label.maxLines = if (resources.configuration.fontScale > 1.3f) 2 else 1
       label.ellipsize = TextUtils.TruncateAt.END
+      // A single long word ("Company") shrinks to fit instead of breaking mid-word at large text sizes.
+      TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(label, 8, 11, 1, TypedValue.COMPLEX_UNIT_SP)
       label.gravity = Gravity.CENTER
       label.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       addView(label, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(2) })

@@ -229,6 +229,9 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     }
     previewing = true
     dock.closeSheet(animate = false)
+    // Show the dock over the kind of page it belongs to: a game page, or the launcher.
+    if (mode == "launcher" && page == Page.SITE) webView.loadUrl(LAUNCHER)
+    else if (mode != "launcher" && page != Page.SITE) webView.loadUrl("${BriefingWidgets.ORIGIN}/")
     if (mode == "signedout") {
       dock.setModel(DockModel.fallback(false))
       dock.setInboxBadge(0)

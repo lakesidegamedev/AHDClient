@@ -30,6 +30,21 @@ sys.exit(0 if any(f'content-desc="{sys.argv[1]}' in n for n in re.findall(r"<nod
 PY
 }
 
+# center_exact "<description>": the same for a node whose whole description matches (a tab, not a row that starts with its name).
+center_exact() {
+  python3 - "$1" <<'PY'
+import re, sys
+xml = open("probe/dock-ui.xml", encoding="utf-8", errors="ignore").read()
+for n in re.findall(r"<node [^>]*>", xml):
+    if f'content-desc="{sys.argv[1]}"' in n:
+        m = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+        if m:
+            x1, y1, x2, y2 = map(int, m.groups())
+            print((x1 + x2) // 2, (y1 + y2) // 2)
+            break
+PY
+}
+
 # center "<prefix>": print the x y centre of the first node whose description starts so.
 center() {
   python3 - "$1" <<'PY'
@@ -52,7 +67,8 @@ absent() { ! has "$1"; }
 
 preview() {
   a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://dock?preview=$1" >/dev/null
-  sleep 5
+  # The preview puts the dock over a game page (or the launcher), which takes a moment to load.
+  sleep 9
 }
 
 # The Ask screenshots leave their sheet open over the app: close it, then
@@ -110,14 +126,14 @@ fi
 
 # A menu tab opens its own sheet from the same surface; tapping it again closes it.
 dump
-read -r x y < <(center "New York") || true
+read -r x y < <(center_exact "New York") || true
 if [ -n "${x:-}" ]; then
   a shell input tap "$x" "$y"; sleep 2
   shot 4-state-sheet
   dump
   check "State tab opens its menu" has "State economy"
   check "State menu lists elections" has "Elections"
-  read -r x y < <(center "New York") || true
+  read -r x y < <(center_exact "New York") || true
   [ -n "${x:-}" ] && a shell input tap "$x" "$y"; sleep 2
   dump
   check "State tab again closes its menu" absent "State economy"
