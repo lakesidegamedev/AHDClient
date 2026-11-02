@@ -27,6 +27,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -293,6 +294,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     targetExpanded = value
     strip.refreshState()
     listener.onExpandedChanged(value)
+    // An open sheet is modal for screen readers: focus moves into it and says what it is.
+    if (value) post { sheet.focusForAccessibility() }
   }
 
   /** What the sheet shows now: the open menu, or the status figures. */
@@ -325,6 +328,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   private fun setProgress(value: Float) {
     progress = value.coerceIn(0f, 1f)
     sheet.reveal = progress
+    strip.setProgress(if (menuId == null) progress else 0f)
     scrim.alpha = progress * 0.5f
     val open = progress > 0f
     val wanted = if (open) View.VISIBLE else View.GONE
@@ -480,8 +484,10 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     /** A menu row's target: a game page or an app action. */
     val link: DockLink? = null,
     val icon: PixelIcon? = null,
-    /** Menu rows without an icon keep the icon's width free when other rows in the menu have one. */
-    val indent: Boolean = false,
+    /** Menu rows always keep the leading icon column, drawn or not, so labels line up. */
+    val reserveIcon: Boolean = false,
+    /** Opens outside the game (browser or mail): shows an outward arrow instead of a chevron. */
+    val external: Boolean = false,
   ) {
     val opens: Boolean get() = path != null || link != null
   }
@@ -520,6 +526,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       caption.setPadding(dp(18), 0, dp(18), dp(6))
       caption.maxLines = 1
       caption.ellipsize = TextUtils.TruncateAt.END
+      caption.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+      ViewCompat.setAccessibilityHeading(caption, true)
       column.addView(caption)
       scroll.addView(column, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
       scroll.isVerticalScrollBarEnabled = false
@@ -559,16 +567,25 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
     fun bindMenu(menu: DockSheet, tabLabel: String, unread: Int) {
       val entries = ArrayList<Entry>()
-      val anyIcon = menu.sections.any { section -> section.links.any { it.icon != null } }
-      for (section in menu.sections) {
-        if (section.title.isNotEmpty()) entries.add(Entry.Heading("section-${section.id}", section.title))
-        for (link in section.links) {
+      menu.sections.forEachIndexed { sectionIndex, section ->
+        if (section.title.isNotEmpty()) entries.add(Entry.Heading("section-$sectionIndex-${section.id}", section.title))
+        section.links.forEachIndexed { linkIndex, link ->
           val badge = if (link.app == AppAction.INBOX && unread > 0) "$unread unread" else ""
-          val spoken = if (badge.isNotEmpty()) "${link.label}, $badge" else link.label
-          entries.add(Entry.Row(RowSpec("link-${section.id}-${link.id}", link.label, badge, spoken, link = link, icon = link.icon, indent = anyIcon)))
+          val spoken = (if (badge.isNotEmpty()) "${link.label}, $badge" else link.label) + if (link.external) ", opens outside the game" else ""
+          // Keyed by position: ids may repeat across sections.
+          entries.add(Entry.Row(RowSpec("link-$sectionIndex-$linkIndex-${link.id}", link.label, badge, spoken, link = link,
+            icon = link.icon, reserveIcon = true, external = link.external)))
         }
       }
       apply(menu.title.ifEmpty { tabLabel }, menu.title.ifEmpty { tabLabel }, entries, animate = false)
+    }
+
+    /** Moves screen-reader focus to the sheet's caption (or the sheet itself when it has none) when a reader is on. */
+    fun focusForAccessibility() {
+      val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+      if (manager?.isEnabled != true) return
+      val target: View = if (caption.visibility == View.VISIBLE) caption else this
+      target.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
     }
 
     private fun apply(title: String, paneTitle: String?, entries: List<Entry>, animate: Boolean) {
@@ -692,6 +709,9 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       setPadding(dp(18), dp(4), dp(18), dp(4))
       label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
       label.setTextColor(MUTED)
+      // Long labels (a party, an office) ellipsize instead of pushing the row apart.
+      label.maxLines = 2
+      label.ellipsize = TextUtils.TruncateAt.END
       icon.setTint(MUTED)
       value.gravity = Gravity.END
       chevron.text = "›"
@@ -730,10 +750,10 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       value.visibility = if (spec.value.isEmpty()) View.GONE else View.VISIBLE
       contentDescription = spec.spoken
       icon.setIcon(spec.icon)
-      icon.visibility = if (spec.icon != null) View.VISIBLE else View.GONE
-      // Rows without an icon line up with the ones that have one.
-      label.setPadding(if (spec.indent && spec.icon == null) dp(32) else 0, 0, 0, 0)
+      // The icon column is always there on menu rows, so labels line up whether or not a row has an icon.
+      icon.visibility = if (spec.icon != null) View.VISIBLE else if (spec.reserveIcon) View.INVISIBLE else View.GONE
       val target: Any? = spec.link ?: spec.path
+      chevron.text = if (spec.external) "\u2197" else "\u203A"
       chevron.visibility = if (target == null) View.GONE else View.VISIBLE
       // Only touch the ripple when the target changes, so a refresh never cuts a press short.
       if (target != boundTarget || background == null && target != null) {
@@ -760,38 +780,46 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   // ---- the strip -----------------------------------------------------------
 
   /**
-   * Slim status line on top of the tab row. A tap or a drag opens the sheet.
-   * The turn clock, funds and actions share one row; when the phone is narrow
-   * or the font is large they wrap onto a second row instead of clipping.
+   * One slim line on top of the tab row, the same on both platforms: clock
+   * glyph and countdown, funds glyph with amount and change, actions glyph
+   * with n/m, and a chevron that turns over as the sheet opens. A tap or a drag
+   * opens the sheet. When the phone is narrow or the font large the funds
+   * figure ellipsizes before anything wraps to a second line.
    */
   private inner class Strip(context: Context) : ViewGroup(context) {
     private val grabber = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x40FFFFFF }
-    private val turn = TextView(context)
-    private val funds = FadeText(context, TEXT, 12f, bold = true)
-    private val actions = FadeText(context, TEXT, 12f, bold = true)
-    private val big = resources.configuration.fontScale > 1.2f
+    private val turnIcon = glyph(DockModel.CLOCK_ICON)
+    private val turn = FadeText(context, TEXT, 12f, bold = true).also { it.tabularFigures() }
+    private val fundsIcon = glyph(DockModel.FUNDS_ICON)
+    private val funds = FadeText(context, TEXT, 12f, bold = true).also { it.tabularFigures() }
+    private val actionsIcon = glyph(DockModel.ACTIONS_ICON)
+    private val actions = FadeText(context, TEXT, 12f, bold = true).also { it.tabularFigures() }
+    private val chevron = glyph(DockModel.CHEVRON_ICON)
 
-    private val gap = dp(12)
-    private var rows: List<List<View>> = emptyList()
+    private val glyphSize = dp(16)
+    private val glyphGap = dp(5)
+    private val minGap = dp(10)
+
+    /** Icon and text of each figure that is showing, left to right. */
+    private var showing: List<Pair<View, View>> = emptyList()
+
+    private fun glyph(icon: PixelIcon) = PixelIconView(context).also {
+      it.setIcon(icon)
+      it.setTint(MUTED)
+    }
 
     init {
       setWillNotDraw(false)
       minimumHeight = dp(STRIP_HEIGHT_DP)
       setPadding(dp(18), dp(10), dp(18), dp(2))
-      turn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-      turn.setTextColor(MUTED)
-      turn.maxLines = if (big) 2 else 1
-      turn.ellipsize = TextUtils.TruncateAt.END
-      for (view in listOf(turn, funds, actions)) {
+      for (view in listOf<View>(turnIcon, turn, fundsIcon, funds, actionsIcon, actions, chevron)) {
         addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
       }
       background = ripple()
       isClickable = true
       isFocusable = true
       // One element for screen readers: the description carries the values.
-      turn.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-      funds.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-      actions.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+      for (view in listOf(turn, funds, actions)) view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       setOnClickListener { if (targetExpanded && menuId == null) closeSheet() else openSheet(null, animate = true) }
       ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
@@ -812,46 +840,58 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       ViewCompat.setStateDescription(this, if (targetExpanded && menuId == null) "Expanded" else "Collapsed")
     }
 
+    /** The chevron points up when closed and turns over as the sheet opens. */
+    fun setProgress(value: Float) {
+      chevron.rotation = value * 180f
+    }
+
+    private fun figures(): List<Pair<View, View>> = listOf(turnIcon to turn, fundsIcon to funds, actionsIcon to actions)
+      .filter { (_, text) -> text.visibility != View.GONE }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
       val width = MeasureSpec.getSize(widthMeasureSpec)
       val inner = max(0, width - paddingLeft - paddingRight)
-      val shown = listOf<View>(turn, funds, actions).filter { it.visibility != View.GONE }
       val free = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-      for (view in shown) view.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), free)
-      // Fill a row until the next figure would not fit, then start another.
-      val flowed = ArrayList<MutableList<View>>()
-      var used = 0
-      for (view in shown) {
-        val need = view.measuredWidth + if (flowed.lastOrNull().isNullOrEmpty()) 0 else gap
-        if (flowed.isEmpty() || used + need > inner) {
-          flowed.add(mutableListOf(view)); used = view.measuredWidth
-        } else {
-          flowed.last().add(view); used += need
+      val shown = figures()
+      showing = shown
+      val iconSpec = MeasureSpec.makeMeasureSpec(glyphSize, MeasureSpec.EXACTLY)
+      for (view in listOf<View>(turnIcon, fundsIcon, actionsIcon, chevron)) view.measure(iconSpec, iconSpec)
+      for ((_, text) in shown) text.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), free)
+      // One line only: when the figures do not fit, the funds amount gives way first, then the countdown.
+      var overflow = shown.sumOf { (_, text) -> glyphSize + glyphGap + text.measuredWidth } + glyphSize +
+        minGap * shown.size - inner
+      for (target in listOf<View>(funds, turn, actions)) {
+        if (overflow <= 0) break
+        if (shown.none { it.second === target }) continue
+        val cut = min(overflow, max(0, target.measuredWidth - dp(36)))
+        if (cut > 0) {
+          target.measure(MeasureSpec.makeMeasureSpec(target.measuredWidth - cut, MeasureSpec.AT_MOST), free)
+          overflow -= cut
         }
       }
-      rows = flowed
-      var height = paddingTop + paddingBottom
-      flowed.forEachIndexed { index, row -> height += row.maxOf { it.measuredHeight } + if (index > 0) dp(2) else 0 }
-      setMeasuredDimension(width, max(height, suggestedMinimumHeight))
+      var content = glyphSize
+      for ((_, text) in shown) content = max(content, text.measuredHeight)
+      setMeasuredDimension(width, max(paddingTop + paddingBottom + content, suggestedMinimumHeight))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
       val inner = (r - l) - paddingLeft - paddingRight
-      val heights = rows.map { row -> row.maxOf { it.measuredHeight } }
-      val content = heights.sum() + dp(2) * max(0, rows.size - 1)
-      var y = paddingTop + max(0, ((b - t) - paddingTop - paddingBottom - content) / 2)
-      rows.forEachIndexed { index, row ->
-        val widths = row.sumOf { it.measuredWidth }
-        // One figure sits in the middle; several spread edge to edge.
-        val space = if (row.size > 1) (inner - widths) / (row.size - 1) else 0
-        var x = paddingLeft + if (row.size == 1) (inner - widths) / 2 else 0
-        for (view in row) {
-          val top = y + (heights[index] - view.measuredHeight) / 2
-          view.layout(x, top, x + view.measuredWidth, top + view.measuredHeight)
-          x += view.measuredWidth + space
-        }
-        y += heights[index] + dp(2)
+      val centre = paddingTop + ((b - t) - paddingTop - paddingBottom) / 2
+      fun place(view: View, x: Int) {
+        val top = centre - view.measuredHeight / 2
+        view.layout(x, top, x + view.measuredWidth, top + view.measuredHeight)
       }
+      // The chevron holds the right edge; the figures spread evenly across the rest.
+      place(chevron, paddingLeft + inner - glyphSize)
+      val used = showing.sumOf { (_, text) -> glyphSize + glyphGap + text.measuredWidth }
+      val space = if (showing.isEmpty()) 0 else max(minGap, (inner - glyphSize - used) / showing.size)
+      var x = paddingLeft
+      for ((icon, text) in showing) {
+        place(icon, x)
+        place(text, x + glyphSize + glyphGap)
+        x += glyphSize + glyphGap + text.measuredWidth + space
+      }
+      for (view in listOf(turnIcon, fundsIcon, actionsIcon)) if (showing.none { it.first === view }) view.layout(0, 0, 0, 0)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -862,30 +902,27 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
 
     fun bind(next: DockStatus?, animate: Boolean) {
-      funds.visibility = if (next?.funds == null) View.GONE else View.VISIBLE
-      actions.visibility = if (next?.actions == null) View.GONE else View.VISIBLE
+      val fundsOn = next?.funds != null
+      val actionsOn = next?.actions != null
+      funds.visibility = if (fundsOn) View.VISIBLE else View.GONE
+      fundsIcon.visibility = if (fundsOn) View.VISIBLE else View.GONE
+      actions.visibility = if (actionsOn) View.VISIBLE else View.GONE
+      actionsIcon.visibility = if (actionsOn) View.VISIBLE else View.GONE
       requestLayout()
       next?.funds?.let { funds.setText(metricText(it), animate) }
-      next?.actions?.let { actions.setText(it.value + " actions", animate) }
+      // "6/10": the glyph says what it counts.
+      next?.actions?.let { actions.setText(it.value.replace(" / ", "/"), animate) }
     }
 
     fun setCountdown(current: DockStatus, remaining: Long?) {
-      val builder = SpannableStringBuilder()
-      val label: String
-      val time: String
-      when {
-        !current.turnActive -> { label = "Turns"; time = "paused" }
-        remaining == null -> { label = ""; time = "" }
-        remaining <= 0 -> { label = "Turn"; time = "running" }
-        else -> { label = "Next turn"; time = DockFormat.countdown(remaining) }
+      val text = DockFormat.clock(remaining, current.turnActive)
+      turn.setText(text, animate = false)
+      val visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+      if (turn.visibility != visibility) {
+        turn.visibility = visibility
+        turnIcon.visibility = visibility
+        requestLayout()
       }
-      builder.append(label)
-      if (label.isNotEmpty() && time.isNotEmpty()) builder.append(' ')
-      val start = builder.length
-      builder.append(time)
-      builder.setSpan(ForegroundColorSpan(TEXT), start, builder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-      turn.text = builder
-      turn.visibility = if (builder.isEmpty()) View.GONE else View.VISIBLE
       // Spoken text changes by the minute, not the second.
       val spokenTime = when {
         !current.turnActive -> "Turns are paused"
@@ -918,6 +955,12 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       addView(back, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
       addView(front, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
       back.alpha = 0f
+    }
+
+    /** Digits of equal width, so a ticking countdown does not shift its neighbours. */
+    fun tabularFigures() {
+      front.fontFeatureSettings = "tnum"
+      back.fontFeatureSettings = "tnum"
     }
 
     private fun label(color: Int, size: Float, bold: Boolean) = TextView(context).apply {
@@ -1112,7 +1155,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
             info.addAction(
               AccessibilityNodeInfoCompat.AccessibilityActionCompat(
                 AccessibilityNodeInfo.ACTION_CLICK,
-                if (checked && targetExpanded && menuId == tab.id) "Close ${tab.label} menu" else "Open ${tab.label} menu",
+                if (checked && targetExpanded && menuId == tab.id) "Close ${tab.fullLabel} menu" else "Open ${tab.fullLabel} menu",
               ),
             )
           }
@@ -1157,7 +1200,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
 
     private fun describe() {
-      contentDescription = if (count > 0) "${tab.label}, $count unread" else tab.label
+      contentDescription = if (count > 0) "${tab.fullLabel}, $count unread" else tab.fullLabel
     }
   }
 }

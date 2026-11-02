@@ -180,7 +180,28 @@ object DockFormat {
   private fun format(pattern: String, value: Double): String =
     DecimalFormat(pattern, DecimalFormatSymbols(Locale.getDefault())).format(value)
 
-  /** Live countdown for the strip: "2h 14m", "14m 05s", "45s". */
+  /**
+   * The strip's countdown, one compact token like the iOS dock: "2:14:05", "14:05",
+   * "3d 4h", "Due now" once it has passed, "Paused" when turns are stopped, and
+   * an empty string when there is no turn time to show.
+   */
+  fun clock(remainingMs: Long?, active: Boolean): String {
+    if (!active) return "Paused"
+    if (remainingMs == null) return ""
+    val total = remainingMs / 1000
+    if (total <= 0) return "Due now"
+    val days = total / 86_400
+    val hours = total / 3_600
+    val minutes = (total % 3_600) / 60
+    val seconds = total % 60
+    return when {
+      days > 0 -> "${days}d ${hours % 24}h"
+      hours > 0 -> "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+      else -> "$minutes:${seconds.toString().padStart(2, '0')}"
+    }
+  }
+
+  /** Live countdown for the status sheet: "2h 14m", "14m 05s", "45s". */
   fun countdown(remainingMs: Long): String {
     val total = (remainingMs / 1000).coerceAtLeast(0)
     val days = total / 86_400

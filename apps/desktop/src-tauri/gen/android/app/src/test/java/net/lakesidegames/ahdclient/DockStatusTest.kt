@@ -45,6 +45,18 @@ class DockStatusTest {
     assertEquals("0s", DockFormat.countdown(-5_000L))
   }
 
+  @Test fun stripClockIsOneCompactToken() {
+    assertEquals("2:14:05", DockFormat.clock((2 * 3600 + 14 * 60 + 5) * 1000L, true))
+    assertEquals("14:05", DockFormat.clock((14 * 60 + 5) * 1000L, true))
+    assertEquals("0:45", DockFormat.clock(45_000L, true))
+    assertEquals("23:59:59", DockFormat.clock((23 * 3600 + 59 * 60 + 59) * 1000L, true))
+    assertEquals("1d 4h", DockFormat.clock(28 * 3600 * 1000L, true))
+    assertEquals("Due now", DockFormat.clock(0L, true))
+    assertEquals("Due now", DockFormat.clock(-5_000L, true))
+    assertEquals("Paused", DockFormat.clock(3_600_000L, false))
+    assertEquals("", DockFormat.clock(null, true))
+  }
+
   @Test fun spokenCountdownIsCoarse() {
     assertEquals("2 hours 14 minutes", DockFormat.spokenCountdown((2 * 3600 + 14 * 60 + 5) * 1000L))
     assertEquals("1 hour 1 minute", DockFormat.spokenCountdown((3600 + 60) * 1000L))
