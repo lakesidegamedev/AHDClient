@@ -26,6 +26,15 @@ for kind in iPhone iPad; do
     sleep 26
     xcrun simctl io "$udid" screenshot "ios-dock-app-screens/$kind-$state.png" >/dev/null 2>&1 && echo "captured $kind $state"
   done
+  # Large text: the same dock at an accessibility size.
+  xcrun simctl ui "$udid" content_size accessibility-extra-extra-large
+  for state in collapsed more; do
+    xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1
+    xcrun simctl launch "$udid" "$bundle" -AHDDockPreview "$state" >/dev/null
+    sleep 26
+    xcrun simctl io "$udid" screenshot "ios-dock-app-screens/$kind-$state-bigtext.png" >/dev/null 2>&1 && echo "captured $kind $state bigtext"
+  done
+  xcrun simctl ui "$udid" content_size large
   xcrun simctl shutdown "$udid" 2>/dev/null
 done
 ls -la ios-dock-app-screens
