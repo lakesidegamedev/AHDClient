@@ -399,16 +399,11 @@ struct DockSheetRow: View {
 struct DockPixelIcon: View {
   let icon: DockIcon
   let base: CGFloat
-  @ScaledMetric(relativeTo: .caption2) private var scaled: CGFloat
-
-  init(icon: DockIcon, base: CGFloat) {
-    self.icon = icon
-    self.base = base
-    _scaled = ScaledMetric(wrappedValue: base, relativeTo: .caption2)
-  }
+  /// 1 at the default text size, growing with Dynamic Type.
+  @ScaledMetric(relativeTo: .caption2) private var factor: CGFloat = 1
 
   var body: some View {
-    let side = min(scaled, base * 1.5)
+    let side = min(base * factor, base * 1.5)
     Canvas { context, size in
       let columns = CGFloat(max(icon.columns, 1))
       let rows = CGFloat(max(icon.rows, 1))
