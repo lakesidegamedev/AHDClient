@@ -19,6 +19,7 @@ SOURCES = Path(__file__).resolve().parents[1] / "apps/desktop/src-tauri/plugins/
 MARKERS = {
     "NativePush.swift": ["Apple declined push registration: ", "This build is not set up for push alerts.",
         "Push alerts are on. Tap one to open what it is about."],
+    "NativeDock.swift": ["Close status", "Shows the full status"],
     "NativeAskView.swift": ["Ask uses outside AI services", "Ask sends nothing until you allow it."],
 }
 
