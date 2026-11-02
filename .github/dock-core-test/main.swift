@@ -159,7 +159,7 @@ func tab(_ id: String, sheet: String? = nil, href: String? = nil, extra: String 
   return "{" + parts.joined(separator: ",") + "}"
 }
 func link(_ id: String, href: String = "/x", extra: String = "") -> String {
-  "{\"id\":\"\(id)\",\"label\":\"L\(id)\",\"href\":\"\(href)\"\(extra.isEmpty ? "" : "," + extra)}"
+  "{\"id\":\"\(id)\",\"label\":\"Label\",\"href\":\"\(href)\"\(extra.isEmpty ? "" : "," + extra)}"
 }
 func section(_ id: String, _ links: [String]) -> String {
   "{\"id\":\"\(id)\",\"title\":\"T\",\"links\":[\(links.joined(separator: ","))]}"
