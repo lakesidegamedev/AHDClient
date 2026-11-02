@@ -64,9 +64,11 @@ class MainActivity : TauriActivity() {
       return
     }
     if (uri.host == "dock") {
-      // Design review only: the dock with canned figures and no network.
+      // Design review only: the dock with canned figures and no network. Debug and CI
+      // builds only; a store build ignores the link, so no page or app can fake a dock.
       intent.data = null
-      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "off") } ?: "collapsed"
+      if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return
+      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "off") } ?: "collapsed"
       applyDockPreview()
       return
     }

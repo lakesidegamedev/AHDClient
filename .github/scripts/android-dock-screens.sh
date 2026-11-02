@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Screenshot and probe the native dock. The preview link
-# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout) draws the dock with canned
-# figures and no network, so every run shows the same thing. Then drive it the
+# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher) draws the dock with canned
+# figures and no network, so every run shows the same thing. The link only exists in the
+# unsigned pull request build (BuildConfig.DOCK_PREVIEW); a store build ignores it. Then drive it the
 # way a player would (drag up, Back, tap the strip) and read the accessibility
 # tree to check what is on screen. Prints DOCK lines for the log; never fails
 # the job: screenshots and probes are evidence, not a gate. Writes to probe/.
@@ -71,7 +72,7 @@ sleep 2
 preview collapsed
 shot 1-collapsed
 dump
-for tab in "Acme Corp" "New York" "United States" Actions "More, 3 unread" "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
+for tab in Company "New York" "United States" Actions "More, 3 unread" "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
 check "collapsed hides the sheet rows" absent "Campaign funds"
 
 # Drag the dock up the way a thumb would. It starts on the status strip, clear
@@ -114,12 +115,12 @@ if [ -n "${x:-}" ]; then
   a shell input tap "$x" "$y"; sleep 2
   shot 4-state-sheet
   dump
-  check "State tab opens its menu" has "State market"
+  check "State tab opens its menu" has "State economy"
   check "State menu lists elections" has "Elections"
   read -r x y < <(center "New York") || true
   [ -n "${x:-}" ] && a shell input tap "$x" "$y"; sleep 2
   dump
-  check "State tab again closes its menu" absent "State market"
+  check "State tab again closes its menu" absent "State economy"
 else
   echo "DOCK FAILED: no State tab to tap"
 fi
@@ -128,7 +129,8 @@ fi
 preview more
 shot 5-more-sheet
 dump
-for row in Briefing "Inbox, 3 unread" Ask "Back to launcher" Profile; do check "More lists '$row'" has "$row"; done
+for row in Briefing "Inbox, 3 unread" Ask "Back to launcher" Portfolio "Discord, opens outside the game"; do check "More lists '$row'" has "$row"; done
+check "More lists the Inbox once (the game's Notifications row is dropped)" absent "Notifications ("
 a shell input keyevent 4
 sleep 2
 dump
@@ -139,8 +141,15 @@ preview signedout
 shot 6-signed-out
 dump
 for tab in Game Briefing Ask More; do check "signed-out dock shows '$tab'" has "$tab"; done
-check "signed-out dock hides the game's tabs" absent "Acme Corp"
+check "signed-out dock hides the game's tabs" absent "Company"
 check "signed-out dock hides the status strip" absent "Status."
+
+# The launcher screen: the dock stays, the status strip does not.
+preview launcher
+shot 12-launcher
+dump
+check "launcher dock keeps the tabs" has "Company"
+check "launcher dock hides the status strip" absent "Status."
 
 # The finished look, dark and light system themes.
 preview expanded

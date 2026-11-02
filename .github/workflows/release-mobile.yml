@@ -105,6 +105,10 @@ jobs:
           } > "$dir/keystore.properties"
 
       - name: Build the APK and the Play bundle
+        env:
+          # Pull request builds are never signed or shipped; they carry the dock
+          # screenshot link the launch job uses. Tag and dispatch builds do not.
+          AHD_DOCK_PREVIEW: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: npm run tauri --workspace apps/desktop -- android build --apk --aab
 
       # Pure Kotlin tests (status figures, countdown wording) run on the JVM.
