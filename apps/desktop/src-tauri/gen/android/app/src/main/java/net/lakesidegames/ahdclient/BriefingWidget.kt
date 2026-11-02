@@ -148,6 +148,9 @@ object BriefingWidgets {
     }
   }
 
+  /** The sanitized snapshot for this signed-in session, or null. The dock's status reads it. */
+  fun snapshot(context: Context): JSONObject? = read(context)
+
   /** Unread inbox count and when it was fetched, for the tab bar badge. */
   fun inbox(context: Context): Pair<Int, Long>? = CompanionSafety.get("inbox count read", null) {
     val data = read(context) ?: return@get null

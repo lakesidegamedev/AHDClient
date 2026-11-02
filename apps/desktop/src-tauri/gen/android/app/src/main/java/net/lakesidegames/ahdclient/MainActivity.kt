@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.graphics.Color
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
@@ -17,6 +18,8 @@ class MainActivity : TauriActivity() {
   private val widgetHandler = Handler(Looper.getMainLooper())
   private var widgetNavigation: Runnable? = null
   private var nav: NativeNav? = null
+  private var dockBack: OnBackPressedCallback? = null
+  private var pendingDockPreview: String? = null
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
@@ -60,6 +63,13 @@ class MainActivity : TauriActivity() {
       openAskWhenReady(preview = uri.encodedQuery == "preview=1")
       return
     }
+    if (uri.host == "dock") {
+      // Design review only: the dock with canned figures and no network.
+      intent.data = null
+      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "off") } ?: "collapsed"
+      applyDockPreview()
+      return
+    }
     val path = CompanionSafety.get("widget deep link lookup", null as String?) {
       when (uri.host) {
         "inbox" -> "/notifications"
@@ -87,6 +97,20 @@ class MainActivity : TauriActivity() {
     }
     widgetNavigation = navigate
     widgetHandler.post(navigate)
+  }
+
+  /** Shows a requested dock preview once the dock is on screen; until then the request waits. */
+  private fun applyDockPreview() {
+    val mode = pendingDockPreview ?: return
+    val bar = nav ?: return
+    if (bar.dock.parent == null) return
+    pendingDockPreview = null
+    CompanionSafety.run("dock preview") { bar.preview(mode) }
+  }
+
+  /** Back closes an open status sheet before it does anything else. */
+  fun onDockExpanded(expanded: Boolean) {
+    dockBack?.isEnabled = expanded
   }
 
   /**
@@ -177,11 +201,21 @@ class MainActivity : TauriActivity() {
       webView.settings.userAgentString =
         webView.settings.userAgentString + " AHDClient-Mobile/" + BuildConfig.VERSION_NAME
     }
-    // The tab bar is optional chrome: if it cannot attach, the WebView still
+    // The dock is optional chrome: if it cannot attach, the WebView still
     // fills the window above the system bars as before.
     CompanionSafety.run("tab bar setup") {
       nav = NativeNav(this, webView).also { bar ->
-        webView.post { CompanionSafety.run("tab bar attach") { bar.attach(); bar.resume() } }
+        // Tell the game this build carries the status dock, so it hides its
+        // own web status footer. Only once the dock exists: if it could not
+        // be built the page keeps its footer. Applies to pages loaded from here on.
+        webView.settings.userAgentString = webView.settings.userAgentString + " AHDClientNativeStatus/1"
+        // Added after Tauri's own back handler, so it is asked first.
+        dockBack = object : OnBackPressedCallback(false) {
+          override fun handleOnBackPressed() { nav?.dock?.setExpanded(false) }
+        }.also { onBackPressedDispatcher.addCallback(this, it) }
+        webView.post {
+          CompanionSafety.run("tab bar attach") { bar.attach(); bar.resume(); applyDockPreview() }
+        }
       }
     }
     CompanionSafety.run("mobile WebView insets") {
@@ -201,7 +235,7 @@ class MainActivity : TauriActivity() {
         val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
         val keyboard = ime.bottom > bars.bottom
         val tabs = nav?.let { bar ->
-          CompanionSafety.get("tab bar layout", 0) { bar.layout(bars.left, bars.right, bars.bottom, keyboard) }
+          CompanionSafety.get("dock layout", 0) { bar.layout(bars.left, bars.right, bars.bottom, keyboard) }
         } ?: 0
         val bottom = when {
           keyboard -> ime.bottom
