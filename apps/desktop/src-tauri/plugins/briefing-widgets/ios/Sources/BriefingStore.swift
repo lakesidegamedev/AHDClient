@@ -159,6 +159,14 @@ enum BriefingStore {
     return value
   }
 
+  /// The signed-in session's fingerprint, or nil when there is no session.
+  /// Per-account caches key on this, so a rename or a second world cannot
+  /// share one.
+  static func sessionFingerprint() -> String? {
+    guard let header = session(), !header.isEmpty else { return nil }
+    return fingerprint(header)
+  }
+
   private static func fingerprint(_ header: String) -> String {
     SHA256.hash(data: Data(header.utf8)).map { String(format: "%02x", $0) }.joined()
   }
@@ -218,7 +226,10 @@ enum BriefingStore {
     SecItemAdd(record as CFDictionary, nil)
   }
 
-  static func refresh(_ completion: @escaping (SavedBriefing?) -> Void) {
+  /// `maxAge` is how old a saved copy may be before the network is asked.
+  /// The default keeps polls to one a minute; the dock passes a few seconds
+  /// right after a turn so the new figures are not served from before it.
+  static func refresh(maxAge: TimeInterval = 60, _ completion: @escaping (SavedBriefing?) -> Void) {
     queue.async {
       pending.append(completion)
       guard pending.count == 1 else { return }
@@ -228,7 +239,7 @@ enum BriefingStore {
         callbacks.forEach { callback in DispatchQueue.main.async { callback(value) } }
       }
       guard let cookie = session(), !cookie.isEmpty else { clear(); finish(nil); return }
-      if let saved = read(), saved.schema == currentSchema, Date().timeIntervalSince(saved.updatedAt) < 60 {
+      if let saved = read(), saved.schema == currentSchema, Date().timeIntervalSince(saved.updatedAt) < maxAge {
         finish(saved); return
       }
       let config = URLSessionConfiguration.ephemeral

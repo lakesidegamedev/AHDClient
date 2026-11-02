@@ -45,10 +45,11 @@ describe("mobile native companion safety", () => {
     const androidDir = "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/";
     // The Android labels live in the dock model, the rest of the behaviour in NativeNav.
     const nav = read(`${androidDir}NativeNav.kt`) + read(`${androidDir}DockModel.kt`);
-    const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    const iosDir = "../src-tauri/plugins/briefing-widgets/ios/Sources/";
+    const ios = ["NativeNav.swift", "NativeDockCore.swift", "NativeDockModel.swift", "NativeDockView.swift"].map((file) => read(iosDir + file)).join("\n");
     for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
       expect(nav).toContain(`"${tab}"`);
-      expect(ios).toContain(`return "${tab}"`);
+      expect(ios).toContain(`label: "${tab}"`);
     }
     // Game home, Inbox, Briefing, Ask and Launcher were the menu's five items.
     for (const source of [nav, ios]) {
@@ -77,15 +78,15 @@ describe("mobile native companion safety", () => {
     expect(ios).toContain('let flag = "window.__ahdclientNativeTabs = true;"');
     // Set only after the bar is in the view tree.
     expect(nav.indexOf("content.addView(dock")).toBeLessThan(nav.indexOf("val flag ="));
-    expect(ios.indexOf("host.addSubview(bar)")).toBeLessThan(ios.indexOf("let flag ="));
+    expect(ios.indexOf("host.addSubview(container)")).toBeLessThan(ios.indexOf("let flag ="));
   });
 
   it("attaches the iOS tab bar from the plugin with iPad keyboard shortcuts", () => {
     const plugin = read("../src-tauri/plugins/briefing-widgets/ios/Sources/BriefingWidgetsPlugin.swift");
     const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
     expect(plugin).toContain("NativeNavController.shared.attach(webview)");
-    expect(ios).toContain("webView.bottomAnchor.constraint(equalTo: bar.topAnchor)");
-    expect(ios).toContain("bar.bottomAnchor.constraint(equalTo: host.bottomAnchor)");
+    expect(ios).toContain("webView.bottomAnchor.constraint(equalTo: slot.topAnchor)");
+    expect(ios).toContain("slot.bottomAnchor.constraint(equalTo: host.bottomAnchor)");
     expect(ios).toContain("UISelectionFeedbackGenerator");
     for (const input of ['"k"', '"r"', '"["', '"]"']) expect(ios).toContain(`input: ${input}`);
     expect(ios).toContain("input: String(index + 1)");

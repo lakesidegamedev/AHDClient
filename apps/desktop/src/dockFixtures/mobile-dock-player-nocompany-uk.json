@@ -1,0 +1,1351 @@
+{
+  "version": 1,
+  "tabs": [
+    {
+      "id": "market",
+      "label": "Market",
+      "icon": {
+        "name": "chart",
+        "grid": [
+          "00000000000",
+          "00000000110",
+          "00000000110",
+          "00001100110",
+          "00001100110",
+          "11001100110",
+          "11001100110",
+          "11001100110",
+          "11001100110",
+          "00000000000",
+          "11111111111"
+        ]
+      },
+      "href": "/market",
+      "activePrefixes": [
+        "/market",
+        "/stockmarket"
+      ]
+    },
+    {
+      "id": "state",
+      "label": "New York",
+      "icon": {
+        "name": "map",
+        "grid": [
+          "00000000000",
+          "01100111110",
+          "01011100010",
+          "01001010010",
+          "01001010010",
+          "01001010010",
+          "01001010010",
+          "01001010010",
+          "01111011110",
+          "00000000000",
+          "00000000000"
+        ]
+      },
+      "sheet": "state",
+      "activePrefixes": [
+        "/country/us/region/NY"
+      ]
+    },
+    {
+      "id": "nation",
+      "label": "United Kingdom",
+      "shortLabel": "Nation",
+      "icon": {
+        "name": "flag",
+        "grid": [
+          "01111111100",
+          "01000000100",
+          "01000000100",
+          "01111111100",
+          "01000000000",
+          "01000000000",
+          "01000000000",
+          "01000000000",
+          "01000000000",
+          "01000000000",
+          "00000000000"
+        ]
+      },
+      "sheet": "nation",
+      "activePrefixes": [
+        "/country/uk"
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "Actions",
+      "icon": {
+        "name": "bolt",
+        "grid": [
+          "00000111000",
+          "00001110000",
+          "00011100000",
+          "00111000000",
+          "01111111100",
+          "00000111000",
+          "00001110000",
+          "00011100000",
+          "00111000000",
+          "01110000000",
+          "00000000000"
+        ]
+      },
+      "href": "/actions",
+      "activePrefixes": [
+        "/actions"
+      ]
+    },
+    {
+      "id": "more",
+      "label": "More",
+      "icon": {
+        "name": "apps",
+        "grid": [
+          "00000000000",
+          "01111011110",
+          "01111011110",
+          "01111011110",
+          "01111011110",
+          "00000000000",
+          "01111011110",
+          "01111011110",
+          "01111011110",
+          "01111011110",
+          "00000000000"
+        ]
+      },
+      "sheet": "more",
+      "activePrefixes": []
+    }
+  ],
+  "sheets": {
+    "state": {
+      "title": "New York",
+      "sections": [
+        {
+          "id": "state:overview",
+          "title": "New York",
+          "links": [
+            {
+              "id": "overview",
+              "label": "New York",
+              "href": "/country/us/region/NY",
+              "icon": {
+                "name": "capitol",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "00000000000",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "00000000000",
+                  "01111111110",
+                  "11111111111"
+                ]
+              },
+              "description": "The people, institutions, and events shaping this place."
+            }
+          ]
+        },
+        {
+          "id": "state:politics",
+          "title": "Politics",
+          "links": [
+            {
+              "id": "elections",
+              "label": "State Elections",
+              "href": "/country/us/region/NY?tab=politics&sub=elections",
+              "icon": {
+                "name": "vote",
+                "grid": [
+                  "00000000000",
+                  "00011111000",
+                  "00010001000",
+                  "00010101000",
+                  "00011001000",
+                  "00010001000",
+                  "00111111100",
+                  "01100000110",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "Races, candidates, and results"
+            }
+          ]
+        },
+        {
+          "id": "state:government",
+          "title": "Government",
+          "links": [
+            {
+              "id": "legislature",
+              "label": "State Legislature",
+              "href": "/country/us/region/NY/legislature",
+              "icon": {
+                "name": "capitol",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "00000000000",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "00000000000",
+                  "01111111110",
+                  "11111111111"
+                ]
+              },
+              "description": "Chambers, legislation, and votes"
+            }
+          ]
+        },
+        {
+          "id": "state:economy",
+          "title": "Economy",
+          "links": [
+            {
+              "id": "economy",
+              "label": "State Economy",
+              "href": "/country/us/region/NY?tab=economy",
+              "icon": {
+                "name": "chart",
+                "grid": [
+                  "00000000000",
+                  "00000000110",
+                  "00000000110",
+                  "00001100110",
+                  "00001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Output, jobs, and growth"
+            }
+          ]
+        }
+      ]
+    },
+    "nation": {
+      "title": "United Kingdom",
+      "sections": [
+        {
+          "id": "switch-country",
+          "title": "View another country",
+          "links": [
+            {
+              "id": "country:US",
+              "label": "United States",
+              "href": "/country/us",
+              "icon": {
+                "name": "flag",
+                "grid": [
+                  "01111111100",
+                  "01000000100",
+                  "01000000100",
+                  "01111111100",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "country:UK",
+              "label": "United Kingdom",
+              "href": "/country/uk",
+              "icon": {
+                "name": "flag",
+                "grid": [
+                  "01111111100",
+                  "01000000100",
+                  "01000000100",
+                  "01111111100",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "nation:overview",
+          "title": "United Kingdom",
+          "links": [
+            {
+              "id": "overview",
+              "label": "United Kingdom",
+              "href": "/country/uk",
+              "icon": {
+                "name": "capitol",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "00000000000",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "00000000000",
+                  "01111111110",
+                  "11111111111"
+                ]
+              },
+              "description": "The people, institutions, and events shaping this place."
+            }
+          ]
+        },
+        {
+          "id": "nation:shortcuts",
+          "title": "Your shortcuts",
+          "links": [
+            {
+              "id": "map",
+              "label": "Map",
+              "href": "/country/uk/map",
+              "icon": {
+                "name": "map",
+                "grid": [
+                  "00000000000",
+                  "01100111110",
+                  "01011100010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01111011110",
+                  "00000000000",
+                  "00000000000"
+                ]
+              },
+              "description": "Explore states and regions"
+            },
+            {
+              "id": "politicalOperations",
+              "label": "My Political Operations",
+              "href": "/political-operations",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "description": "Your political organisation"
+            },
+            {
+              "id": "homeNation",
+              "label": "Home Nation · United States",
+              "href": "/country/us",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "nation:Politics",
+          "title": "Politics",
+          "links": [
+            {
+              "id": "parties",
+              "label": "Political Parties",
+              "href": "/country/uk/parties",
+              "icon": {
+                "name": "flag",
+                "grid": [
+                  "01111111100",
+                  "01000000100",
+                  "01000000100",
+                  "01111111100",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "01000000000",
+                  "00000000000"
+                ]
+              },
+              "description": "Parties and their platforms"
+            },
+            {
+              "id": "elections",
+              "label": "Elections",
+              "href": "/country/uk/elections",
+              "icon": {
+                "name": "vote",
+                "grid": [
+                  "00000000000",
+                  "00011111000",
+                  "00010001000",
+                  "00010101000",
+                  "00011001000",
+                  "00010001000",
+                  "00111111100",
+                  "01100000110",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "Races, candidates, and results"
+            },
+            {
+              "id": "politicians",
+              "label": "Politicians",
+              "href": "/country/uk/politicians",
+              "icon": {
+                "name": "people",
+                "grid": [
+                  "00110001100",
+                  "01111011110",
+                  "01111011110",
+                  "00110001100",
+                  "00000000000",
+                  "01111011110",
+                  "11111111111",
+                  "10001110001",
+                  "10001110001",
+                  "00000000000",
+                  "00000000000"
+                ]
+              },
+              "description": "The political directory"
+            },
+            {
+              "id": "politicalMetrics",
+              "label": "Political Metrics",
+              "href": "/country/uk/political-metrics",
+              "icon": {
+                "name": "chart",
+                "grid": [
+                  "00000000000",
+                  "00000000110",
+                  "00000000110",
+                  "00001100110",
+                  "00001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Opinion and political conditions"
+            }
+          ]
+        },
+        {
+          "id": "nation:Government",
+          "title": "Government",
+          "links": [
+            {
+              "id": "legislature",
+              "label": "Parliament",
+              "href": "/country/uk/legislature",
+              "icon": {
+                "name": "capitol",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "00000000000",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "00000000000",
+                  "01111111110",
+                  "11111111111"
+                ]
+              },
+              "description": "Chambers, legislation, and votes"
+            },
+            {
+              "id": "executive",
+              "label": "10 Downing Street",
+              "href": "/country/uk/executive",
+              "icon": {
+                "name": "capitol",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "00000000000",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "01010101010",
+                  "00000000000",
+                  "01111111110",
+                  "11111111111"
+                ]
+              },
+              "description": "The executive and cabinet"
+            },
+            {
+              "id": "policy",
+              "label": "Policy",
+              "href": "/country/uk/policy",
+              "icon": {
+                "name": "bill",
+                "grid": [
+                  "01111111000",
+                  "01000001100",
+                  "01000001010",
+                  "01000001110",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "The rules of the country"
+            }
+          ]
+        },
+        {
+          "id": "nation:Economy",
+          "title": "Economy",
+          "links": [
+            {
+              "id": "centralBank",
+              "label": "Banking",
+              "href": "/banking",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Public and private banks"
+            },
+            {
+              "id": "economy",
+              "label": "Economy",
+              "href": "/country/uk/economy",
+              "icon": {
+                "name": "chart",
+                "grid": [
+                  "00000000000",
+                  "00000000110",
+                  "00000000110",
+                  "00001100110",
+                  "00001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Output, jobs, and growth"
+            },
+            {
+              "id": "budget",
+              "label": "National Budget",
+              "href": "/country/uk/budget",
+              "icon": {
+                "name": "bill",
+                "grid": [
+                  "01111111000",
+                  "01000001100",
+                  "01000001010",
+                  "01000001110",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "Revenue and public spending"
+            }
+          ]
+        }
+      ]
+    },
+    "more": {
+      "title": "Everything",
+      "sections": [
+        {
+          "id": "you:overview",
+          "title": "You",
+          "links": [
+            {
+              "id": "profile",
+              "label": "Pat Doe",
+              "href": "/profile",
+              "icon": {
+                "name": "star",
+                "grid": [
+                  "00000100000",
+                  "00001110000",
+                  "00001110000",
+                  "11111111111",
+                  "01111111110",
+                  "00111111100",
+                  "00011111000",
+                  "00111011100",
+                  "00110001100",
+                  "01100000110",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "you:you",
+          "title": "Profile",
+          "links": [
+            {
+              "id": "notifications",
+              "label": "Notifications (9+)",
+              "href": "/notifications",
+              "icon": {
+                "name": "bell",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "00100000100",
+                  "00100000100",
+                  "00100000100",
+                  "00100000100",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000",
+                  "00001110000",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "portfolio",
+              "label": "Portfolio",
+              "href": "/portfolio",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              }
+            },
+            {
+              "id": "wallet",
+              "label": "Wallet",
+              "href": "/portfolio?tab=currency",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              }
+            },
+            {
+              "id": "settings",
+              "label": "Settings",
+              "href": "/settings",
+              "icon": {
+                "name": "gear",
+                "grid": [
+                  "00011011000",
+                  "00111111100",
+                  "01100000110",
+                  "11001110011",
+                  "11001010011",
+                  "01101110110",
+                  "01100000110",
+                  "11000000011",
+                  "01111111110",
+                  "00110101100",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "contests",
+              "label": "Contests",
+              "href": "/contests",
+              "icon": {
+                "name": "star",
+                "grid": [
+                  "00000100000",
+                  "00001110000",
+                  "00001110000",
+                  "11111111111",
+                  "01111111110",
+                  "00111111100",
+                  "00011111000",
+                  "00111011100",
+                  "00110001100",
+                  "01100000110",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "whatsNew",
+              "label": "What's new",
+              "href": "/changelog",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "world:overview",
+          "title": "World",
+          "links": [
+            {
+              "id": "nations",
+              "label": "Nations & World Map",
+              "href": "/world",
+              "icon": {
+                "name": "globe",
+                "grid": [
+                  "00011111000",
+                  "00100000100",
+                  "01001010010",
+                  "10001010001",
+                  "10001010001",
+                  "11111111111",
+                  "10001010001",
+                  "10001010001",
+                  "01001010010",
+                  "00100000100",
+                  "00011111000"
+                ]
+              },
+              "description": "Explore nations and the world map"
+            }
+          ]
+        },
+        {
+          "id": "world:markets",
+          "title": "Markets & finance",
+          "links": [
+            {
+              "id": "stockMarket",
+              "label": "The Market",
+              "href": "/market",
+              "icon": {
+                "name": "chart",
+                "grid": [
+                  "00000000000",
+                  "00000000110",
+                  "00000000110",
+                  "00001100110",
+                  "00001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "11001100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Shares and market activity"
+            },
+            {
+              "id": "banking",
+              "label": "Banking",
+              "href": "/banking",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Public and private banks"
+            },
+            {
+              "id": "forex",
+              "label": "Currency Exchange",
+              "href": "/forex/global",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "Currencies across the world"
+            },
+            {
+              "id": "trade",
+              "label": "Trade",
+              "href": "/world/trade",
+              "icon": {
+                "name": "globe",
+                "grid": [
+                  "00011111000",
+                  "00100000100",
+                  "01001010010",
+                  "10001010001",
+                  "10001010001",
+                  "11111111111",
+                  "10001010001",
+                  "10001010001",
+                  "01001010010",
+                  "00100000100",
+                  "00011111000"
+                ]
+              },
+              "description": "Goods across borders"
+            },
+            {
+              "id": "imf",
+              "label": "IMF",
+              "href": "/international/imf",
+              "icon": {
+                "name": "bank",
+                "grid": [
+                  "00000100000",
+                  "00011111000",
+                  "01111111110",
+                  "11111111111",
+                  "00000000000",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "01100100110",
+                  "00000000000",
+                  "11111111111"
+                ]
+              },
+              "description": "International monetary cooperation"
+            }
+          ]
+        },
+        {
+          "id": "world:industry",
+          "title": "Industry & news",
+          "links": [
+            {
+              "id": "sectors",
+              "label": "Sectors",
+              "href": "/sectors",
+              "icon": {
+                "name": "briefcase",
+                "grid": [
+                  "00011111000",
+                  "00010001000",
+                  "01111111110",
+                  "01000000010",
+                  "01000000010",
+                  "01111111110",
+                  "01000100010",
+                  "01000100010",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "Industry and production"
+            },
+            {
+              "id": "news",
+              "label": "News",
+              "href": "/news?country=uk",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "description": "News from your country"
+            },
+            {
+              "id": "governmentContracts",
+              "label": "Government Contracts",
+              "href": "/country/uk/government-contracts",
+              "icon": {
+                "name": "bill",
+                "grid": [
+                  "01111111000",
+                  "01000001100",
+                  "01000001010",
+                  "01000001110",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01011111010",
+                  "01000000010",
+                  "01111111110",
+                  "00000000000"
+                ]
+              },
+              "description": "Public procurement opportunities"
+            }
+          ]
+        },
+        {
+          "id": "world:diplomacy",
+          "title": "World affairs",
+          "links": [
+            {
+              "id": "map",
+              "label": "Country Map",
+              "href": "/country/uk/map",
+              "icon": {
+                "name": "map",
+                "grid": [
+                  "00000000000",
+                  "01100111110",
+                  "01011100010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01001010010",
+                  "01111011110",
+                  "00000000000",
+                  "00000000000"
+                ]
+              },
+              "description": "Explore states and regions"
+            },
+            {
+              "id": "nations",
+              "label": "Nations & World Map",
+              "href": "/world",
+              "icon": {
+                "name": "globe",
+                "grid": [
+                  "00011111000",
+                  "00100000100",
+                  "01001010010",
+                  "10001010001",
+                  "10001010001",
+                  "11111111111",
+                  "10001010001",
+                  "10001010001",
+                  "01001010010",
+                  "00100000100",
+                  "00011111000"
+                ]
+              },
+              "description": "Explore nations and the world map"
+            },
+            {
+              "id": "internationalOrgs",
+              "label": "International Orgs",
+              "href": "/world/international-organizations",
+              "icon": {
+                "name": "globe",
+                "grid": [
+                  "00011111000",
+                  "00100000100",
+                  "01001010010",
+                  "10001010001",
+                  "10001010001",
+                  "11111111111",
+                  "10001010001",
+                  "10001010001",
+                  "01001010010",
+                  "00100000100",
+                  "00011111000"
+                ]
+              },
+              "description": "Diplomacy and cooperation"
+            },
+            {
+              "id": "crises",
+              "label": "Crises",
+              "href": "/world/crises",
+              "icon": {
+                "name": "bolt",
+                "grid": [
+                  "00000111000",
+                  "00001110000",
+                  "00011100000",
+                  "00111000000",
+                  "01111111100",
+                  "00000111000",
+                  "00001110000",
+                  "00011100000",
+                  "00111000000",
+                  "01110000000",
+                  "00000000000"
+                ]
+              },
+              "description": "International flashpoints"
+            }
+          ]
+        },
+        {
+          "id": "help:overview",
+          "title": "Help",
+          "links": [
+            {
+              "id": "guides",
+              "label": "Wiki/Guides",
+              "href": "https://wiki.ahousedividedgame.com",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "description": "Rules, mechanics, and getting started",
+              "external": true
+            }
+          ]
+        },
+        {
+          "id": "help:resources",
+          "title": "Resources",
+          "links": [
+            {
+              "id": "guides",
+              "label": "Wiki/Guides",
+              "href": "https://wiki.ahousedividedgame.com",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "description": "Rules, mechanics, and getting started",
+              "external": true
+            },
+            {
+              "id": "about",
+              "label": "About",
+              "href": "/about",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "suggestions",
+              "label": "Suggestions",
+              "href": "/feedback",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "help:community",
+          "title": "Community",
+          "links": [
+            {
+              "id": "discord",
+              "label": "Discord",
+              "href": "https://discord.gg/DmF8zJJuqN",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "external": true
+            },
+            {
+              "id": "patreon",
+              "label": "Support on Patreon",
+              "href": "https://www.patreon.com/cw/AHouseDividedGame/membership",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "external": true
+            },
+            {
+              "id": "supporters",
+              "label": "Supporter Wall",
+              "href": "https://lakesidegames.net/supporters",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "external": true
+            }
+          ]
+        },
+        {
+          "id": "help:support",
+          "title": "Support",
+          "links": [
+            {
+              "id": "support",
+              "label": "Email Support",
+              "href": "mailto:admin@ahousedividedgame.com",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              },
+              "description": "Get help with a problem",
+              "external": true
+            },
+            {
+              "id": "privacy",
+              "label": "Privacy Policy",
+              "href": "/privacy",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            },
+            {
+              "id": "terms",
+              "label": "Terms of Service",
+              "href": "/terms",
+              "icon": {
+                "name": "book",
+                "grid": [
+                  "00000000000",
+                  "01111011110",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01000100010",
+                  "01111111110",
+                  "00000100000",
+                  "00000000000"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

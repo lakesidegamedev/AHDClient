@@ -579,7 +579,10 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
             icon = link.icon, reserveIcon = true, external = link.external)))
         }
       }
-      apply(menu.title.ifEmpty { tabLabel }, menu.title.ifEmpty { tabLabel }, entries, animate = false)
+      // The More sheet carries the app rows; title it like its tab ("More"), as on iOS.
+      val title = if (menu.sections.any { section -> section.links.any { it.app != null } }) tabLabel
+        else menu.title.ifEmpty { tabLabel }
+      apply(title, title, entries, animate = false)
     }
 
     /** Moves screen-reader focus to the sheet's caption (or the sheet itself when it has none) when a reader is on. */
