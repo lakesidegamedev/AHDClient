@@ -66,7 +66,7 @@ class MainActivity : TauriActivity() {
     if (uri.host == "dock") {
       // Design review only: the dock with canned figures and no network.
       intent.data = null
-      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "off") } ?: "collapsed"
+      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "off") } ?: "collapsed"
       applyDockPreview()
       return
     }
@@ -211,7 +211,7 @@ class MainActivity : TauriActivity() {
         webView.settings.userAgentString = webView.settings.userAgentString + " AHDClientNativeStatus/1"
         // Added after Tauri's own back handler, so it is asked first.
         dockBack = object : OnBackPressedCallback(false) {
-          override fun handleOnBackPressed() { nav?.dock?.setExpanded(false) }
+          override fun handleOnBackPressed() { nav?.dock?.closeSheet() }
         }.also { onBackPressedDispatcher.addCallback(this, it) }
         webView.post {
           CompanionSafety.run("tab bar attach") { bar.attach(); bar.resume(); applyDockPreview() }

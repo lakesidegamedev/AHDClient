@@ -46,12 +46,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * The phone dock: one rounded surface that carries the tab row (Game,
- * Briefing, Inbox, Ask, More) and, above it, a slim status strip with the
- * turn countdown, funds and actions. Drag the dock up or tap the strip and a
- * sheet grows out of it with the full status; tapping a row opens that game
- * page. Drawn with plain views and spring animations so it needs no extra
- * toolkit.
+ * The phone dock: one rounded surface that carries the game's tab row (from
+ * the DockModel) and, above it, a slim status strip with the turn countdown,
+ * funds and actions. Drag the dock up or tap the strip and a sheet grows out
+ * of it with the full status; tap a menu tab (State, Nation, More) and the
+ * same sheet grows with that menu instead. Tapping a row opens that game page
+ * or runs an app action. Drawn with plain views and spring animations so it
+ * needs no extra toolkit.
  *
  * The dock is a transparent overlay the size of the window. Touches outside
  * the surface fall through to the WebView. NativeNav owns what the dock
@@ -60,10 +61,13 @@ import kotlin.math.roundToInt
  */
 class NativeDock(context: Context, private val listener: Listener) : FrameLayout(context) {
   interface Listener {
-    /** A tab was tapped. [again] is true when it was already the selected tab. */
-    fun onTab(tab: NativeNav.Destination, again: Boolean)
+    /** A page or app tab was tapped (menu tabs open their sheet here instead). [again] is true when it was already selected. */
+    fun onTab(tab: DockTab, again: Boolean)
 
-    /** A sheet row asked to open a game page. */
+    /** A menu sheet row was tapped: a game page or an app action. */
+    fun onOpenLink(link: DockLink)
+
+    /** A status row asked to open a game page. */
     fun onOpenPath(path: String)
 
     /** The collapsed dock changed height (the strip came or went, or the font scale changed). */
@@ -103,6 +107,11 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   private val tabRow = TabRow(context)
 
   private var status: DockStatus? = null
+  private var model: DockModel = DockModel.fallback(false)
+  private var inboxUnread = 0
+
+  /** The menu sheet that is (or was last) open, or null for the status sheet. */
+  private var menuId: String? = null
   private var stripAllowed = false
   private var progress = 0f
   private var targetExpanded = false
@@ -146,6 +155,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     addView(panel, LayoutParams(dp(MAX_WIDTH_DP), LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
     strip.visibility = View.GONE
     sheet.visibility = View.GONE
+    tabRow.setTabs(model.tabs)
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -185,9 +195,28 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     return reportedHeight
   }
 
-  fun showSelected(tab: NativeNav.Destination?, animate: Boolean = true) = tabRow.select(tab, animate && !reducedMotion())
+  /** The tab that matches the page on screen; null when none does. */
+  fun showSelected(tabId: String?, animate: Boolean = true) = tabRow.select(tabId, animate && !reducedMotion())
 
-  fun setInboxBadge(count: Int) = tabRow.setBadge(count)
+  /** The tabs and menus the game described (or the app's fallback). Keeps the selection and an open sheet when it can. */
+  fun setModel(next: DockModel) {
+    if (sameModel(model, next)) return
+    model = next
+    tabRow.setTabs(next.tabs)
+    tabRow.setBadge(inboxUnread)
+    if (targetExpanded && menuId != null && next.sheets[menuId] == null) closeSheet(animate = false)
+    else if (targetExpanded && menuId != null) bindSheet(animate = false)
+  }
+
+  private fun sameModel(a: DockModel, b: DockModel) = a.tabs == b.tabs && a.sheets == b.sheets
+
+  /** Unread inbox items: a badge on the More tab and a count on the Inbox row. */
+  fun setInboxBadge(count: Int) {
+    if (count == inboxUnread) return
+    inboxUnread = count
+    tabRow.setBadge(count)
+    if (menuId != null) bindSheet(animate = false)
+  }
 
   /** The strip only shows on game pages; the launcher and Briefing have their own screens. */
   fun setStripAllowed(allowed: Boolean) {
@@ -200,7 +229,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     val previous = status
     status = next
     strip.bind(next, previous != null && !reducedMotion())
-    sheet.bind(next, previous != null && !reducedMotion())
+    if (menuId == null) bindSheet(animate = previous != null && !reducedMotion())
     applyStripVisibility()
     updateTickText()
   }
@@ -216,28 +245,73 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     handler.removeCallbacks(ticker)
   }
 
+  /** Opens or closes the status sheet. */
   fun setExpanded(open: Boolean, animate: Boolean = true) {
-    val want = open && strip.visibility == View.VISIBLE && sheet.hasRows
-    if (want == targetExpanded && progress == (if (want) 1f else 0f)) return
-    commitTarget(want)
-    if (animate && !reducedMotion()) settle(if (want) 1f else 0f, 0f) else {
+    if (open) openSheet(null, animate) else closeSheet(animate)
+  }
+
+  fun openMenu(tabId: String, animate: Boolean = true) = openSheet(tabId, animate)
+
+  /** Opens the menu sheet for a menu tab, or closes it when it is the one already open. */
+  fun toggleMenu(tabId: String) {
+    if (targetExpanded && menuId == tabId) closeSheet() else openSheet(tabId, animate = true)
+  }
+
+  fun closeSheet(animate: Boolean = true) {
+    if (!targetExpanded && progress == 0f) return
+    commitTarget(false)
+    tabRow.setOpen(null)
+    if (animate && !reducedMotion()) settle(0f, 0f) else {
       spring?.cancel()
-      setProgress(if (want) 1f else 0f)
+      setProgress(0f)
+    }
+  }
+
+  private fun openSheet(menu: String?, animate: Boolean) {
+    val tab = model.tab(menu)
+    if (menu != null && (tab?.sheet == null || model.sheets[tab.sheet] == null)) return
+    if (menu == null && !(strip.visibility == View.VISIBLE && status?.hasStrip == true)) return
+    val switching = targetExpanded && menuId != menu
+    menuId = menu
+    bindSheet(animate = false)
+    if (!sheet.hasRows) { menuId = null; return }
+    tabRow.setOpen(menu)
+    if (switching && animate && !reducedMotion()) sheet.fadeIn()
+    if (targetExpanded && !switching) return
+    commitTarget(true)
+    if (animate && !reducedMotion()) settle(1f, 0f) else {
+      spring?.cancel()
+      setProgress(1f)
     }
   }
 
   private fun commitTarget(value: Boolean) {
-    if (targetExpanded == value) return
+    if (targetExpanded == value) {
+      strip.refreshState()
+      return
+    }
     targetExpanded = value
     strip.refreshState()
     listener.onExpandedChanged(value)
+  }
+
+  /** What the sheet shows now: the open menu, or the status figures. */
+  private fun bindSheet(animate: Boolean) {
+    val id = menuId
+    val tab = model.tab(id)
+    val menu = tab?.sheet?.let { model.sheets[it] }
+    if (id != null && menu != null) {
+      sheet.bindMenu(menu, tab.label, inboxUnread)
+    } else {
+      sheet.bindStatus(status, animate)
+    }
   }
 
   private fun applyStripVisibility() {
     val show = stripAllowed && status?.hasStrip == true
     val wanted = if (show) View.VISIBLE else View.GONE
     if (strip.visibility != wanted) strip.visibility = wanted
-    if (!show && targetExpanded) setExpanded(false, animate = false)
+    if (!show && targetExpanded && menuId == null) closeSheet(animate = false)
     // The page ends above the dock, so a new height needs a new layout pass.
     post {
       val before = reportedHeight
@@ -257,6 +331,11 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     if (scrim.visibility != wanted) scrim.visibility = wanted
     sheet.importantForAccessibility =
       if (open) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    // Fully closed: the next drag up opens the status figures again.
+    if (progress == 0f && !targetExpanded && menuId != null) {
+      menuId = null
+      bindSheet(animate = false)
+    }
   }
 
   private fun settle(target: Float, velocity: Float) {
@@ -331,7 +410,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       screen.recycle()
     }
 
-    private fun canDrag(): Boolean = strip.visibility == View.VISIBLE && sheet.hasRows
+    private fun canDrag(): Boolean = sheet.hasRows && (strip.visibility == View.VISIBLE || targetExpanded)
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
       if (!canDrag()) return false
@@ -380,6 +459,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
           val velocity = -tracker.yVelocity / max(1, sheet.fullHeight)
           val open = if (ev.actionMasked == MotionEvent.ACTION_CANCEL) progress > 0.5f else progress + velocity * 0.12f > 0.5f
           commitTarget(open && sheet.hasRows)
+          if (!targetExpanded) tabRow.setOpen(null)
           if (reducedMotion()) setProgress(if (targetExpanded) 1f else 0f)
           else settle(if (targetExpanded) 1f else 0f, velocity)
         }
@@ -395,8 +475,22 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     val label: String,
     val value: CharSequence,
     val spoken: String,
-    val path: String?,
-  )
+    /** A game page on the status sheet. */
+    val path: String? = null,
+    /** A menu row's target: a game page or an app action. */
+    val link: DockLink? = null,
+    val icon: PixelIcon? = null,
+    /** Menu rows without an icon keep the icon's width free when other rows in the menu have one. */
+    val indent: Boolean = false,
+  ) {
+    val opens: Boolean get() = path != null || link != null
+  }
+
+  /** One line of the sheet: a section heading or a row. */
+  private sealed class Entry {
+    class Heading(val key: String, val text: String) : Entry()
+    class Row(val spec: RowSpec) : Entry()
+  }
 
   /** Grows from zero to its content height as [reveal] goes 0..1, anchored to the strip below it. */
   private inner class SheetBox(context: Context) : FrameLayout(context) {
@@ -436,6 +530,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
     fun canScrollUp(): Boolean = scroll.canScrollVertically(-1)
 
+    /** A short fade when one menu replaces another while the sheet stays open. */
+    fun fadeIn() {
+      column.animate().cancel()
+      column.alpha = 0f
+      column.animate().alpha(1f).setDuration(160).start()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
       val width = MeasureSpec.getSize(widthMeasureSpec)
       scroll.measure(
@@ -451,28 +552,70 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       scroll.layout(0, (b - t) - scroll.measuredHeight, r - l, b - t)
     }
 
-    fun bind(next: DockStatus?, animate: Boolean) {
-      val specs = if (next == null) emptyList() else specs(next)
-      val keys = specs.map { it.key }
-      caption.text = next?.turnTitle.orEmpty()
-      caption.visibility = if (next?.turnTitle.isNullOrEmpty()) View.GONE else View.VISIBLE
+    fun bindStatus(next: DockStatus?, animate: Boolean) {
+      val specs = if (next == null) emptyList() else statusSpecs(next)
+      apply(next?.turnTitle.orEmpty(), null, specs.map { Entry.Row(it) }, animate)
+    }
+
+    fun bindMenu(menu: DockSheet, tabLabel: String, unread: Int) {
+      val entries = ArrayList<Entry>()
+      val anyIcon = menu.sections.any { section -> section.links.any { it.icon != null } }
+      for (section in menu.sections) {
+        if (section.title.isNotEmpty()) entries.add(Entry.Heading("section-${section.id}", section.title))
+        for (link in section.links) {
+          val badge = if (link.app == AppAction.INBOX && unread > 0) "$unread unread" else ""
+          val spoken = if (badge.isNotEmpty()) "${link.label}, $badge" else link.label
+          entries.add(Entry.Row(RowSpec("link-${section.id}-${link.id}", link.label, badge, spoken, link = link, icon = link.icon, indent = anyIcon)))
+        }
+      }
+      apply(menu.title.ifEmpty { tabLabel }, menu.title.ifEmpty { tabLabel }, entries, animate = false)
+    }
+
+    private fun apply(title: String, paneTitle: String?, entries: List<Entry>, animate: Boolean) {
+      val keys = entries.map { if (it is Entry.Row) it.spec.key else (it as Entry.Heading).key }
+      caption.text = title
+      caption.visibility = if (title.isEmpty()) View.GONE else View.VISIBLE
+      ViewCompat.setAccessibilityPaneTitle(this, paneTitle ?: "Status details")
       if (keys != currentKeys) {
-        rows.values.forEach { column.removeView(it) }
+        for (index in column.childCount - 1 downTo 1) column.removeViewAt(index)
         rows.clear()
         turnRow = null
-        for (spec in specs) {
-          val row = SheetRow(context)
-          rows[spec.key] = row
-          if (spec.key == "turn") turnRow = row
-          column.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        for (entry in entries) {
+          when (entry) {
+            is Entry.Heading -> column.addView(heading(entry.text))
+            is Entry.Row -> {
+              val row = SheetRow(context)
+              rows[entry.spec.key] = row
+              if (entry.spec.key == "turn") turnRow = row
+              column.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+          }
         }
         currentKeys = keys
+        scroll.scrollTo(0, 0)
       }
       // The countdown row ticks by itself; everything else crossfades when a figure changes.
-      for (spec in specs) rows[spec.key]?.bind(spec, animate && spec.key != "turn") { path -> setExpanded(false); listener.onOpenPath(path) }
+      for (entry in entries) {
+        if (entry !is Entry.Row) continue
+        rows[entry.spec.key]?.bind(entry.spec, animate && entry.spec.key != "turn") { spec ->
+          closeSheet()
+          if (spec.link != null) listener.onOpenLink(spec.link) else spec.path?.let { listener.onOpenPath(it) }
+        }
+      }
       // Collapsed, the sheet stays measured at zero height so a drag knows its travel.
       visibility = if (rows.isEmpty()) View.GONE else View.VISIBLE
       requestLayout()
+    }
+
+    private fun heading(text: String) = TextView(context).apply {
+      this.text = text.uppercase()
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+      setTextColor(MUTED)
+      letterSpacing = 0.08f
+      setPadding(dp(18), dp(12), dp(18), dp(2))
+      maxLines = 1
+      ellipsize = TextUtils.TruncateAt.END
+      ViewCompat.setAccessibilityHeading(this, true)
     }
 
     fun setCountdown(current: DockStatus, remaining: Long?) {
@@ -480,26 +623,26 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       row.bindValue(turnValue(current, remaining), turnSpoken(current, remaining), animate = false)
     }
 
-    private fun specs(s: DockStatus): List<RowSpec> {
+    private fun statusSpecs(s: DockStatus): List<RowSpec> {
       val out = ArrayList<RowSpec>()
       if (s.nextTurnAt != null || !s.turnActive) {
         val remaining = s.nextTurnAt?.minus(System.currentTimeMillis())
-        out.add(RowSpec("turn", "Next turn", turnValue(s, remaining), turnSpoken(s, remaining), null))
+        out.add(RowSpec("turn", "Next turn", turnValue(s, remaining), turnSpoken(s, remaining)))
       }
       for ((key, metric) in listOf(
         "funds" to s.funds, "actions" to s.actions, "corp" to s.corpCash,
         "state" to s.stateInfluence, "national" to s.nationalInfluence,
       )) {
-        if (metric != null) out.add(RowSpec(key, metric.label, metricText(metric), metric.spoken, metric.path))
+        if (metric != null) out.add(RowSpec(key, metric.label, metricText(metric), metric.spoken, path = metric.path))
       }
       val inbox = ArrayList<Pair<String, Int>>()
       if (s.notifications > 0) inbox.add("Notifications" to s.notifications)
       if (s.mail > 0) inbox.add("Mail" to s.mail)
       if (inbox.isEmpty()) {
-        out.add(RowSpec("inbox", "Inbox", "All read", "Inbox, all read", "/notifications"))
+        out.add(RowSpec("inbox", "Inbox", "All read", "Inbox, all read", path = "/notifications"))
       } else {
         for ((label, count) in inbox) {
-          out.add(RowSpec("inbox-$label", label, "$count unread", "$label, $count unread", "/notifications"))
+          out.add(RowSpec("inbox-$label", label, "$count unread", "$label, $count unread", path = "/notifications"))
         }
       }
       return out
@@ -536,10 +679,11 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
   /** A label, a value that crossfades when it changes, and a chevron when the row opens a page. */
   private inner class SheetRow(context: Context) : LinearLayout(context) {
+    private val icon = PixelIconView(context)
     private val label = TextView(context)
     private val value = FadeText(context, TEXT, 14f, bold = true)
     private val chevron = TextView(context)
-    private var boundPath: String? = null
+    private var boundTarget: Any? = null
 
     init {
       orientation = HORIZONTAL
@@ -548,10 +692,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       setPadding(dp(18), dp(4), dp(18), dp(4))
       label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
       label.setTextColor(MUTED)
+      icon.setTint(MUTED)
       value.gravity = Gravity.END
       chevron.text = "›"
       chevron.setTextColor(MUTED)
       chevron.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+      addView(icon, LayoutParams(dp(20), dp(20)).also { it.marginEnd = dp(12) })
+      icon.visibility = View.GONE
       if (resources.configuration.fontScale > 1.3f) {
         // Large text: the label sits above its figure so neither is squeezed.
         val stack = LinearLayout(context)
@@ -573,22 +720,29 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       })
     }
 
-    fun bind(spec: RowSpec, animate: Boolean, open: (String) -> Unit) {
+    fun bind(spec: RowSpec, animate: Boolean, open: (RowSpec) -> Unit) {
       label.text = spec.label
+      // Menu rows are plain text on the primary color; status rows keep the muted label beside a bold figure.
+      val menuRow = spec.link != null
+      label.setTextColor(if (menuRow) TEXT else MUTED)
       value.setText(spec.value, animate)
       contentDescription = spec.spoken
-      val path = spec.path
-      chevron.visibility = if (path == null) View.GONE else View.VISIBLE
-      // Only touch the ripple when the link changes, so a refresh never cuts a press short.
-      if (path != boundPath || background == null && path != null) {
-        boundPath = path
-        if (path == null) {
+      icon.setIcon(spec.icon)
+      icon.visibility = if (spec.icon != null) View.VISIBLE else View.GONE
+      // Rows without an icon line up with the ones that have one.
+      label.setPadding(if (spec.indent && spec.icon == null) dp(32) else 0, 0, 0, 0)
+      val target: Any? = spec.link ?: spec.path
+      chevron.visibility = if (target == null) View.GONE else View.VISIBLE
+      // Only touch the ripple when the target changes, so a refresh never cuts a press short.
+      if (target != boundTarget || background == null && target != null) {
+        boundTarget = target
+        if (target == null) {
           isClickable = false
           background = null
           setOnClickListener(null)
         } else {
           background = ripple()
-          setOnClickListener { open(path) }
+          setOnClickListener { open(spec) }
         }
       }
       isFocusable = true
@@ -635,7 +789,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       turn.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       funds.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       actions.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-      setOnClickListener { setExpanded(!targetExpanded) }
+      setOnClickListener { if (targetExpanded && menuId == null) closeSheet() else openSheet(null, animate = true) }
       ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
           super.onInitializeAccessibilityNodeInfo(host, info)
@@ -643,7 +797,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
           info.addAction(
             AccessibilityNodeInfoCompat.AccessibilityActionCompat(
               AccessibilityNodeInfo.ACTION_CLICK,
-              if (targetExpanded) "Hide status details" else "Show status details",
+              if (targetExpanded && menuId == null) "Hide status details" else "Show status details",
             ),
           )
         }
@@ -652,7 +806,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
 
     fun refreshState() {
-      ViewCompat.setStateDescription(this, if (targetExpanded) "Expanded" else "Collapsed")
+      ViewCompat.setStateDescription(this, if (targetExpanded && menuId == null) "Expanded" else "Collapsed")
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -801,8 +955,11 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   private inner class TabRow(context: Context) : FrameLayout(context) {
     private val indicator = View(context)
     private val row = LinearLayout(context)
-    private val tabs = NativeNav.Destination.values().associateWith { TabView(context, it) }
-    private var selected: NativeNav.Destination? = null
+    private val tabs = LinkedHashMap<String, TabView>()
+    private var shown: List<DockTab> = emptyList()
+    private var selected: String? = null
+    private var open: String? = null
+    private var badge = 0
     private val move = SpringAnimation(indicator, DynamicAnimation.TRANSLATION_X, 0f).also {
       it.spring = SpringForce(0f).setStiffness(620f).setDampingRatio(0.74f)
     }
@@ -815,17 +972,38 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       addView(indicator, LayoutParams(dp(64), dp(32)).also { it.topMargin = dp(5) })
       row.orientation = LinearLayout.HORIZONTAL
       addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-      for ((tab, view) in tabs) {
+    }
+
+    /** Rebuilds the tabs when the game described different ones; the selection carries over by id. */
+    fun setTabs(next: List<DockTab>) {
+      if (next == shown) return
+      shown = next
+      row.removeAllViews()
+      tabs.clear()
+      for (tab in next) {
+        val view = TabView(context, tab)
+        tabs[tab.id] = view
         row.addView(view, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        view.setOnClickListener {
-          val again = selected == tab
-          view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-          // Ask is a sheet over the current page, so the selection stays put.
-          if (tab != NativeNav.Destination.ASK) select(tab, !reducedMotion())
-          if (targetExpanded) setExpanded(false)
-          listener.onTab(tab, again)
-        }
+        view.setOnClickListener { tapped(tab, view) }
       }
+      if (selected !in tabs) selected = null
+      if (open !in tabs) open = null
+      refreshVisual(animate = false)
+      requestLayout()
+    }
+
+    private fun tapped(tab: DockTab, view: View) {
+      val again = selected == tab.id
+      // A light tick only when the tab actually changes.
+      if (!again && open != tab.id) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+      if (tab.sheet != null) {
+        toggleMenu(tab.id)
+        return
+      }
+      // Ask is a sheet over the current page, so the selection stays put.
+      if (tab.app != AppAction.ASK) select(tab.id, !reducedMotion())
+      if (targetExpanded) closeSheet()
+      listener.onTab(tab, again)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -833,19 +1011,31 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       if (changed) place(animate = false)
     }
 
-    fun select(tab: NativeNav.Destination?, animate: Boolean) {
+    fun select(tab: String?, animate: Boolean) {
       if (tab == selected) return
-      val previous = selected
       selected = tab
-      previous?.let { tabs[it]?.setChecked(false, animate) }
-      tab?.let { tabs[it]?.setChecked(true, animate) }
+      refreshVisual(animate)
+    }
+
+    /** The menu tab whose sheet is open counts as selected while it is open. */
+    fun setOpen(tab: String?) {
+      if (tab == open) return
+      open = tab
+      refreshVisual(animate = !reducedMotion())
+    }
+
+    private fun refreshVisual(animate: Boolean) {
+      val visual = open ?: selected
+      for ((id, view) in tabs) view.setChecked(id == visual, animate)
       place(animate)
     }
 
     private fun place(animate: Boolean) {
-      val tab = selected?.let { tabs[it] }
+      val tab = (open ?: selected)?.let { tabs[it] }
       if (tab == null || tab.width == 0) { indicator.alpha = 0f; return }
-      val x = (row.left + tab.left + (tab.width - indicator.layoutParams.width) / 2).toFloat()
+      val width = min(dp(64), max(dp(32), tab.width - dp(4)))
+      if (indicator.layoutParams.width != width) { indicator.layoutParams.width = width; indicator.requestLayout() }
+      val x = (row.left + tab.left + (tab.width - width) / 2).toFloat()
       val wasHidden = indicator.alpha == 0f
       indicator.alpha = 1f
       if (!animate || wasHidden) {
@@ -856,11 +1046,14 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       }
     }
 
-    fun setBadge(count: Int) = tabs[NativeNav.Destination.INBOX]?.setBadge(count)
+    fun setBadge(count: Int) {
+      badge = count
+      shown.firstOrNull { it.sheet == "more" }?.let { tabs[it.id]?.setBadge(count) }
+    }
   }
 
-  private inner class TabView(context: Context, private val tab: NativeNav.Destination) : LinearLayout(context) {
-    private val icon = ImageView(context)
+  private inner class TabView(context: Context, private val tab: DockTab) : LinearLayout(context) {
+    private val icon = PixelIconView(context)
     private val label = TextView(context)
     private val badge = TextView(context)
     private var checked = false
@@ -883,9 +1076,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       background = ripple()
 
       val holder = FrameLayout(context)
-      icon.setImageResource(tab.icon)
-      icon.setColorFilter(MUTED)
-      icon.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+      icon.setIcon(tab.icon)
+      icon.setTint(MUTED)
       holder.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
       badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
       badge.setTextColor(Color.WHITE)
@@ -912,6 +1104,14 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
           super.onInitializeAccessibilityNodeInfo(host, info)
           info.roleDescription = "Tab"
           info.isSelected = checked
+          if (tab.sheet != null) {
+            info.addAction(
+              AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                AccessibilityNodeInfo.ACTION_CLICK,
+                if (checked && targetExpanded && menuId == tab.id) "Close ${tab.label} menu" else "Open ${tab.label} menu",
+              ),
+            )
+          }
         }
       })
     }
@@ -940,12 +1140,12 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
     private fun applyTint(color: Int) {
       tint = color
-      icon.setColorFilter(color)
+      icon.setTint(color)
       label.setTextColor(color)
     }
 
     fun setBadge(value: Int) {
-      if (tab != NativeNav.Destination.INBOX || value == count) return
+      if (value == count) return
       count = value
       badge.text = if (value > 99) "99+" else value.toString()
       badge.visibility = if (value > 0) View.VISIBLE else View.GONE

@@ -139,7 +139,11 @@ object BriefingWidgets {
   }
 
   private fun cacheFile(context: Context) = File(context.noBackupFilesDir, "multiplayer-briefing.json")
-  fun clear(context: Context) = synchronized(lock) { cacheFile(context).delete(); Unit }
+  fun clear(context: Context) = synchronized(lock) {
+    cacheFile(context).delete()
+    DockModelStore.clear(context)
+    Unit
+  }
   private fun read(context: Context): JSONObject? = CompanionSafety.get("widget cache read", null) {
     synchronized(lock) {
       val data = JSONObject(cacheFile(context).readText())
@@ -164,6 +168,14 @@ object BriefingWidgets {
       name == "auth-token" || name.matches(Regex("auth-token-[a-zA-Z0-9-]+")) ||
         name.matches(Regex("(__Secure-)?(authjs|next-auth)\\.session-token(\\.[0-9]+)?"))
     }.sorted().joinToString("; ")
+
+  /** Fingerprint of the signed-in session, or null when signed out. The dock keys its cached model on it. */
+  fun identity(): String? = CompanionSafety.get("session identity", null as String?) {
+    session().takeIf { it.isNotEmpty() }?.let { fingerprint(it) }
+  }
+
+  /** The auth cookies for the game, for requests made with the player's own session. */
+  fun sessionCookie(): String = session()
 
   private fun fingerprint(session: String) = MessageDigest.getInstance("SHA-256")
     .digest(session.toByteArray()).joinToString("") { "%02x".format(it) }

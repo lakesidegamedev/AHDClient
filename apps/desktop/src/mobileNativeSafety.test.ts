@@ -42,7 +42,9 @@ describe("mobile native companion safety", () => {
   });
 
   it("gives every old in-game menu item a home in the native tab bar on both phones", () => {
-    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    const androidDir = "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/";
+    // The Android labels live in the dock model, the rest of the behaviour in NativeNav.
+    const nav = read(`${androidDir}NativeNav.kt`) + read(`${androidDir}DockModel.kt`);
     const ios = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
     for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
       expect(nav).toContain(`"${tab}"`);

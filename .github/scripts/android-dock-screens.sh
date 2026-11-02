@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Screenshot and probe the native dock. The preview link
-# (ahdclient://dock?preview=collapsed|expanded) draws the dock with canned
+# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout) draws the dock with canned
 # figures and no network, so every run shows the same thing. Then drive it the
 # way a player would (drag up, Back, tap the strip) and read the accessibility
 # tree to check what is on screen. Prints DOCK lines for the log; never fails
@@ -71,16 +71,16 @@ sleep 2
 preview collapsed
 shot 1-collapsed
 dump
-for tab in Game Briefing "Inbox, 3 unread" Ask More "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
+for tab in "Acme Corp" "New York" "United States" Actions "More, 3 unread" "Status. Next turn"; do check "collapsed shows '$tab'" has "$tab"; done
 check "collapsed hides the sheet rows" absent "Campaign funds"
 
 # Drag the dock up the way a thumb would, starting on its tab row.
-read -r gx gy < <(center "Game") || true
+read -r gx gy < <(center "Actions") || true
 a shell input swipe "$((width / 2))" "${gy:-$((height - 60))}" "$((width / 2))" "$((height * 35 / 100))" 350
 sleep 2
 shot 2-dragged-open
 dump
-check "drag up opens the sheet" has "Campaign funds"
+check "drag up opens the status sheet" has "Campaign funds"
 check "sheet lists corporate cash" has "Corporate cash"
 check "sheet lists the inbox" has "Notifications, 3 unread"
 
@@ -89,10 +89,9 @@ a shell input keyevent 4
 sleep 2
 dump
 check "Back closes the sheet" absent "Campaign funds"
-check "Back kept the app open" has "Game"
+check "Back kept the app open" has "New York"
 
 # Tap the strip to open, tap it again to close.
-dump
 read -r x y < <(center "Status.") || true
 if [ -n "${x:-}" ]; then
   a shell input tap "$x" "$y"; sleep 2
@@ -107,25 +106,60 @@ else
   echo "DOCK FAILED: no strip to tap"
 fi
 
+# A menu tab opens its own sheet from the same surface; tapping it again closes it.
+dump
+read -r x y < <(center "New York") || true
+if [ -n "${x:-}" ]; then
+  a shell input tap "$x" "$y"; sleep 2
+  shot 4-state-sheet
+  dump
+  check "State tab opens its menu" has "State market"
+  check "State menu lists elections" has "Elections"
+  read -r x y < <(center "New York") || true
+  [ -n "${x:-}" ] && a shell input tap "$x" "$y"; sleep 2
+  dump
+  check "State tab again closes its menu" absent "State market"
+else
+  echo "DOCK FAILED: no State tab to tap"
+fi
+
+# The More sheet: the app's own rows first.
+preview more
+shot 5-more-sheet
+dump
+for row in Briefing "Inbox, 3 unread" Ask "Back to launcher" Profile; do check "More lists '$row'" has "$row"; done
+a shell input keyevent 4
+sleep 2
+dump
+check "Back closes the More sheet" absent "Back to launcher"
+
+# Signed out or an older game: Game, Briefing, Ask, More and no status.
+preview signedout
+shot 6-signed-out
+dump
+for tab in Game Briefing Ask More; do check "signed-out dock shows '$tab'" has "$tab"; done
+check "signed-out dock hides the game's tabs" absent "Acme Corp"
+check "signed-out dock hides the status strip" absent "Status."
+
 # The finished look, dark and light system themes.
 preview expanded
-shot 4-expanded-dark
+shot 7-expanded-dark
 a shell cmd uimode night no >/dev/null 2>&1
 sleep 3
 preview expanded
-shot 5-expanded-light
+shot 8-expanded-light
 preview collapsed
-shot 6-collapsed-light
+shot 9-collapsed-light
 dump
-check "light theme keeps the dock" has "Game"
+check "light theme keeps the dock" has "New York"
 
 # Largest font scale: nothing should clip or overlap.
 a shell settings put system font_scale 1.6
 sleep 2
 preview collapsed
-shot 7-collapsed-large-font
-preview expanded
-shot 8-expanded-large-font
+shot 10-collapsed-large-font
+preview more
+shot 11-more-large-font
 a shell settings put system font_scale 1.0
 a shell cmd uimode night no >/dev/null 2>&1
 echo "Dock screenshots: $(ls probe/dock-*.png 2>/dev/null | tr '\n' ' ')"
