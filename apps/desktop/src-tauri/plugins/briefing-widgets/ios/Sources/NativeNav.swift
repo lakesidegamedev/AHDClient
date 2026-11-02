@@ -1,4 +1,5 @@
 import Combine
+import SafariServices
 import SwiftUI
 import UIKit
 import WebKit
@@ -44,11 +45,20 @@ final class NativeNavController: NSObject {
   private var hosting: UIHostingController<DockView>?
   private var cancellables = Set<AnyCancellable>()
   private var onInboxPage = false
+  /// The signed-in session's fingerprint; nil signed out. Keys the layout cache.
   private var layoutAccount: String?
-  private var layoutFetchedAt = Date.distantPast
-  private var layoutInFlight = false
+  /// The game's language cookie, read from the webview; unknown until first read.
+  private var layoutLocale: String?
+  private var localeKnown = false
+  /// The country the page is about (Nation follows the page); nil is home.
+  private var layoutCountry: String?
+  private var onSandbox = false
+  private var layoutFetchedAt = [String: Date]()
+  private var layoutInFlight: String?
   private var lastGameURL: URL?
   private var lastURL: URL?
+  private var lastPlace = ""
+  private weak var container: DockContainerView?
   private var inboxVisitedAt = Date.distantPast
   private var urlObservation: NSKeyValueObservation?
   private var turnRefresh: DispatchWorkItem?
@@ -59,6 +69,7 @@ final class NativeNavController: NSObject {
 
   func attach(_ webView: WKWebView) {
     self.webView = webView
+    DockLayoutCache.removeLegacy()
     install(attempt: 0)
   }
 
@@ -97,6 +108,7 @@ final class NativeNavController: NSObject {
     container.backgroundColor = .clear
     container.translatesAutoresizingMaskIntoConstraints = false
     host.addSubview(container)
+    self.container = container
 
     let hosting = UIHostingController(rootView: DockView(model: model))
     hosting.view.backgroundColor = .clear
@@ -131,9 +143,11 @@ final class NativeNavController: NSObject {
     ])
     self.host = host
     host.layoutIfNeeded()
+    homeInsetChanged()
 
     model.onTab = { [weak self] tab in self?.handle(tab) }
     model.onOpenPath = { [weak self] path in self?.openGamePath(path) }
+    model.onOpenExternal = { [weak self] url in self?.openExternal(url) }
     model.onApp = { [weak self] app in self?.perform(app) }
     // A new layout can move the page to a different tab; look again.
     model.$layout.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in
@@ -145,6 +159,24 @@ final class NativeNavController: NSObject {
     }.store(in: &cancellables)
     observers.append(NotificationCenter.default.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
       self?.model.reduceMotion = UIAccessibility.isReduceMotionEnabled
+    })
+    // An open panel is modal for VoiceOver: the page behind it is out of
+    // reach, and the panel's title is announced as it opens.
+    model.$expanded.removeDuplicates().receive(on: DispatchQueue.main).sink { [weak self] open in
+      guard let self else { return }
+      self.container?.accessibilityViewIsModal = open
+      if open { UIAccessibility.post(notification: .screenChanged, argument: self.model.title(of: self.model.panel)) }
+    }.store(in: &cancellables)
+    model.$panel.removeDuplicates().dropFirst().receive(on: DispatchQueue.main).sink { [weak self] panel in
+      guard let self, self.model.expanded else { return }
+      UIAccessibility.post(notification: .screenChanged, argument: self.model.title(of: panel))
+    }.store(in: &cancellables)
+    // With the soft keyboard up the dock steps aside, as Android's does.
+    observers.append(NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] note in
+      self?.keyboardChanged(note)
+    })
+    observers.append(NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.model.setKeyboardUp(false)
     })
 
     // Silences the floating AHD button mobile.rs keeps as a fallback for a
@@ -179,8 +211,10 @@ final class NativeNavController: NSObject {
     })
     observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
       self?.refreshStatus()
+      self?.refreshLocale()
       self?.refreshLayout(maxAge: 30)
     })
+    refreshLocale()
     // Paint the last known figures and the cached tabs at once, then ask for fresh ones.
     apply(BriefingStore.read())
     refreshStatus()
@@ -193,6 +227,23 @@ final class NativeNavController: NSObject {
       responder = next
     }
     return nil
+  }
+
+  /// The home indicator inset of the window; the dock's bottom pad follows
+  /// this and never the keyboard.
+  func homeInsetChanged() {
+    guard let inset = host?.window?.safeAreaInsets.bottom else { return }
+    model.setHomeInset(inset)
+  }
+
+  private func keyboardChanged(_ note: Notification) {
+    guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
+    let screen = UIScreen.main.bounds.height
+    // Docked and tall: not the iPad shortcut bar, not a floating keyboard.
+    let docked = frame.height > 100 && frame.maxY >= screen - 1 && frame.minY < screen - 100
+    // A native sheet (Ask) has its own keyboard; the page behind it stays put.
+    if docked, let host, Self.owningController(of: host)?.presentedViewController != nil { return }
+    model.setKeyboardUp(docked)
   }
 
   private func moveSlot(to height: CGFloat) {
@@ -234,7 +285,7 @@ final class NativeNavController: NSObject {
     func set(_ base: String) {
       guard !base.contains(Self.statusMarker) else { return }
       webView.customUserAgent = base + " " + Self.statusMarker
-      if let host = webView.url?.host, Self.gameHosts.contains(host) { webView.reload() }
+      if preview == nil, let host = webView.url?.host, Self.gameHosts.contains(host) { webView.reload() }
     }
     if let agent = webView.customUserAgent, !agent.isEmpty {
       set(agent)
@@ -338,9 +389,14 @@ final class NativeNavController: NSObject {
     let path = DockTabs.path(url)
     let inbox = isGame && path == "/notifications"
     if isGame && !inbox { lastGameURL = url }
-    if url != lastURL {
-      lastURL = url
+    lastURL = url
+    // Only a move to another page closes the open sheet; a query or hash
+    // update on the same page (a tabbed page syncing its tab) leaves it be.
+    let place = (url.host ?? "") + path
+    if place != lastPlace {
+      lastPlace = place
       model.close()
+      pageMoved(url, path: path, isGame: isGame)
     }
     let strip = Self.showsStatus(on: url)
     if strip != model.onStripPage {
@@ -360,6 +416,61 @@ final class NativeNavController: NSObject {
     // A new section of the game can change what the game wants in the dock.
     if model.selectedID != nil { refreshLayout(maxAge: 300) }
     select(tab)
+  }
+
+  /// A new page: sign-out pages drop the dock to the app tabs at once, the
+  /// sandbox gets the app tabs, a country page moves Nation to that country,
+  /// and the language cookie is looked at again.
+  private func pageMoved(_ url: URL, path: String, isGame: Bool) {
+    guard isGame else { return }
+    if DockTabs.signedOutPaths.contains(path) {
+      signedOutNavigation()
+      return
+    }
+    // A vanished session drops the dock to the app tabs now, not at the next poll.
+    syncAccount()
+    let sandbox = url.host == Self.sandboxHost
+    if sandbox != onSandbox {
+      onSandbox = sandbox
+      // The sandbox is another world: the production account's tabs do not apply.
+      reapplyLayout(strict: true)
+      if !sandbox { refreshLayout(maxAge: 0) }
+    }
+    if !sandbox {
+      let country = DockTabs.country(inPath: path)
+      if country != layoutCountry {
+        layoutCountry = country
+        reapplyLayout(strict: false)
+        refreshLayout(maxAge: 300)
+      }
+    }
+    refreshLocale()
+  }
+
+  /// /login, /register or /logout: forget the account's tabs now, then let
+  /// the status poll say whether a session survived.
+  private func signedOutNavigation() {
+    if let account = layoutAccount { DockLayoutCache.clear(account: account) }
+    layoutAccount = nil
+    layoutFetchedAt.removeAll()
+    model.setLayout(nil)
+    refreshStatus(maxAge: 0)
+  }
+
+  /// Rows the game marks external open outside the game webview: a Safari
+  /// sheet for https, the mail app for mailto. Never `webView.load`.
+  private func openExternal(_ url: URL) {
+    guard DockExternal.url(url.absoluteString) != nil else { return }
+    if url.scheme == "https" {
+      let safari = SFSafariViewController(url: url)
+      safari.preferredBarTintColor = Self.background
+      safari.preferredControlTintColor = .white
+      var top = host.flatMap { Self.owningController(of: $0) }
+      while let next = top?.presentedViewController { top = next }
+      top?.present(safari, animated: true)
+    } else {
+      UIApplication.shared.open(url)
+    }
   }
 
   /// Game pages carry the web status footer, except the bare ones.
@@ -385,7 +496,7 @@ final class NativeNavController: NSObject {
     guard preview == nil else { return }
     let next = saved.map { DockStatus($0.data) }
     if model.status != next { model.status = next }
-    syncAccount(saved)
+    syncAccount()
     refreshBadge(saved)
     scheduleTurnRefresh()
   }
@@ -414,41 +525,97 @@ final class NativeNavController: NSObject {
 
   // MARK: Layout
 
-  /// Which account the dock layout belongs to: the character's name, or the
-  /// session when the player has no character yet. Nil when signed out.
-  private func account(of saved: SavedBriefing?) -> String? {
-    guard let saved else { return nil }
-    return DockLayoutCache.accountKey(saved.data.name) ?? "s-" + String(saved.sessionId.prefix(16))
+  /// The cache key for the dock on show: session, language, country.
+  private func layoutKey() -> String? {
+    layoutAccount.map { DockLayoutCache.key(account: $0, locale: layoutLocale, country: layoutCountry) }
   }
 
-  /// A different account (or none) swaps the dock to that account's cached
-  /// tabs, or to the app tabs, at once; a fresh copy is asked for behind it.
-  private func syncAccount(_ saved: SavedBriefing?) {
-    let next = account(of: saved)
+  /// Show the cached tabs for the current key. `strict` also drops to the app
+  /// tabs when there is nothing cached; otherwise the dock keeps what it has
+  /// until fresh tabs arrive. Signed out or on the sandbox: app tabs.
+  private func reapplyLayout(strict: Bool) {
+    guard layoutAccount != nil, !onSandbox else {
+      model.setLayout(nil)
+      return
+    }
+    if let cached = DockLayoutCache.load(key: layoutKey()) {
+      model.setLayout(cached)
+    } else if strict {
+      model.setLayout(nil)
+    }
+  }
+
+  /// The signed-in session decides the account: a different one (or none)
+  /// swaps the dock to that account's cached tabs, or to the app tabs, at
+  /// once, and a fresh copy is asked for behind it. The old account's cache
+  /// goes with its session.
+  private func syncAccount() {
+    let next = BriefingStore.sessionFingerprint()
     guard next != layoutAccount else { return }
+    if let old = layoutAccount { DockLayoutCache.clear(account: old) }
     layoutAccount = next
-    layoutFetchedAt = .distantPast
-    model.setLayout(DockLayoutCache.load(account: next))
+    layoutFetchedAt.removeAll()
+    if next == nil || localeKnown { reapplyLayout(strict: true) }
     if next != nil { refreshLayout(maxAge: 0) }
+  }
+
+  /// Reads the game's `ahd-locale` cookie from the webview. The game picks its
+  /// language from that cookie alone; a change swaps to that language's cached
+  /// tabs and asks for fresh ones.
+  private func refreshLocale(then run: (() -> Void)? = nil) {
+    guard let store = webView?.configuration.websiteDataStore.httpCookieStore else {
+      run?()
+      return
+    }
+    store.getAllCookies { [weak self] cookies in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        let value = cookies.first { $0.name == "ahd-locale" && $0.domain.hasSuffix("ahousedividedgame.com") }?.value
+        let locale = DockLocale.valid(value)
+        let first = !self.localeKnown
+        let changed = first || locale != self.layoutLocale
+        self.localeKnown = true
+        self.layoutLocale = locale
+        if changed && self.layoutAccount != nil {
+          self.reapplyLayout(strict: first)
+          self.refreshLayout(maxAge: 0)
+        }
+        run?()
+      }
+    }
   }
 
   /// Never blocks the UI. A failure keeps whatever the dock already has.
   private func refreshLayout(maxAge: TimeInterval) {
-    guard preview == nil, !layoutInFlight, let account = layoutAccount,
-      Date().timeIntervalSince(layoutFetchedAt) >= maxAge,
+    guard preview == nil, !onSandbox, layoutAccount != nil else { return }
+    guard localeKnown else {
+      refreshLocale { [weak self] in self?.refreshLayout(maxAge: maxAge) }
+      return
+    }
+    guard layoutInFlight == nil, let key = layoutKey(), let account = layoutAccount,
+      Date().timeIntervalSince(layoutFetchedAt[key] ?? .distantPast) >= maxAge,
       let cookie = BriefingStore.session(), !cookie.isEmpty else { return }
-    layoutInFlight = true
-    layoutFetchedAt = Date()
-    DockLayoutClient.fetch(cookie: cookie) { [weak self] outcome in
+    layoutInFlight = key
+    layoutFetchedAt[key] = Date()
+    DockLayoutClient.fetch(cookie: cookie, locale: layoutLocale, country: layoutCountry) { [weak self] outcome in
       guard let self else { return }
-      self.layoutInFlight = false
-      // The player may have switched account while the request was out.
-      guard self.layoutAccount == account else { return }
+      self.layoutInFlight = nil
+      // The session may have changed while the request was out: adopt it.
+      guard BriefingStore.sessionFingerprint() == account else {
+        self.syncAccount()
+        return
+      }
+      // So may the language, the country or the world: ask again for what is on show now.
+      guard self.layoutKey() == key, !self.onSandbox else {
+        self.refreshLayout(maxAge: 0)
+        return
+      }
       switch outcome {
       case .layout(let layout, let bytes):
-        DockLayoutCache.save(bytes, account: account)
+        DockLayoutCache.save(bytes, key: key)
         self.model.setLayout(layout)
       case .signedOut:
+        DockLayoutCache.clear(account: account)
         self.model.setLayout(nil)
       case .unavailable:
         break
@@ -459,6 +626,11 @@ final class NativeNavController: NSObject {
   private func applyPreview(_ state: String) {
     let signedOut = state == "signedout" || state == "briefing"
     model.setLayout(signedOut ? nil : DockFixture.layout)
+    // The strip lives on game pages, so the strip states show a stand-in game
+    // page, not the launcher the app opened on.
+    if !signedOut, let webView {
+      webView.loadHTMLString(NativeDockPreview.standInPage, baseURL: URL(string: Self.site))
+    }
     select(state == "briefing" ? "briefing" : signedOut ? "game" : "state")
     model.onStripPage = !signedOut
     model.status = signedOut ? nil : DockStatus.sample()
@@ -529,8 +701,14 @@ final class NativeNavHost: UIView {
   @objc private func goForward() { controller?.goForward() }
   @objc private func closePanel() { controller?.closePanel() }
 
+  override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+    controller?.homeInsetChanged()
+  }
+
   override func didMoveToWindow() {
     super.didMoveToWindow()
+    controller?.homeInsetChanged()
     // With nothing focused yet, shortcuts still need a responder to start from.
     if window != nil { DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() } }
   }

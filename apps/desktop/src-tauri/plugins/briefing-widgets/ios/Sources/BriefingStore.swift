@@ -159,6 +159,14 @@ enum BriefingStore {
     return value
   }
 
+  /// The signed-in session's fingerprint, or nil when there is no session.
+  /// Per-account caches key on this, so a rename or a second world cannot
+  /// share one.
+  static func sessionFingerprint() -> String? {
+    guard let header = session(), !header.isEmpty else { return nil }
+    return fingerprint(header)
+  }
+
   private static func fingerprint(_ header: String) -> String {
     SHA256.hash(data: Data(header.utf8)).map { String(format: "%02x", $0) }.joined()
   }
