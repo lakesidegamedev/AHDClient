@@ -88,7 +88,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     private const val MAX_WIDTH_DP = 600
     private const val TAB_HEIGHT_DP = 56
     private const val STRIP_HEIGHT_DP = 48
-    private const val SHEET_SHARE = 0.72f
+    private const val SHEET_SHARE = 0.8f
   }
 
   private val density = resources.displayMetrics.density
@@ -111,6 +111,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   private var lastDueAt = 0L
 
   private var lastLeft = 0
+  private var lastTop = 0
   private var lastRight = 0
   private var lastBottom = 0
   private var lastKeyboard = false
@@ -148,15 +149,17 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-    sheet.maxHeight = (MeasureSpec.getSize(heightMeasureSpec) * SHEET_SHARE).toInt()
+    // Tall enough for every row on most phones, never up under the status bar.
+    val window = MeasureSpec.getSize(heightMeasureSpec)
+    sheet.maxHeight = min((window * SHEET_SHARE).toInt(), window - lastTop - max(reportedHeight, 0) - dp(12)).coerceAtLeast(0)
     super.onMeasure(widthMeasureSpec, heightMeasureSpec)
   }
 
   // ---- state from NativeNav ------------------------------------------------
 
-  /** Called from the insets listener. Returns the collapsed dock height, 0 while the keyboard is up. */
-  fun fit(left: Int, right: Int, bottom: Int, keyboard: Boolean): Int {
-    lastLeft = left; lastRight = right; lastBottom = bottom; lastKeyboard = keyboard
+  /** Called from the insets listener (the system bar insets). Returns the collapsed dock height, 0 while the keyboard is up. */
+  fun fit(left: Int, top: Int, right: Int, bottom: Int, keyboard: Boolean): Int {
+    lastLeft = left; lastTop = top; lastRight = right; lastBottom = bottom; lastKeyboard = keyboard
     // The keyboard covers the dock, as in other apps; the page gets the room.
     if (keyboard) {
       if (targetExpanded) setExpanded(false, animate = false)
@@ -238,7 +241,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     // The page ends above the dock, so a new height needs a new layout pass.
     post {
       val before = reportedHeight
-      fit(lastLeft, lastRight, lastBottom, lastKeyboard)
+      fit(lastLeft, lastTop, lastRight, lastBottom, lastKeyboard)
       if (before >= 0 && before != reportedHeight) listener.onCollapsedHeightChanged()
     }
   }
@@ -320,6 +323,14 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       canvas.drawRoundRect(bounds, radius, radius, edge)
     }
 
+    /** Velocity in screen coordinates: the panel's own top moves with the finger, so local ones would read zero. */
+    private fun track(ev: MotionEvent) {
+      val screen = MotionEvent.obtain(ev)
+      screen.setLocation(ev.rawX, ev.rawY)
+      tracker.addMovement(screen)
+      screen.recycle()
+    }
+
     private fun canDrag(): Boolean = strip.visibility == View.VISIBLE && sheet.hasRows
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -327,13 +338,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       when (ev.actionMasked) {
         MotionEvent.ACTION_DOWN -> {
           tracker.clear()
-          tracker.addMovement(ev)
+          track(ev)
           downX = ev.rawX; downY = ev.rawY
           startedInSheet = sheet.height > 0 && ev.y < sheet.bottom
           dragging = false
         }
         MotionEvent.ACTION_MOVE -> {
-          tracker.addMovement(ev)
+          track(ev)
           val dy = ev.rawY - downY
           val dx = ev.rawX - downX
           if (!dragging && abs(dy) > slop && abs(dy) > abs(dx)) {
@@ -356,7 +367,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
       if (!dragging) return super.onTouchEvent(ev)
-      tracker.addMovement(ev)
+      track(ev)
       when (ev.actionMasked) {
         MotionEvent.ACTION_MOVE -> {
           val travel = max(1, sheet.fullHeight)

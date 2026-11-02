@@ -54,6 +54,10 @@ preview() {
   sleep 5
 }
 
+# The Ask screenshots leave their sheet open over the app: close it, then
+# bring the app back (it may have exited on the second Back; this relaunches it).
+a shell input keyevent 4; sleep 2
+a shell input keyevent 4; sleep 2
 a shell am start -W -n "$pkg/.MainActivity" >/dev/null
 sleep 12
 # The sign-in walk can leave the keyboard up; it rightly hides the dock.

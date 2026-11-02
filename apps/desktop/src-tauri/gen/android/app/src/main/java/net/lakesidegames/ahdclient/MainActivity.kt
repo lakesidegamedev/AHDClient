@@ -235,7 +235,7 @@ class MainActivity : TauriActivity() {
         val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
         val keyboard = ime.bottom > bars.bottom
         val tabs = nav?.let { bar ->
-          CompanionSafety.get("dock layout", 0) { bar.layout(bars.left, bars.right, bars.bottom, keyboard) }
+          CompanionSafety.get("dock layout", 0) { bar.layout(bars.left, bars.top, bars.right, bars.bottom, keyboard) }
         } ?: 0
         val bottom = when {
           keyboard -> ime.bottom

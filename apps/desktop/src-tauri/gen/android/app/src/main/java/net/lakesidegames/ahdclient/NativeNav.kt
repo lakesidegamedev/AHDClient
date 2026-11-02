@@ -150,9 +150,9 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   }
 
   /** Called from the WebView's insets listener; returns the dock's collapsed height. */
-  fun layout(left: Int, right: Int, bottom: Int, keyboard: Boolean): Int {
+  fun layout(left: Int, top: Int, right: Int, bottom: Int, keyboard: Boolean): Int {
     if (dock.parent == null) return 0
-    return dock.fit(left, right, bottom, keyboard)
+    return dock.fit(left, top, right, bottom, keyboard)
   }
 
   /**
