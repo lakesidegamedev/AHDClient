@@ -37,7 +37,6 @@ import android.widget.TextView
 import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
-import androidx.core.widget.TextViewCompat
 import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
@@ -1158,13 +1157,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       addView(holder, LayoutParams(dp(40), dp(24)))
 
       label.text = tab.label
-      label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+      // Large text: a long single word ("Company") must still fit its tab, so the label steps down
+      // (the scale still applies: 8sp at 1.6x reads about as large as 12.8sp) instead of breaking mid-word.
+      label.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (resources.configuration.fontScale > 1.3f) 8f else 11f)
       label.setTextColor(MUTED)
       // Large text: names (a state, a company) wrap to a second line before they are cut.
       label.maxLines = if (resources.configuration.fontScale > 1.3f) 2 else 1
       label.ellipsize = TextUtils.TruncateAt.END
-      // A single long word ("Company") shrinks to fit instead of breaking mid-word at large text sizes.
-      TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(label, 8, 11, 1, TypedValue.COMPLEX_UNIT_SP)
       label.gravity = Gravity.CENTER
       label.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       addView(label, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(2) })

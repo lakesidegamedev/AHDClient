@@ -35,6 +35,11 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     private const val SITE_HOSTS = "ahousedividedgame.com|www.ahousedividedgame.com|sandbox.ahousedividedgame.com"
     private const val SANDBOX_HOST = "sandbox.ahousedividedgame.com"
 
+    /** What the preview shows behind the dock in place of a game page: plain, dark and labelled. */
+    private const val PREVIEW_PAGE =
+      "<html><body style=\"margin:0;height:100vh;display:flex;align-items:center;justify-content:center;" +
+        "background:#0f1016;color:#71717a;font:14px sans-serif\">Game page (screenshot preview)</body></html>"
+
     /** Tells the game this build draws its own status and menu dock, so the page hides both. Added once the dock is on screen. */
     const val NATIVE_MARKER = "AHDClientNativeStatus/1"
 
@@ -229,9 +234,13 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     }
     previewing = true
     dock.closeSheet(animate = false)
-    // Show the dock over the kind of page it belongs to: a game page, or the launcher.
+    // Show the dock over the kind of page it belongs to: a game page (a small local placeholder, no
+    // network), or the launcher.
     if (mode == "launcher" && page == Page.SITE) webView.loadUrl(LAUNCHER)
-    else if (mode != "launcher" && page != Page.SITE) webView.loadUrl("${BriefingWidgets.ORIGIN}/")
+    else if (mode != "launcher" && page != Page.SITE) {
+      val base = "${BriefingWidgets.ORIGIN}/preview"
+      webView.loadDataWithBaseURL(base, PREVIEW_PAGE, "text/html", "UTF-8", base)
+    }
     if (mode == "signedout") {
       dock.setModel(DockModel.fallback(false))
       dock.setInboxBadge(0)

@@ -67,8 +67,8 @@ absent() { ! has "$1"; }
 
 preview() {
   a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://dock?preview=$1" >/dev/null
-  # The preview puts the dock over a game page (or the launcher), which takes a moment to load.
-  sleep 9
+  # The preview puts the dock over a placeholder game page (or the launcher), which takes a moment.
+  sleep 6
 }
 
 # The Ask screenshots leave their sheet open over the app: close it, then
@@ -188,5 +188,8 @@ preview more
 shot 11-more-large-font
 a shell settings put system font_scale 1.0
 a shell cmd uimode night no >/dev/null 2>&1
+# Crash and app log lines, so a lost emulator or a dock exception is visible next to the checks.
+a logcat -d -v time -t 800 AndroidRuntime:E AHDClient:V '*:S' > probe/dock-logcat.txt 2>/dev/null || true
+echo "Emulator state: $(a get-state 2>&1 | head -1)"
 echo "Dock screenshots: $(ls probe/dock-*.png 2>/dev/null | tr '\n' ' ')"
 exit 0
