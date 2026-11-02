@@ -245,6 +245,15 @@ jobs:
       - name: Check native Ask Swift sources
         run: |
           xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/FoundationModelBridge.swift apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/NativeAsk*.swift
+      - name: Dock core tests (real /api/mobile-dock payloads)
+        run: |
+          d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
+          xcrun swiftc -swift-version 5 -o "$RUNNER_TEMP/dock-core-test" $d/BriefingStore.swift $d/NativeDockLayout.swift $d/NativeDockCore.swift .github/dock-core-test/main.swift
+          "$RUNNER_TEMP/dock-core-test" apps/desktop/src/dockFixtures
+      - name: Check native dock Swift sources
+        run: |
+          d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
       - name: Generate native app icons
         run: |
           npm run tauri --workspace apps/desktop -- icon src/assets/ahd-logo.png --ios-color '#ffffff'
@@ -370,6 +379,22 @@ jobs:
         run: |
           app=$(find apps/desktop/src-tauri/gen/apple/build -maxdepth 3 -name '*.app' -print -quit)
           bash .github/scripts/ios-ask-screens.sh "$app"
+
+      - name: Screenshot the dock on iPhone and iPad
+        if: steps.signing.outputs.mode == 'simulator'
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          app=$(find apps/desktop/src-tauri/gen/apple/build -maxdepth 3 -name '*.app' -print -quit)
+          bash .github/scripts/ios-dock-app-screens.sh "$app"
+
+      - name: Upload dock screenshots
+        if: steps.signing.outputs.mode == 'simulator'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-dock-app-screens
+          path: ios-dock-app-screens/
+          if-no-files-found: ignore
 
       - name: Render the home-screen widgets
         if: steps.signing.outputs.mode == 'simulator'
