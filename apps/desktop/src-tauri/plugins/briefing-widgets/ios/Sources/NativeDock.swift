@@ -602,6 +602,7 @@ private struct DockStripContent: View {
     Group {
       if sizeCategory.isAccessibilityCategory {
         VStack(alignment: .leading, spacing: 4) { chips }
+          .frame(maxWidth: .infinity, alignment: .leading)
       } else {
         HStack(spacing: 12) {
           chips
@@ -712,6 +713,7 @@ struct DockRow: Identifiable {
 private struct DockRowView: View {
   let row: DockRow
   let open: (String) -> Void
+  @Environment(\.sizeCategory) private var sizeCategory
 
   var body: some View {
     if let path = row.path {
@@ -739,21 +741,21 @@ private struct DockRowView: View {
         .foregroundColor(DockStyle.muted)
         .frame(width: 28)
         .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 1) {
-        Text(row.title).font(.footnote).foregroundColor(DockStyle.muted).lineLimit(2)
-        Text(row.value)
-          .font(.system(.body, design: .rounded).weight(.semibold).monospacedDigit())
-          .foregroundColor(DockStyle.text)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-      }
-      Spacer(minLength: 8)
-      if let detail = row.detail {
-        Text(detail)
-          .font(.system(.footnote, design: .rounded).weight(.medium).monospacedDigit())
-          .foregroundColor(row.tone == .up ? DockStyle.up : row.tone == .down ? DockStyle.down : DockStyle.muted)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
+      if sizeCategory.isAccessibilityCategory {
+        // Large text: one column, nothing truncated.
+        VStack(alignment: .leading, spacing: 2) {
+          title
+          value
+          detail
+        }
+        Spacer(minLength: 4)
+      } else {
+        VStack(alignment: .leading, spacing: 1) {
+          title
+          value.lineLimit(1).minimumScaleFactor(0.8)
+        }
+        Spacer(minLength: 8)
+        detail.lineLimit(1).minimumScaleFactor(0.8)
       }
       if showsArrow {
         Image(systemName: "chevron.right")
@@ -766,6 +768,22 @@ private struct DockRowView: View {
     .padding(.vertical, 8)
     .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
     .contentShape(Rectangle())
+  }
+
+  private var title: some View {
+    Text(row.title).font(.footnote).foregroundColor(DockStyle.muted).fixedSize(horizontal: false, vertical: true)
+  }
+
+  private var value: Text {
+    Text(row.value).font(.system(.body, design: .rounded).weight(.semibold).monospacedDigit()).foregroundColor(DockStyle.text)
+  }
+
+  @ViewBuilder private var detail: some View {
+    if let text = row.detail {
+      Text(text)
+        .font(.system(.footnote, design: .rounded).weight(.medium).monospacedDigit())
+        .foregroundColor(row.tone == .up ? DockStyle.up : row.tone == .down ? DockStyle.down : DockStyle.muted)
+    }
   }
 }
 
