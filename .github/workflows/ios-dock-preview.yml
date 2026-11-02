@@ -10,6 +10,8 @@ on:
     paths:
       - "apps/desktop/src-tauri/plugins/briefing-widgets/ios/**"
       - ".github/ios-dock-harness/**"
+      - ".github/dock-core-test/**"
+      - "apps/desktop/src/dockFixtures/**"
       - ".github/scripts/ios-dock-screens.sh"
       - ".github/workflows/ios-dock-preview.yml"
   push:
@@ -17,6 +19,8 @@ on:
     paths:
       - "apps/desktop/src-tauri/plugins/briefing-widgets/ios/**"
       - ".github/ios-dock-harness/**"
+      - ".github/dock-core-test/**"
+      - "apps/desktop/src/dockFixtures/**"
       - ".github/scripts/ios-dock-screens.sh"
       - ".github/workflows/ios-dock-preview.yml"
 
@@ -38,6 +42,11 @@ jobs:
           xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
           test -n "$xcode"
           sudo xcode-select -s "$xcode/Contents/Developer"
+      - name: Dock core tests (real /api/mobile-dock payloads)
+        run: |
+          d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
+          xcrun swiftc -swift-version 5 -o "$RUNNER_TEMP/dock-core-test" $d/BriefingStore.swift $d/NativeDockLayout.swift $d/NativeDockCore.swift .github/dock-core-test/main.swift
+          "$RUNNER_TEMP/dock-core-test" apps/desktop/src/dockFixtures
       - name: Typecheck the dock sources
         run: |
           d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
