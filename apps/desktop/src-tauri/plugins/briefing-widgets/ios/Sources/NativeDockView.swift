@@ -403,7 +403,7 @@ struct DockPixelIcon: View {
   @ScaledMetric(relativeTo: .caption2) private var factor: CGFloat = 1
 
   var body: some View {
-    let side = min(base * factor, base * 1.5)
+    let side = min(base * factor, base * 1.25)
     Canvas { context, size in
       let columns = CGFloat(max(icon.columns, 1))
       let rows = CGFloat(max(icon.rows, 1))
@@ -459,6 +459,7 @@ struct DockTabButton: View {
           .lineLimit(1)
           .minimumScaleFactor(0.7)
           .truncationMode(.tail)
+          .padding(.horizontal, 3)
       }
       .frame(maxWidth: .infinity, minHeight: 54)
       .contentShape(Rectangle())
