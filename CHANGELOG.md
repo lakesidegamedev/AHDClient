@@ -1,10 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [2.9.0] - 2026-11-02
 
 - Singleplayer worlds have saves. Open Saves from the menu in the game bar, or from Your worlds, to save under a name, go back to any save, or delete one. Loading a save keeps where you were as one extra save first, so it can be undone.
 - The game autosaves after every turn and keeps the last three, so a bad turn can be rolled back. Settings, under Singleplayer, can change it to every 2nd, 5th or 10th turn, or turn it off.
 - Saves live in the world's own folder, so deleting a world deletes its saves. Older saves are brought up to date as they load, the same way an older world is.
+- End turn can play several turns at once: pick 3, 5 or 10. It stops early when something needs you, such as a vote to cast, an offer to answer, an election you are in, an attack on you or a lost office, and then shows what happened: money and actions gained, offices won or lost, and new inbox items. You can stop it after the current turn.
+- New Career worlds offer a short Getting started guide: create your character, run a Campaign, join a party, end your first turn and check your inbox. Each step ticks off when you actually do it, and you can hide or skip the guide.
+- Turns in singleplayer are about a quarter faster, and setting up a new world is quicker.
+- The singleplayer game no longer shows the website's cookie and analytics banner. The analytics it asked about never run in singleplayer.
+- A world now refuses to start if another program is using its database port, instead of opening the wrong data.
 
 ## [2.8.1] - 2026-11-01
 
