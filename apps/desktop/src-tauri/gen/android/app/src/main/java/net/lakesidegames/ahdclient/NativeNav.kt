@@ -1,9 +1,13 @@
 package net.lakesidegames.ahdclient
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
@@ -29,6 +33,10 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   companion object {
     private const val LAUNCHER = "http://tauri.localhost/"
     private const val SITE_HOSTS = "ahousedividedgame.com|www.ahousedividedgame.com|sandbox.ahousedividedgame.com"
+    private const val SANDBOX_HOST = "sandbox.ahousedividedgame.com"
+
+    /** Tells the game this build draws its own status and menu dock, so the page hides both. Added once the dock is on screen. */
+    const val NATIVE_MARKER = "AHDClientNativeStatus/1"
 
     /** The timer, in ms. Foreground, tab return and turn events ask sooner (see FORCED_GAP_MS). */
     private const val STATUS_INTERVAL_MS = 120_000L
@@ -76,18 +84,38 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private var section: String? = null
   private var inboxVisitedAt = 0L
   private var ticks = 0
-  private var fetching = false
-  private var lastFetchAt = 0L
   private var previewing = false
 
-  /** The game's model (without the app section) for the signed-in account, or null for the fallback. */
-  private var gameModel: DockModel? = null
+  // What the dock knows, all in memory: disk and network are read on worker threads only.
   private var identity: String? = null
+  private var checkedAccount = false
+  private var locale: String? = null
+
+  /** The country the page on screen is about (Nation follows it), or null for the home nation. */
+  private var country: String? = null
+
+  /** On a sign-in, registration or sign-out page. */
+  private var authPage = false
+
+  /** On the sandbox site: its pages are not the live account's, so the dock shows the fallback tabs. */
+  private var sandbox = false
+
+  /** The game's models (without the app section) for this account, by [DockKey.sub]. */
+  private val models = HashMap<String, DockModel>()
+  private var statusNow: DockStatus? = null
+  private var inboxNow: Pair<Int, Long>? = null
+
+  private var fetching: DockKey? = null
+  private var refreshAgain = false
+  private val lastFetch = HashMap<DockKey, Long>()
+  private var statusFetchedAt = 0L
+  private var appliedModel: DockModel = DockModel.fallback(false)
+
   private val follow = object : Runnable {
     override fun run() {
       CompanionSafety.run("dock follow") {
-        // Every 10 seconds: a sign-in, sign-out or account switch changes the tabs.
-        if (ticks % 20 == 0) checkAccount()
+        // Every tick, and cheap (no disk): a sign-out, account switch or language change shows at once.
+        checkAccount()
         followPage()
         if (ticks++ % 20 == 0) showStatus()
       }
@@ -121,8 +149,22 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       }
       webView.evaluateJavascript(flag, null)
       CompanionSafety.run("dock turn bridge") { installTurnBridge(supportsScripts) }
+      // Only now that the dock is on screen does the page learn to hide its own status bar and menu.
+      CompanionSafety.run("dock user agent marker") { markUserAgent() }
     }
     ViewCompat.requestApplyInsets(webView)
+  }
+
+  /**
+   * Appends the native-dock marker to the WebView's user agent. A game page
+   * that is already open was served without it, so it is reloaded once.
+   */
+  private fun markUserAgent() {
+    val settings = webView.settings
+    val agent = settings.userAgentString ?: ""
+    if (agent.contains(NATIVE_MARKER)) return
+    settings.userAgentString = "$agent $NATIVE_MARKER"
+    if (pageOf(webView.url) == Page.SITE) webView.reload()
   }
 
   /**
@@ -143,7 +185,12 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   }
 
   fun resume() {
-    CompanionSafety.run("dock model cache") { checkAccount() }
+    CompanionSafety.run("dock model cache") {
+      val first = !checkedAccount
+      checkAccount()
+      // Back in the app: read the saved models and figures once, off the UI thread (the first check already did).
+      if (!first) identity?.let { loadCaches(it) }
+    }
     handler.removeCallbacks(follow)
     handler.removeCallbacks(fetch)
     handler.post(follow)
@@ -166,9 +213,11 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   }
 
   /**
-   * `ahdclient://dock?preview=collapsed|expanded|state|more|signedout|off`
+   * `ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher|off`
    * shows the dock with the canned game model and canned figures, no network,
-   * so a reviewer or CI can capture each state. A tab tap ends it.
+   * so a reviewer or CI can capture each state ("launcher" is the launcher
+   * screen, where the status strip stays hidden). A tab tap ends it. Only
+   * debug and CI builds accept the link (MainActivity); store builds ignore it.
    */
   fun preview(mode: String) {
     if (mode == "off") {
@@ -192,8 +241,9 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     dock.setModel(fixture)
     dock.setStatus(DockStatus.preview(System.currentTimeMillis()))
     dock.setInboxBadge(3)
-    dock.setStripAllowed(true)
-    dock.showSelected("state", animate = false)
+    // The same rule the live dock applies: the strip belongs to game pages, not the launcher.
+    dock.setStripAllowed(DockRouting.stripAllowed(onGamePage = mode != "launcher", signedIn = true, authPage = false, sandbox = false))
+    dock.showSelected(if (mode == "launcher") "more" else "state", animate = false)
     when (mode) {
       "expanded" -> dock.setExpanded(true, animate = false)
       "state" -> dock.openMenu("state", animate = false)
@@ -221,13 +271,28 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     endPreview()
     CompanionSafety.run("dock link ${link.id}") {
       val site = siteOrigin()
-      when (link.app) {
-        AppAction.BRIEFING -> webView.loadUrl("$LAUNCHER?screen=briefing")
-        AppAction.INBOX -> webView.loadUrl("$site/notifications")
-        AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
-        AppAction.LAUNCHER -> webView.loadUrl(LAUNCHER)
-        null -> DockModel.safePath(link.href)?.let { webView.loadUrl(site + it) }
+      when {
+        link.app == AppAction.BRIEFING -> webView.loadUrl("$LAUNCHER?screen=briefing")
+        link.app == AppAction.INBOX -> webView.loadUrl("$site/notifications")
+        link.app == AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
+        link.app == AppAction.LAUNCHER -> webView.loadUrl(LAUNCHER)
+        // Wiki, Discord, Patreon, support mail: outside the game WebView, never loaded in it.
+        link.external -> openExternal(link.href)
+        else -> DockModel.safePath(link.href)?.let { webView.loadUrl(site + it) }
       }
+    }
+  }
+
+  /** Browser (or the mail app) for an allow-listed outside address; the check runs again here, at the last step. */
+  private fun openExternal(href: String?) {
+    val safe = DockModel.safeExternal(href) ?: return
+    val uri = Uri.parse(safe)
+    val intent = if (uri.scheme == "mailto") Intent(Intent.ACTION_SENDTO, uri)
+    else Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+    try {
+      activity.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+      // No browser or mail app on the phone: nothing to open.
     }
   }
 
@@ -244,6 +309,9 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   }
 
   override fun onExpandedChanged(expanded: Boolean) {
+    // An open sheet is modal for TalkBack: the page behind it is not reachable until it closes.
+    webView.importantForAccessibility =
+      if (expanded) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
     activity.onDockExpanded(expanded)
   }
 
@@ -255,6 +323,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     if (!previewing) return
     previewing = false
     applyModel()
+    showStatus()
   }
 
   // ---- pages -----------------------------------------------------------------
@@ -262,7 +331,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   /** The sandbox keeps its own pages while the player is in it. */
   private fun siteOrigin(): String {
     val host = webView.url?.let { Uri.parse(it).host }
-    return if (host == "sandbox.ahousedividedgame.com") "https://$host" else BriefingWidgets.ORIGIN
+    return if (host == SANDBOX_HOST) "https://$host" else BriefingWidgets.ORIGIN
   }
 
   /** The tab the page on screen belongs to, in the model now showing. */
@@ -284,53 +353,126 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private fun followPage() {
     val url = webView.url
     val now = pageOf(url) ?: return
-    val path = if (now == Page.SITE) Uri.parse(url).path else null
+    val uri = if (now == Page.SITE) Uri.parse(url) else null
+    val path = uri?.path
     if (now == Page.SITE) lastGameUrl = url
+    val nextSandbox = uri?.host == SANDBOX_HOST
+    val nextAuth = now == Page.SITE && DockRouting.isAuthPath(path)
+    val nextCountry = if (now == Page.SITE && !nextAuth) DockRouting.countryOf(path) else null
+    val authChanged = nextAuth != authPage
+    val sandboxChanged = nextSandbox != sandbox
+    val countryChanged = nextCountry != country
+    authPage = nextAuth
+    sandbox = nextSandbox
+    country = nextCountry
+    // Signing in or out: the previous account's tabs are gone at once, and so is what was saved for it.
+    if (authChanged && nextAuth) dropAccountModels()
     val tab = tabFor(now, path)
     val inbox = now == Page.SITE && path?.trimEnd('/') == "/notifications"
-    val moved = now != page || tab != tabId || inbox != onInbox
+    val moved = now != page || tab != tabId || inbox != onInbox || authChanged || sandboxChanged || countryChanged
     if (!moved) return
     val leftInbox = onInbox && !inbox
     val returned = now == Page.SITE && page != null && page != Page.SITE
     val newSection = now == Page.SITE && sectionOf(path) != section
     page = now
-    tabId = tab
     onInbox = inbox
     if (now == Page.SITE) section = sectionOf(path)
-    // The player just read the inbox, or came back to the game: look again.
-    if (leftInbox || returned) {
+    if (authChanged || sandboxChanged || countryChanged) {
+      // A different set of tabs may apply (fallback on sign-in pages and the sandbox, another country's Nation).
+      applyModel()
+    }
+    tabId = tabFor(now, path)
+    // The player just read the inbox, came back to the game, or finished signing in: look again.
+    if (leftInbox || returned || (authChanged && !nextAuth)) {
       handler.post { CompanionSafety.run("dock status fetch") { requestRefresh(force = true) } }
+    } else if (countryChanged) {
+      // Nation follows the page; throttled per country.
+      handler.post { CompanionSafety.run("dock country refresh") { requestRefresh(force = false) } }
     } else if (newSection) {
       // A new part of the game can mean a different state or company in the tabs; throttled to once a minute.
       handler.post { CompanionSafety.run("dock section refresh") { requestRefresh(force = false) } }
     }
     if (inbox && !leftInbox) inboxVisitedAt = System.currentTimeMillis()
-    if (!previewing) dock.showSelected(tab)
+    if (!previewing) dock.showSelected(tabId)
     showStatus()
   }
 
   // ---- the model ---------------------------------------------------------------
 
-  private var appliedModel: DockModel = DockModel.fallback(false)
-  private var checkedAccount = false
+  /** What a dock request would be for right now, or null when signed out. */
+  private fun currentKey(): DockKey? = identity?.let { DockKey(it, locale, country) }
 
-  /** A sign-in, sign-out or account switch: start from that account's cached model, or the fallback. */
-  private fun checkAccount() {
-    val now = BriefingWidgets.identity()
-    if (checkedAccount && now == identity) return
-    checkedAccount = true
-    val changed = now != identity
-    identity = now
-    gameModel = if (now == null) null else DockModelStore.cached(activity.applicationContext)
-    applyModel()
-    // A different account (or first run) has not fetched yet: look now.
-    if (changed && now != null) handler.post { CompanionSafety.run("dock account refresh") { requestRefresh(force = true) } }
+  /**
+   * The game's model for the page on screen. While another country's tabs are
+   * still loading, the last model in the same language stays; a model in
+   * another language never does.
+   */
+  private fun gameModelNow(): DockModel? {
+    val key = currentKey() ?: return null
+    models[key.sub]?.let { return it }
+    return models[DockKey.sub(key.locale, null)]
+      ?: models.entries.firstOrNull { it.key.startsWith("${key.locale ?: "-"}|") }?.value
   }
+
+  /** The player is signed in, on the live game, and not on a sign-in page. */
+  private fun accountLive() = identity != null && !authPage && !sandbox
+
+  private fun dropAccountModels() {
+    models.clear()
+    val context = activity.applicationContext
+    Thread { DockModelStore.clear(context) }.start()
+  }
+
+  /**
+   * A sign-in, sign-out, account switch or language change: start from what is
+   * cached for that account (read on a worker), or the fallback, and look
+   * again. Only reads the cookies, so it is cheap enough for every tick.
+   */
+  private fun checkAccount() {
+    val nowId = BriefingWidgets.identity()
+    val nowLocale = if (nowId == null) null else DockModelStore.locale()
+    val accountChanged = !checkedAccount || nowId != identity
+    if (!accountChanged && nowLocale == locale) return
+    checkedAccount = true
+    identity = nowId
+    locale = nowLocale
+    if (accountChanged) {
+      models.clear()
+      statusNow = null
+      inboxNow = null
+      if (nowId == null) dropAccountModels() else loadCaches(nowId)
+    }
+    applyModel()
+    showStatus()
+    // A different account, or language, has not fetched yet: look now.
+    if (nowId != null) handler.post { CompanionSafety.run("dock account refresh") { requestRefresh(force = true) } }
+  }
+
+  /** Reads the saved models and the last status snapshot off the UI thread, then shows them. */
+  private fun loadCaches(forIdentity: String) {
+    val context = activity.applicationContext
+    Thread {
+      val saved = DockModelStore.cachedAll(context, forIdentity)
+      val snapshot = readSnapshot(context)
+      handler.post {
+        if (identity != forIdentity) return@post
+        for ((key, model) in saved) models.putIfAbsent(key, model)
+        if (snapshot != null) { statusNow = snapshot.first; inboxNow = snapshot.second }
+        CompanionSafety.run("dock cache show") { applyModel(); showStatus() }
+      }
+    }.start()
+  }
+
+  /** The widgets' last status snapshot as dock figures plus the inbox count. Reads the file: worker threads only. */
+  private fun readSnapshot(context: android.content.Context): Pair<DockStatus?, Pair<Int, Long>?>? =
+    CompanionSafety.get("dock snapshot read", null as Pair<DockStatus?, Pair<Int, Long>?>?) {
+      Pair(DockStatus.from(BriefingWidgets.snapshot(context)), BriefingWidgets.inbox(context))
+    }
 
   private fun applyModel() {
     if (previewing) return
-    val signedIn = BriefingWidgets.identity() != null
-    val next = gameModel?.withApp(signedIn) ?: DockModel.fallback(signedIn)
+    val live = accountLive()
+    val next = (if (live) gameModelNow() else null)?.withApp(live) ?: DockModel.fallback(live)
     appliedModel = next
     dock.setModel(next)
     // The tab list can change under the page: pick the matching tab again.
@@ -345,53 +487,71 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   // ---- status ------------------------------------------------------------------
 
   /**
-   * Fetch through the widgets' own request (same cookie, same cache), plus the
-   * dock model, then redraw from the caches. Never on the UI thread, never
-   * twice at once, and the timer never goes under a minute.
+   * Fetch the dock model for the page on screen (and, at most once a minute,
+   * the status figures through the widgets' own request), then redraw from
+   * memory. Never on the UI thread, never twice at once, and a model is not
+   * asked for again within a minute (5 seconds when something just happened).
    */
   private fun requestRefresh(force: Boolean) {
-    if (previewing || fetching) return
-    val now = android.os.SystemClock.elapsedRealtime()
+    if (previewing || sandbox || authPage) return
+    val key = currentKey() ?: return
+    val running = fetching
+    if (running != null) {
+      // A different country or language than the one in flight: go again when it lands.
+      if (running != key) refreshAgain = true
+      return
+    }
+    val now = SystemClock.elapsedRealtime()
     val gap = if (force) FORCED_GAP_MS else STATUS_GAP_MS
-    if (lastFetchAt != 0L && now - lastFetchAt < gap) return
-    fetching = true
-    lastFetchAt = now
+    val last = lastFetch[key]
+    if (last != null && now - last < gap) return
+    val statusDue = statusFetchedAt == 0L || now - statusFetchedAt >= gap
+    fetching = key
+    lastFetch[key] = now
+    if (statusDue) statusFetchedAt = now
     val context = activity.applicationContext
     Thread {
-      var outcome: DockModelStore.Outcome? = null
+      var fetched: DockModelStore.Fetched? = null
+      var snapshot: Pair<DockStatus?, Pair<Int, Long>?>? = null
       try {
-        BriefingWidgets.refresh(context)
-        outcome = DockModelStore.refresh(context)
+        if (statusDue) BriefingWidgets.refresh(context)
+        fetched = DockModelStore.refresh(context, key)
+        snapshot = readSnapshot(context)
       } finally {
-        handler.post {
-          fetching = false
-          CompanionSafety.run("dock status show") {
-            when (outcome) {
-              DockModelStore.Outcome.UPDATED, DockModelStore.Outcome.UNCHANGED ->
-                gameModel = DockModelStore.cached(context) ?: gameModel
-              DockModelStore.Outcome.SIGNED_OUT, DockModelStore.Outcome.UNAVAILABLE -> gameModel = null
-              // Offline or a server error keeps the last good model on screen.
-              DockModelStore.Outcome.FAILED, null -> Unit
-            }
-            applyModel()
-            showStatus()
-          }
-        }
+        handler.post { CompanionSafety.run("dock status show") { refreshed(key, fetched, snapshot) } }
       }
     }.start()
   }
 
-  /** Redraws the dock from the last cached snapshot. Cheap; safe to call often. */
+  private fun refreshed(key: DockKey, fetched: DockModelStore.Fetched?, snapshot: Pair<DockStatus?, Pair<Int, Long>?>?) {
+    fetching = null
+    // The player signed out or switched while the request was out: say nothing about the new session.
+    if (identity == key.identity) {
+      when (fetched?.outcome) {
+        DockModelStore.Outcome.UPDATED, DockModelStore.Outcome.UNCHANGED -> fetched.model?.let { models[key.sub] = it }
+        DockModelStore.Outcome.SIGNED_OUT, DockModelStore.Outcome.UNAVAILABLE -> models.clear()
+        // Offline or a server error keeps the last good model on screen.
+        DockModelStore.Outcome.FAILED, null -> Unit
+      }
+      if (snapshot != null) { statusNow = snapshot.first; inboxNow = snapshot.second }
+      applyModel()
+      showStatus()
+    }
+    if (refreshAgain) {
+      refreshAgain = false
+      requestRefresh(force = false)
+    }
+  }
+
+  /** Redraws the dock from the figures held in memory. Cheap; safe to call often. */
   private fun showStatus() {
     if (previewing) return
-    val data = BriefingWidgets.snapshot(activity)
-    val status = DockStatus.from(data)
-    dock.setStatus(status)
-    dock.setStripAllowed(page == Page.SITE)
+    val signedIn = identity != null
+    dock.setStatus(if (signedIn) statusNow else null)
+    dock.setStripAllowed(DockRouting.stripAllowed(page == Page.SITE, signedIn, authPage, sandbox))
     // The Inbox badge on More: hidden on the Inbox itself and until a snapshot newer than the last visit arrives.
-    val inbox = BriefingWidgets.inbox(activity)
-    val unread = inbox?.first ?: 0
-    val fresh = (inbox?.second ?: 0L) > inboxVisitedAt
-    dock.setInboxBadge(if (unread > 0 && fresh && !onInbox) unread else 0)
+    val unread = inboxNow?.first ?: 0
+    val fresh = (inboxNow?.second ?: 0L) > inboxVisitedAt
+    dock.setInboxBadge(if (accountLive() && unread > 0 && fresh && !onInbox) unread else 0)
   }
 }

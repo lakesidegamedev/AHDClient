@@ -205,10 +205,9 @@ class MainActivity : TauriActivity() {
     // fills the window above the system bars as before.
     CompanionSafety.run("tab bar setup") {
       nav = NativeNav(this, webView).also { bar ->
-        // Tell the game this build carries the status dock, so it hides its
-        // own web status footer. Only once the dock exists: if it could not
-        // be built the page keeps its footer. Applies to pages loaded from here on.
-        webView.settings.userAgentString = webView.settings.userAgentString + " AHDClientNativeStatus/1"
+        // The game is told this build carries the dock (user agent marker) by
+        // NativeNav.attach, once the dock is really on screen: if attach bails,
+        // the page keeps its own status bar and menu.
         // Added after Tauri's own back handler, so it is asked first.
         dockBack = object : OnBackPressedCallback(false) {
           override fun handleOnBackPressed() { nav?.dock?.closeSheet() }

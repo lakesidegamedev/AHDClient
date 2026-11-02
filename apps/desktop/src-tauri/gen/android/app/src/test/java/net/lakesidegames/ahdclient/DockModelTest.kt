@@ -20,7 +20,10 @@ class DockModelTest {
     assertNull("no tabs is not a dock", DockModel.parse(JSONObject("""{"version":1,"tabs":[],"sheets":{}}""")))
     val fixture = DockModel.fixture()
     assertEquals(listOf("company", "state", "nation", "actions", "more"), fixture.tabs.map { it.id })
-    assertEquals("Acme Corp", fixture.tabs[0].label)
+    assertEquals("Company", fixture.tabs[0].label)
+    // The game sends a short label for Nation; the tab shows it and keeps the full name for TalkBack.
+    assertEquals("Nation", fixture.tabs[2].label)
+    assertEquals("United States", fixture.tabs[2].fullLabel)
     assertEquals("/corporation/7", fixture.tabs[0].href)
     assertEquals("state", fixture.tabs[1].sheet)
     assertNotNull(fixture.sheets["state"])
@@ -32,7 +35,7 @@ class DockModelTest {
     assertEquals("app", sections[0].id)
     assertEquals(listOf("Briefing", "Inbox", "Ask", "Back to launcher"), sections[0].links.map { it.label })
     assertEquals(listOf(AppAction.BRIEFING, AppAction.INBOX, AppAction.ASK, AppAction.LAUNCHER), sections[0].links.map { it.app })
-    assertEquals("you", sections[1].id)
+    assertEquals("you:you", sections[1].id)
   }
 
   @Test fun rejectsOtherVersionsAndTooFewTabs() {
@@ -88,8 +91,8 @@ class DockModelTest {
     val tabs = (1..9).map { tab("t$it", ""","href":"/t$it"""") }
     val model = DockModel.parse(doc(tabs))!!
     assertEquals(6, model.tabs.size)
-    val long = """{"id":"l","label":"${"W".repeat(80)}","icon":$icon,"href":"/l"}"""
-    assertEquals(28, DockModel.parse(doc(listOf(long, tab("b", ""","href":"/b""""))))!!.tabs[0].label.length)
+    val long = """{"id":"l","label":"${"W".repeat(120)}","icon":$icon,"href":"/l"}"""
+    assertEquals(80, DockModel.parse(doc(listOf(long, tab("b", ""","href":"/b""""))))!!.tabs[0].label.length)
   }
 
   @Test fun hrefTabsDefaultToTheirOwnPrefix() {
@@ -99,13 +102,15 @@ class DockModelTest {
 
   @Test fun theLongestPrefixWinsAndWholeSegmentsOnly() {
     val model = DockModel.fixture()
-    assertEquals("state", model.activeTab("/state/NY/elections")?.id)
+    assertEquals("state", model.activeTab("/country/us/region/NY/elections")?.id)
+    assertEquals("nation", model.activeTab("/country/us/budget")?.id)
     assertEquals("company", model.activeTab("/corporation/7/finance")?.id)
     assertEquals("actions", model.activeTab("/actions")?.id)
     assertEquals("actions", model.activeTab("/actions/")?.id)
-    assertEquals("more", model.activeTab("/profile?tab=1")?.id)
-    assertNull("a prefix is a whole segment", model.activeTab("/statements"))
-    assertNull(model.activeTab("/unknown"))
+    assertEquals("actions", model.activeTab("/actions?tab=1#top")?.id)
+    assertNull("a prefix is whole segments", model.activeTab("/country/usa"))
+    assertNull("an unclaimed page lights no tab", model.activeTab("/unknown"))
+    assertNull(model.activeTab("/profile"))
     assertNull(model.activeTab(null))
     // The game can claim a deeper path for another tab: the longer prefix wins.
     val deeper = DockModel.parse(
