@@ -79,6 +79,12 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // The ahdclient://dock?preview link (screenshots with canned data) is for debug builds and the
+    // unsigned pull request build CI screenshots; a signed build never has it, whatever the env says.
+    defaultConfig {
+        val dockPreview = System.getenv("AHD_DOCK_PREVIEW") == "1" && !keystorePropertiesFile.exists()
+        buildConfigField("boolean", "DOCK_PREVIEW", dockPreview.toString())
+    }
 }
 
 rust {
@@ -91,7 +97,9 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    implementation("androidx.dynamicanimation:dynamicanimation:1.0.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }

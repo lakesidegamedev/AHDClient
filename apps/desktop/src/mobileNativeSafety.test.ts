@@ -24,24 +24,27 @@ describe("mobile native companion safety", () => {
     expect(activity).toContain("ViewCompat.requestApplyInsets(webView)");
   });
 
-  it("ends the Android WebView above the tab bar, and gives the page the room when the keyboard is up", () => {
+  it("ends the Android WebView above the dock, and gives the page the room when the keyboard is up", () => {
     const activity = read(
       "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/MainActivity.kt",
     );
     const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
-    // One insets listener places both views, so the bar never covers the
+    const dock = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeDock.kt");
+    // One insets listener places both views, so the dock never covers the
     // game's fixed bottom status bar.
     expect(activity).toMatch(/keyboard -> ime\.bottom\s+tabs > 0 -> tabs\s+else -> bars\.bottom/);
     expect(activity).toContain('CompanionSafety.run("tab bar setup")');
-    expect(nav).toContain("val height = (BAR_HEIGHT_DP * activity.resources.displayMetrics.density).toInt() + bottom");
-    expect(nav).toContain("return if (keyboard) 0 else height");
-    // A bar that never attached must not leave a gap under the page.
-    expect(nav).toContain("if (bar.parent == null) return 0");
-    expect(nav).toContain("ViewCompat.setOnApplyWindowInsetsListener(bar) { _, insets -> insets }");
+    expect(dock).toContain("reportedHeight = height + bottom");
+    expect(dock).toContain("return 0");
+    // A dock that never attached must not leave a gap under the page.
+    expect(nav).toContain("if (dock.parent == null) return 0");
+    expect(dock).toContain("ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets -> insets }");
   });
 
   it("gives every old in-game menu item a home in the native tab bar on both phones", () => {
-    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    const androidDir = "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/";
+    // The Android labels live in the dock model, the rest of the behaviour in NativeNav.
+    const nav = read(`${androidDir}NativeNav.kt`) + read(`${androidDir}DockModel.kt`);
     const iosDir = "../src-tauri/plugins/briefing-widgets/ios/Sources/";
     const ios = ["NativeNav.swift", "NativeDockCore.swift", "NativeDockModel.swift", "NativeDockView.swift"].map((file) => read(iosDir + file)).join("\n");
     for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
@@ -61,7 +64,7 @@ describe("mobile native companion safety", () => {
     expect(ios).toContain('static let launcher = "tauri://localhost/"');
   });
 
-  it("keeps the floating AHD button only as a fallback for a tab bar that did not attach", () => {
+  it("keeps the floating AHD button only as a fallback for a dock that did not attach", () => {
     const mobile = read("../src-tauri/src/mobile.rs");
     const mount = mobile.indexOf("function mount()");
     const guard = mobile.indexOf("if (window.__ahdclientNativeTabs) return;");
@@ -74,7 +77,7 @@ describe("mobile native companion safety", () => {
     expect(nav).toContain('val flag = "window.__ahdclientNativeTabs = true;"');
     expect(ios).toContain('let flag = "window.__ahdclientNativeTabs = true;"');
     // Set only after the bar is in the view tree.
-    expect(nav.indexOf("content.addView(bar")).toBeLessThan(nav.indexOf("val flag ="));
+    expect(nav.indexOf("content.addView(dock")).toBeLessThan(nav.indexOf("val flag ="));
     expect(ios.indexOf("host.addSubview(container)")).toBeLessThan(ios.indexOf("let flag ="));
   });
 
