@@ -29,7 +29,9 @@ struct DockView: View {
 
   var body: some View {
     GeometryReader { geo in
-      let pad = max(geo.safeAreaInsets.bottom - 8, 8)
+      // The pad is the window's home-indicator inset, set by the host; the
+      // geometry's own safe area grows with the keyboard and must not be used.
+      let pad = model.bottomPad
       let cap = max(0, geo.size.height * 0.62)
       let extent = min(model.natural[model.panel.key] ?? 0, cap)
       let progress = min(max(model.progress, 0), 1.03)
@@ -39,10 +41,14 @@ struct DockView: View {
           .frame(maxWidth: DockStyle.maxWidth)
           .padding(.horizontal, 10)
           .padding(.bottom, pad)
+          // With the keyboard up the dock steps aside, like Android's.
+          .opacity(model.keyboardUp ? 0 : 1)
+          .allowsHitTesting(!model.keyboardUp)
+          .accessibilityHidden(model.keyboardUp)
+          .animation(model.reduceMotion ? .easeInOut(duration: 0.15) : .easeOut(duration: 0.18), value: model.keyboardUp)
       }
       .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
-      .onAppear { model.bottomPad = pad; model.setCap(cap) }
-      .onChange(of: pad) { model.bottomPad = $0 }
+      .onAppear { model.setCap(cap) }
       .onChange(of: cap) { model.setCap($0) }
     }
     .ignoresSafeArea()
@@ -269,14 +275,11 @@ struct DockSheetContent: View {
   private var sheet: DockSheet? { model.sheet(key) }
   private var isMore: Bool { key == "more" }
 
-  private var title: String {
-    if let name = sheet?.title, !name.isEmpty { return name }
-    return model.tabs.first { $0.kind == .sheet(key) }?.label ?? ""
-  }
+  private var title: String { model.title(of: .sheet(key)) }
 
   private struct AppRow: Identifiable {
     let id: String
-    let symbol: String
+    let icon: DockIcon
     let label: String
     let count: Int
     let app: DockApp
@@ -285,11 +288,17 @@ struct DockSheetContent: View {
   private var appRows: [AppRow] {
     var rows = [AppRow]()
     let hasTab = { (id: String) in model.tabs.contains { $0.id == id } }
-    if !hasTab("briefing") { rows.append(AppRow(id: "briefing", symbol: "newspaper", label: "Briefing", count: 0, app: .briefing)) }
-    rows.append(AppRow(id: "inbox", symbol: "tray", label: "Inbox", count: model.badge, app: .inbox))
-    if !hasTab("ask") { rows.append(AppRow(id: "ask", symbol: "bubble.left.and.bubble.right", label: "Ask", count: 0, app: .ask)) }
-    rows.append(AppRow(id: "launcher", symbol: "square.grid.2x2", label: "Back to launcher", count: 0, app: .launcher))
+    if !hasTab("briefing") { rows.append(AppRow(id: "briefing", icon: DockAppIcons.briefing, label: "Briefing", count: 0, app: .briefing)) }
+    rows.append(AppRow(id: "inbox", icon: DockAppIcons.inbox, label: "Inbox", count: model.badge, app: .inbox))
+    if !hasTab("ask") { rows.append(AppRow(id: "ask", icon: DockAppIcons.ask, label: "Ask", count: 0, app: .ask)) }
+    rows.append(AppRow(id: "launcher", icon: DockAppIcons.launcher, label: "Back to launcher", count: 0, app: .launcher))
     return rows
+  }
+
+  /// On More the app's Inbox row stands in for the game's Notifications row.
+  private var sections: [DockSection] {
+    guard let sheet else { return [] }
+    return isMore ? sheet.sections(without: "notifications") : sheet.sections
   }
 
   var body: some View {
@@ -298,6 +307,8 @@ struct DockSheetContent: View {
         Text(title)
           .font(.headline)
           .foregroundColor(DockStyle.text)
+          .lineLimit(2)
+          .truncationMode(.tail)
           .padding(.horizontal, 16)
           .padding(.top, 14)
           .padding(.bottom, 4)
@@ -306,17 +317,16 @@ struct DockSheetContent: View {
       }
       if isMore {
         sectionHeader("App")
-        ForEach(appRows) { row in
-          DockSheetRow(label: row.label, icon: nil, symbol: row.symbol, count: row.count, reserveIcon: true) { model.openApp(row.app) }
-          divider
+        ForEach(Array(appRows.enumerated()), id: \.element.id) { index, row in
+          DockSheetRow(label: row.label, icon: row.icon, count: row.count, external: false) { model.openApp(row.app) }
+          if index < appRows.count - 1 { divider }
         }
       }
-      ForEach(sheet?.sections ?? []) { section in
+      ForEach(sections) { section in
         if let name = section.title, !name.isEmpty { sectionHeader(name) }
-        let reserve = section.links.contains { $0.icon != nil }
-        ForEach(section.links) { link in
-          DockSheetRow(label: link.label, icon: link.icon, symbol: nil, count: 0, reserveIcon: reserve) { model.openPath(link.href) }
-          if link.id != section.links.last?.id { divider }
+        ForEach(Array(section.links.enumerated()), id: \.element.id) { index, link in
+          DockSheetRow(label: link.label, icon: link.icon, count: 0, external: link.external) { model.openLink(link) }
+          if index < section.links.count - 1 { divider }
         }
       }
     }
@@ -331,6 +341,8 @@ struct DockSheetContent: View {
     Text(name)
       .font(.footnote.weight(.semibold))
       .foregroundColor(DockStyle.muted)
+      .lineLimit(1)
+      .truncationMode(.tail)
       .padding(.horizontal, 16)
       .padding(.top, 12)
       .padding(.bottom, 2)
@@ -342,26 +354,30 @@ struct DockSheetContent: View {
 struct DockSheetRow: View {
   let label: String
   let icon: DockIcon?
-  let symbol: String?
   let count: Int
-  let reserveIcon: Bool
+  let external: Bool
   let action: () -> Void
+  @Environment(\.sizeCategory) private var sizeCategory
 
   var body: some View {
     Button(action: action) {
       HStack(spacing: 12) {
-        if let icon, icon.columns > 0 {
-          DockPixelIcon(icon: icon, base: 20).foregroundColor(DockStyle.muted).frame(width: 28)
-            .accessibilityHidden(true)
-        } else if let symbol {
-          Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundColor(DockStyle.muted).frame(width: 28)
-            .accessibilityHidden(true)
-        } else if reserveIcon {
-          Color.clear.frame(width: 28, height: 1)
+        // The icon column is always reserved, so labels line up whether or
+        // not a row has an icon.
+        Group {
+          if let icon, icon.columns > 0 {
+            DockPixelIcon(icon: icon, base: 20).foregroundColor(DockStyle.muted)
+          } else {
+            Color.clear
+          }
         }
+        .frame(width: 28, height: 28)
+        .accessibilityHidden(true)
         Text(label)
           .font(.body)
           .foregroundColor(DockStyle.text)
+          .lineLimit(sizeCategory.isAccessibilityCategory ? 4 : 2)
+          .truncationMode(.tail)
           .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 8)
         if count > 0 {
@@ -373,7 +389,7 @@ struct DockSheetRow: View {
             .background(Capsule().fill(DockStyle.accent))
             .accessibilityHidden(true)
         }
-        Image(systemName: "chevron.right")
+        Image(systemName: external ? "arrow.up.right" : "chevron.right")
           .font(.system(size: 11, weight: .bold))
           .foregroundColor(DockStyle.muted.opacity(0.7))
           .accessibilityHidden(true)
@@ -386,7 +402,7 @@ struct DockSheetRow: View {
     .buttonStyle(DockPressStyle(scale: 0.99))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(Text(count > 0 ? "\(label), \(count) unread" : label))
-    .accessibilityHint(Text("Opens the page"))
+    .accessibilityHint(Text(external ? "Opens outside the game" : "Opens the page"))
     .accessibilityAddTraits(.isButton)
   }
 }
@@ -394,34 +410,37 @@ struct DockSheetRow: View {
 // MARK: - Pixel icons
 
 /// The game's pixel icon, drawn as crisp square pixels in the current
-/// foreground colour. The cell size is rounded down to whole device pixels so
-/// the squares never blur or show seams.
+/// foreground colour: whole device pixels per cell, no smoothing, no
+/// fractional scaling. `emphasized` is the selected tab's small pop, one
+/// device pixel more per cell, so it stays sharp too.
 struct DockPixelIcon: View {
   let icon: DockIcon
   let base: CGFloat
+  var emphasized = false
   /// 1 at the default text size, growing with Dynamic Type.
   @ScaledMetric(relativeTo: .caption2) private var factor: CGFloat = 1
 
   var body: some View {
     let side = min(base * factor, base * 1.25)
+    // Room for the emphasized size; the drawing is centered in it.
+    let box = side * 1.3
     Canvas { context, size in
       let columns = CGFloat(max(icon.columns, 1))
       let rows = CGFloat(max(icon.rows, 1))
       let screen = UIScreen.main.scale
-      let cell = max(floor(min(size.width / columns, size.height / rows) * screen) / screen, 1 / screen)
-      let originX = (size.width - cell * columns) / 2
-      let originY = (size.height - cell * rows) / 2
-      let x0 = (originX * screen).rounded() / screen
-      let y0 = (originY * screen).rounded() / screen
+      let fit = floor(min(side / columns, side / rows) * screen)
+      let cell = max(fit + (emphasized ? 1 : 0), 1) / screen
+      let x0 = ((size.width - cell * columns) / 2 * screen).rounded() / screen
+      let y0 = ((size.height - cell * rows) / 2 * screen).rounded() / screen
       var path = Path()
       for (row, line) in icon.grid.enumerated() {
         for (column, character) in line.enumerated() where character == "1" {
           path.addRect(CGRect(x: x0 + CGFloat(column) * cell, y: y0 + CGFloat(row) * cell, width: cell, height: cell))
         }
       }
-      context.fill(path, with: .foreground)
+      context.fill(path, with: .foreground, style: FillStyle(antialiased: false))
     }
-    .frame(width: side, height: side)
+    .frame(width: box, height: box)
   }
 }
 
@@ -449,7 +468,6 @@ struct DockTabButton: View {
           }
           icon
             .foregroundColor(selected ? DockStyle.accent : DockStyle.muted)
-            .scaleEffect(selected && !reduce ? 1.1 : 1)
         }
         .frame(width: 58, height: 30)
         .overlay(badgeView, alignment: .topTrailing)
@@ -482,10 +500,11 @@ struct DockTabButton: View {
 
   @ViewBuilder private var icon: some View {
     if let icon = tab.icon, icon.columns > 0 {
-      DockPixelIcon(icon: icon, base: 22)
+      DockPixelIcon(icon: icon, base: 22, emphasized: selected && !reduce)
     } else {
       Image(systemName: selected && Self.filled.contains(tab.id) ? tab.symbol + ".fill" : tab.symbol)
         .font(.system(size: 20, weight: .medium))
+        .scaleEffect(selected && !reduce ? 1.1 : 1)
     }
   }
 

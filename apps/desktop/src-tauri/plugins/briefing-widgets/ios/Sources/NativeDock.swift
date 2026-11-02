@@ -263,7 +263,7 @@ final class DockContainerView: UIView {
   weak var model: DockModel?
 
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    guard let model else { return nil }
+    guard let model, !model.keyboardUp else { return nil }
     let open = model.expanded || model.progress > 0.001
     guard open || point.y >= bounds.height - model.slotHeight else { return nil }
     let hit = super.hitTest(point, with: event)
@@ -285,4 +285,23 @@ enum NativeDockPreview {
     if next < arguments.endIndex, states.contains(arguments[next].lowercased()) { return arguments[next].lowercased() }
     return "collapsed"
   }
+
+  /// A stand-in game page so the strip states are photographed over a game
+  /// page and not over the launcher the app opened on.
+  static let standInPage: String = {
+    var rows = ""
+    for index in 1...30 {
+      rows += "<div class='row'><b>Senate bill \(index)</b><span>Vote closes in \(index) turns</span></div>"
+    }
+    return """
+      <meta name='viewport' content='width=device-width, initial-scale=1'>
+      <style>
+        body { margin: 0; background: #1b1b26; color: #e8e8ee; font: 16px -apple-system; }
+        h1 { margin: 0; padding: 70px 16px 12px; background: #23233a; }
+        .row { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #2c2c3c; }
+        span { color: #9a9ab0; }
+      </style>
+      <h1>Stand-in game page</h1>\(rows)
+      """
+  }()
 }

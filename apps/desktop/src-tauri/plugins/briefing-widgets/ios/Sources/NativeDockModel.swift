@@ -6,27 +6,6 @@ import UIKit
 // game (DockLayout) when there is one and from the app's own four tabs when
 // there is not; either way the views see the same DockTab values.
 
-/// Somewhere the app itself can take the player.
-enum DockApp: String {
-  case game, briefing, inbox, ask, launcher
-}
-
-struct DockTab: Identifiable, Equatable {
-  enum Kind: Equatable {
-    case page(String)
-    case sheet(String)
-    case app(DockApp)
-  }
-
-  let id: String
-  let label: String
-  let icon: DockIcon?
-  /// Used when the tab has no pixel icon (the app's own tabs).
-  let symbol: String
-  let kind: Kind
-  let activePrefixes: [String]
-}
-
 /// What the grown panel shows: the full status, or one tab's sheet.
 enum DockPanel: Equatable {
   case status
@@ -40,55 +19,7 @@ enum DockPanel: Equatable {
   }
 }
 
-enum DockTabs {
-  /// Signed out, an older game, or no answer yet: the player is never stuck.
-  static let fallback: [DockTab] = [
-    DockTab(id: "game", label: "Game", icon: nil, symbol: "building.columns", kind: .app(.game), activePrefixes: []),
-    DockTab(id: "briefing", label: "Briefing", icon: nil, symbol: "newspaper", kind: .app(.briefing), activePrefixes: []),
-    DockTab(id: "ask", label: "Ask", icon: nil, symbol: "bubble.left.and.bubble.right", kind: .app(.ask), activePrefixes: []),
-    DockTab(id: "more", label: "More", icon: nil, symbol: "ellipsis.circle", kind: .sheet("more"), activePrefixes: []),
-  ]
-
-  static func tabs(for layout: DockLayout?) -> [DockTab] {
-    guard let layout else { return fallback }
-    return layout.tabs.map { spec in
-      let kind: DockTab.Kind = spec.sheet.map { .sheet($0) } ?? .page(spec.href ?? "/")
-      return DockTab(id: spec.id, label: spec.label, icon: spec.icon, symbol: symbol(for: spec), kind: kind, activePrefixes: spec.activePrefixes)
-    }
-  }
-
-  /// Only drawn when a game icon is missing or malformed.
-  private static func symbol(for spec: DockTabSpec) -> String {
-    switch spec.id {
-    case "company": return "briefcase"
-    case "state": return "building.columns"
-    case "nation": return "globe"
-    case "actions": return "bolt"
-    case "more": return "ellipsis.circle"
-    default: return "circle.grid.2x2"
-    }
-  }
-
-  static func path(_ url: URL) -> String {
-    url.path.count > 1 && url.path.hasSuffix("/") ? String(url.path.dropLast()) : (url.path.isEmpty ? "/" : url.path)
-  }
-
-  /// Which tab a page belongs to: the longest matching prefix wins, and a
-  /// prefix matches whole path segments only ("/state/NY" is not "/state/NYC").
-  /// The home page "/" matches only itself. Nil when no tab claims the page.
-  static func tab(forPath path: String, in tabs: [DockTab]) -> String? {
-    var best: (id: String, length: Int)?
-    for tab in tabs {
-      for prefix in tab.activePrefixes {
-        let clean = prefix.split(separator: "?").first.map(String.init) ?? prefix
-        let trimmed = clean.count > 1 && clean.hasSuffix("/") ? String(clean.dropLast()) : clean
-        let matches = trimmed == "/" ? path == "/" : (path == trimmed || path.hasPrefix(trimmed + "/"))
-        if matches, trimmed.count > (best?.length ?? -1) { best = (tab.id, trimmed.count) }
-      }
-    }
-    return best?.id
-  }
-
+extension DockTabs {
   /// The selected tab for a webview address, or nil to leave it alone.
   static func selection(for url: URL?, tabs: [DockTab], usingGameTabs: Bool) -> String? {
     guard let url, let host = url.host else { return nil }
@@ -123,14 +54,20 @@ final class DockModel: ObservableObject {
   @Published var reduceMotion = UIAccessibility.isReduceMotionEnabled
   /// Height the webview must leave free at the bottom of the screen.
   @Published private(set) var slotHeight: CGFloat = 96
+  /// The soft keyboard is up: the dock steps aside, like Android, and the page
+  /// gets the room.
+  @Published private(set) var keyboardUp = false
+  /// Space under the dock surface: the window's home indicator inset only.
+  /// It never follows the keyboard.
+  @Published private(set) var bottomPad: CGFloat = 8
   /// Natural height of each panel's content, and the most the panel may grow.
   @Published private(set) var natural: [String: CGFloat] = [:]
   private(set) var capHeight: CGFloat = 400
 
   var baseHeight: CGFloat = 0 { didSet { updateSlot() } }
-  var bottomPad: CGFloat = 8 { didSet { updateSlot() } }
   var onTab: (DockTab) -> Void = { _ in }
   var onOpenPath: (String) -> Void = { _ in }
+  var onOpenExternal: (URL) -> Void = { _ in }
   var onApp: (DockApp) -> Void = { _ in }
   let spring = DockSpring()
 
@@ -138,7 +75,9 @@ final class DockModel: ObservableObject {
     spring.onChange = { [weak self] value in self?.progress = value }
   }
 
-  var showsStrip: Bool { onStripPage && status?.showable == true }
+  /// Only on a game page, never on the launcher or the Briefing, and only for
+  /// a signed-in player with a character.
+  var showsStrip: Bool { onStripPage && selectedID != "briefing" && status?.showable == true }
   var usingGameTabs: Bool { layout != nil }
 
   /// The tab to light up: the one whose sheet is open, else the page's.
@@ -161,8 +100,33 @@ final class DockModel: ObservableObject {
 
   private func updateSlot() {
     guard baseHeight > 0 else { return }
-    let height = baseHeight + bottomPad + DockStyle.pageGap
+    let height = keyboardUp ? 0 : baseHeight + bottomPad + DockStyle.pageGap
     if abs(height - slotHeight) > 0.5 { slotHeight = height }
+  }
+
+  /// The window's bottom safe area (home indicator), the only thing the pad follows.
+  func setHomeInset(_ inset: CGFloat) {
+    let pad = max(inset - 8, 8)
+    guard abs(pad - bottomPad) > 0.5 else { return }
+    bottomPad = pad
+    updateSlot()
+  }
+
+  func setKeyboardUp(_ up: Bool) {
+    guard up != keyboardUp else { return }
+    if up { close(animated: false) }
+    keyboardUp = up
+    updateSlot()
+  }
+
+  /// What VoiceOver announces when a panel opens.
+  func title(of panel: DockPanel) -> String {
+    switch panel {
+    case .status: return "Status"
+    case .sheet(let key):
+      if let name = sheet(key)?.title, !name.isEmpty { return name }
+      return tabs.first { $0.kind == .sheet(key) }?.label ?? "Menu"
+    }
   }
 
   func measured(_ heights: [String: CGFloat]) {
@@ -191,7 +155,7 @@ final class DockModel: ObservableObject {
   }
 
   func open(_ target: DockPanel, velocity: CGFloat = 0, animated: Bool = true) {
-    if target == .status && !showsStrip { return }
+    if keyboardUp || (target == .status && !showsStrip) { return }
     if case .sheet(let key) = target, !tabs.contains(where: { $0.kind == .sheet(key) }) { return }
     if panel != target {
       // Swapping the content of a panel that is already open grows or
@@ -237,6 +201,15 @@ final class DockModel: ObservableObject {
   func openPath(_ path: String) {
     close()
     onOpenPath(path)
+  }
+
+  func openLink(_ link: DockLink) {
+    if link.external {
+      close()
+      if let url = DockExternal.url(link.href) { onOpenExternal(url) }
+    } else {
+      openPath(link.href)
+    }
   }
 
   func openApp(_ app: DockApp) {
