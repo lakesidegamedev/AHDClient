@@ -293,6 +293,8 @@ final class DockModel: ObservableObject {
 
   func setExpanded(_ on: Bool, velocity: CGFloat = 0, animated: Bool = true) {
     let open = on && showsStrip
+    // Closing what is already closed (every tab tap does) starts no motion.
+    if !open && !expanded && progress < 0.001 && spring.value < 0.001 { return }
     expanded = open
     let target: CGFloat = open ? 1 : 0
     if animated && !reduceMotion {
