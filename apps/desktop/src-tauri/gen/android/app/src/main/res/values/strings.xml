@@ -163,8 +163,6 @@
     <string name="widget_msg_stocks">Buy shares to populate your private market watch.</string>
     <string name="widget_msg_corp">Your character does not lead a corporation.</string>
     <string name="widget_msg_unavailable">Stats are unavailable. Tap Refresh to try again.</string>
-    <string name="widget_updated_now">updated just now</string>
-    <string name="widget_updated_ago">updated %1$dm ago</string>
     <string name="widget_multiplayer">Multiplayer</string>
     <string name="widget_section_of">%1$s · %2$d of %3$d</string>
     <string name="widget_chart">Recent trend</string>
@@ -172,4 +170,28 @@
     <string name="shortcut_profile">Profile</string>
     <string name="shortcut_election">My election</string>
     <string name="shortcut_corporation">My corporation</string>
+    <string name="widget_desc_overview">Your inbox and key figures at a glance.</string>
+    <string name="widget_desc_profile">Your character\'s cash and influence.</string>
+    <string name="widget_desc_election">Your election: margin, seats and when polls close.</string>
+    <string name="widget_desc_corporation">Market cap and capital for the corporation you lead.</string>
+    <string name="widget_desc_stocks">Share prices and the value of your holdings.</string>
+    <string name="widget_preview_monogram">AM</string>
+    <string name="widget_preview_name">Alex Morgan</string>
+    <string name="widget_preview_turn">Turn 215</string>
+    <string name="widget_preview_inbox_value">12</string>
+    <string name="widget_preview_cash">$48.2M</string>
+    <string name="widget_preview_funds">$3.1M</string>
+    <string name="widget_preview_state">62</string>
+    <string name="widget_preview_national">41</string>
+    <string name="widget_preview_margin">+3.4%</string>
+    <string name="widget_preview_seats">218</string>
+    <string name="widget_preview_polls">In 2 turns</string>
+    <string name="widget_preview_mcap">$1.8B</string>
+    <string name="widget_preview_capital">$240M</string>
+    <string name="widget_preview_marketing">$12M</string>
+    <string name="widget_preview_price">$87.40</string>
+    <string name="widget_preview_shares">1,200</string>
+    <string name="widget_preview_holding">$104.9K</string>
+    <string name="widget_updated_at">updated %1$s</string>
+    <string name="widget_brand">AHD</string>
 </resources>

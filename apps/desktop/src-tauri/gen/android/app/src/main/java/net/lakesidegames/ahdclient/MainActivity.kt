@@ -93,6 +93,13 @@ class MainActivity : TauriActivity() {
       openAskWhenReady(preview = uri.encodedQuery == "preview=1")
       return
     }
+    if (uri.host == "widgets") {
+      // Design review only: the widget picker samples. Same debug and CI gate as the dock preview.
+      intent.data = null
+      if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return
+      CompanionSafety.run("widget preview") { WidgetPreviewScreen.show(this) }
+      return
+    }
     if (uri.host == "dock") {
       // Design review only: the dock with canned figures and no network. Debug and CI
       // builds only; a store build ignores the link, so no page or app can fake a dock.

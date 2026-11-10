@@ -163,8 +163,6 @@
     <string name="widget_msg_stocks">Kaufe Aktien, um deine private Marktübersicht zu füllen.</string>
     <string name="widget_msg_corp">Dein Charakter leitet kein Unternehmen.</string>
     <string name="widget_msg_unavailable">Die Werte sind nicht verfügbar. Tippe auf Aktualisieren, um es erneut zu versuchen.</string>
-    <string name="widget_updated_now">gerade aktualisiert</string>
-    <string name="widget_updated_ago">vor %1$d Min. aktualisiert</string>
     <string name="widget_multiplayer">Mehrspieler</string>
     <string name="widget_section_of">%1$s · %2$d von %3$d</string>
     <string name="widget_chart">Letzter Verlauf</string>
@@ -172,4 +170,28 @@
     <string name="shortcut_profile">Profil</string>
     <string name="shortcut_election">Meine Wahl</string>
     <string name="shortcut_corporation">Mein Unternehmen</string>
+    <string name="widget_desc_overview">Dein Posteingang und die wichtigsten Zahlen auf einen Blick.</string>
+    <string name="widget_desc_profile">Bargeld und Einfluss deiner Figur.</string>
+    <string name="widget_desc_election">Deine Wahl: Abstand, Sitze und Ende der Abstimmung.</string>
+    <string name="widget_desc_corporation">Marktwert und Kapital des Unternehmens, das du leitest.</string>
+    <string name="widget_desc_stocks">Aktienkurse und der Wert deiner Beteiligungen.</string>
+    <string name="widget_preview_monogram">AM</string>
+    <string name="widget_preview_name">Alex Morgan</string>
+    <string name="widget_preview_turn">Zug 215</string>
+    <string name="widget_preview_inbox_value">12</string>
+    <string name="widget_preview_cash">48,2 Mio. $</string>
+    <string name="widget_preview_funds">3,1 Mio. $</string>
+    <string name="widget_preview_state">62</string>
+    <string name="widget_preview_national">41</string>
+    <string name="widget_preview_margin">+3,4 %</string>
+    <string name="widget_preview_seats">218</string>
+    <string name="widget_preview_polls">In 2 Zügen</string>
+    <string name="widget_preview_mcap">1,8 Mrd. $</string>
+    <string name="widget_preview_capital">240 Mio. $</string>
+    <string name="widget_preview_marketing">12 Mio. $</string>
+    <string name="widget_preview_price">87,40 $</string>
+    <string name="widget_preview_shares">1.200</string>
+    <string name="widget_preview_holding">104,9 Tsd. $</string>
+    <string name="widget_updated_at">aktualisiert um %1$s</string>
+    <string name="widget_brand">AHD</string>
 </resources>
