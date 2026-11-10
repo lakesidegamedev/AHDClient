@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "gameVersion": "1.19.0",
+  "rulesVersion": "1.0.0",
+  "defaultPreset": "2027-default",
+  "presets": [
+    {
+      "preset": "1953-default",
+      "era": "1953",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "1979-default",
+      "era": "1979",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "1991-default",
+      "era": "1991",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "1999-default",
+      "era": "1999",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "2007-default",
+      "era": "2007",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "2019-default",
+      "era": "2019",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "2023-default",
+      "era": "2023",
+      "seedable": false,
+      "playerCountries": [],
+      "computerCountries": [],
+      "backgroundCountries": []
+    },
+    {
+      "preset": "2027-default",
+      "era": "2027",
+      "seedable": true,
+      "playerCountries": [
+        {
+          "id": "US",
+          "name": "United States"
+        }
+      ],
+      "computerCountries": [
+        {
+          "id": "UK",
+          "name": "United Kingdom"
+        },
+        {
+          "id": "JP",
+          "name": "Japan"
+        },
+        {
+          "id": "DE",
+          "name": "Germany"
+        },
+        {
+          "id": "CN",
+          "name": "China"
+        }
+      ],
+      "backgroundCountries": [
+        {
+          "id": "IE",
+          "name": "Ireland"
+        },
+        {
+          "id": "BR",
+          "name": "Brazil"
+        },
+        {
+          "id": "NG",
+          "name": "Nigeria"
+        },
+        {
+          "id": "HU",
+          "name": "Hungary"
+        },
+        {
+          "id": "PL",
+          "name": "Poland"
+        },
+        {
+          "id": "RO",
+          "name": "Romania"
+        },
+        {
+          "id": "BG",
+          "name": "Bulgaria"
+        },
+        {
+          "id": "RU",
+          "name": "Russia"
+        },
+        {
+          "id": "FR",
+          "name": "France"
+        },
+        {
+          "id": "IT",
+          "name": "Italy"
+        },
+        {
+          "id": "ES",
+          "name": "Spain"
+        },
+        {
+          "id": "SE",
+          "name": "Sweden"
+        },
+        {
+          "id": "TR",
+          "name": "Turkey"
+        },
+        {
+          "id": "GR",
+          "name": "Greece"
+        },
+        {
+          "id": "AT",
+          "name": "Austria"
+        },
+        {
+          "id": "FI",
+          "name": "Finland"
+        }
+      ]
+    }
+  ],
+  "modes": [
+    "normal",
+    "head-of-state",
+    "worldsim"
+  ],
+  "difficulties": [
+    "easy",
+    "normal",
+    "hard"
+  ],
+  "autonomyLevels": [
+    "off",
+    "v0",
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+    "v5",
+    "v6"
+  ],
+  "defaultAutonomyLevel": "v6",
+  "featureFlags": [
+    {
+      "key": "forexEnabled",
+      "label": "Foreign exchange",
+      "description": "Currencies trade against each other, so exchange rates move with trade and policy and affect prices abroad.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "playerRandomEventsEnabled",
+      "label": "Player random events",
+      "description": "Your politician can run into random events such as scandals, windfalls and personal setbacks.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "autoDisastersEnabled",
+      "label": "Automatic crises and disasters",
+      "description": "Natural disasters and economic crises can strike on their own and force a response from governments.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "sectorTechTreesEnabled",
+      "label": "Sector technology trees",
+      "description": "Industries research new technology over time, which changes what they produce and what it costs.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "nppTurnoverEnabled",
+      "label": "Politician aging and retirement",
+      "description": "Computer-run politicians grow old, retire and die, and are replaced by younger members of their party.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "nppPartyRenewalEnabled",
+      "label": "Party renewal",
+      "description": "Computer-run parties can split, new parties can form in empty political ground, and parties under 2% fold.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "eraSystemEnabled",
+      "label": "Era progression",
+      "description": "The world moves through historical eras as the years pass, changing rules and available options.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "livingConflictsEnabled",
+      "label": "Living conflicts",
+      "description": "Wars and border disputes start, escalate and end on their own as the world changes.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "coldWarEnabled",
+      "label": "Cold War systems",
+      "description": "Superpower rivalry shapes alliances, arms spending and proxy conflicts in eras where it applies.",
+      "defaultEnabled": true
+    },
+    {
+      "key": "nppCorpStrategyEnabled",
+      "label": "Autonomous corporate strategy",
+      "description": "Computer-run companies decide for themselves where to invest, expand and compete.",
+      "defaultEnabled": true
+    }
+  ]
+}

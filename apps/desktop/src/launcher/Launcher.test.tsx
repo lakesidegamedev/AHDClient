@@ -50,8 +50,7 @@ describe("Launcher", () => {
     expect(screen.getByRole("button", { name: "Load Game" })).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Starting era timeline" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "New Game" }));
-    // The default era is the runtime's default preset (2027 for the older table).
-    expect(screen.getAllByText("The next mandate")).toHaveLength(2);
+    expect(screen.getAllByText("Cold War dawn")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: /1979/ }));
     expect(screen.getAllByText("Late Cold War")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: /1953/ }));
@@ -72,7 +71,7 @@ describe("Launcher", () => {
     await userEvent.click(screen.getByRole("button", { name: "New Game" }));
     const timeline = screen.getByRole("list", { name: "Starting era timeline" });
     expect(timeline.querySelectorAll('[role="listitem"]')).toHaveLength(8);
-    expect(timeline.querySelector('button[aria-current="true"]')?.textContent).toContain("2027");
+    expect(timeline.querySelector('button[aria-current="true"]')?.textContent).toContain("1953");
   });
 
   it("gives the selected era preview the full panel width", () => {

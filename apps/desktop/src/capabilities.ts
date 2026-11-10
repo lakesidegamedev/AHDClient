@@ -53,7 +53,7 @@ export function legacyCapabilities(diagnostic: string | null = null): Capabiliti
     source: "legacy",
     gameVersion: null,
     rulesVersion: null,
-    defaultPreset: ERAS[ERAS.length - 1]?.preset ?? "",
+    defaultPreset: ERAS[0]?.preset ?? "",
     presets: ERAS.map((era) => ({
       preset: era.preset,
       era: era.id,
