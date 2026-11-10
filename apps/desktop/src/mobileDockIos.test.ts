@@ -473,3 +473,48 @@ describe("iOS load feedback contract", () => {
     expect(dockFile).toContain('"offline"');
   });
 });
+
+describe("iOS alerts", () => {
+  const alerts = read("NativeAlerts.swift");
+  const nav = read("NativeNav.swift");
+  const push = read("NativePush.swift");
+  const view = read("NativeDockView.swift");
+  const dock = read("NativeDock.swift");
+
+  it("asks once, after a signed-in status load, never at launch", () => {
+    expect(alerts).toContain("Get alerts for votes, offers and attacks?");
+    expect(alerts).toContain("!asked && signedIn && statusLoaded && onGamePage");
+    expect(alerts).toContain("permission == .notDetermined");
+    expect(nav).toContain("offerAlerts(saved)");
+    expect(nav).toContain("guard saved != nil, layoutAccount != nil");
+    // The system prompt is only reached from the sheet's button, through configure.
+    expect(push.match(/requestAuthorization/g)).toHaveLength(1);
+    expect(push).toContain("NativeAlerts.shared.setEnabled");
+  });
+
+  it("has an Alerts row in More and a preview state for the sheet", () => {
+    expect(view).toContain('label: "Alerts"');
+    expect(nav).toContain("case .alerts:");
+    expect(dock).toContain('"alerts"');
+    expect(nav).toContain('state == "alerts"');
+  });
+
+  it("badges the icon with unread and clears alerts for the page in view", () => {
+    expect(alerts).toContain("setBadgeCount(value)");
+    expect(alerts).toContain("applicationIconBadgeNumber");
+    expect(nav).toContain("NativeAlerts.shared.updateBadge");
+    expect(nav).toContain("NativeAlerts.shared.clearDelivered(viewing: path)");
+    expect(push).toContain("[.banner, .sound, .badge]");
+  });
+
+  it("registers an alert category with an Open inbox action", () => {
+    expect(alerts).toContain('title: "Open inbox"');
+    expect(push).toContain("NativeAlerts.shared.registerCategories()");
+    expect(push).toContain("NativeAlerts.openInboxAction");
+  });
+
+  it("keeps UIKit-free policy and no push state in the sheet code", () => {
+    expect(alerts).toContain("enum AlertsPolicy");
+    expect(alerts).not.toContain("NativePush");
+  });
+});

@@ -251,7 +251,7 @@ jobs:
 
       - name: Check native push Swift sources
         run: |
-          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/BriefingStore.swift apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/NativePush.swift
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/BriefingStore.swift apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/NativePush.swift apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/NativeAlerts.swift
       - name: Check native Ask Swift sources
         run: |
           xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/FoundationModelBridge.swift apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources/NativeAsk*.swift
@@ -263,7 +263,7 @@ jobs:
       - name: Check native dock Swift sources
         run: |
           d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
-          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeLoad.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeLoad.swift $d/NativeAlerts.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
       - name: Generate native app icons
         run: |
           npm run tauri --workspace apps/desktop -- icon src/assets/ahd-logo.png --ios-color '#ffffff'
