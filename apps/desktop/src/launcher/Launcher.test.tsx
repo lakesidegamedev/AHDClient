@@ -58,6 +58,17 @@ describe("Launcher", () => {
     expect(props.onNewWorld).toHaveBeenCalledWith("1953");
   });
 
+  it("quick start skips setup for the chosen era", async () => {
+    const onQuickStart = vi.fn();
+    const props = renderLauncher({ onQuickStart });
+    expect(screen.queryByRole("button", { name: "Quick start" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "New Game" }));
+    await userEvent.click(screen.getByRole("button", { name: /1979/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Quick start" }));
+    expect(onQuickStart).toHaveBeenCalledWith("1979");
+    expect(props.onNewWorld).not.toHaveBeenCalled();
+  });
+
   it("starts a new world in the selected era", async () => {
     const props = renderLauncher();
     await userEvent.click(screen.getByRole("button", { name: "New Game" }));

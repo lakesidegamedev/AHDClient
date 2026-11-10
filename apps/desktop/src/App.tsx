@@ -8,9 +8,11 @@ import { NewWorldScreen } from "./screens/NewWorldScreen.js";
 import { WorldsScreen } from "./screens/WorldsScreen.js";
 import { BootScreen } from "./screens/BootScreen.js";
 import { WorldsimScreen } from "./screens/WorldsimScreen.js";
+import { defaultSetupOptions } from "./screens/setupOptions.js";
 import type { SetupOptions } from "./screens/setupOptions.js";
 import { PlayingScreen } from "./screens/PlayingScreen.js";
-import { CLASSIC_REQUIRED, ask, classicGame, eraById, game, online, slugForWorld, worldSaves, worlds } from "./worlds.js";
+import { CLASSIC_REQUIRED, ask, classicGame, eraById, game, online, slugForWorld, uniqueWorldName, worldSaves, worlds } from "./worlds.js";
+import type { Era } from "./worlds.js";
 import type {
   ClassicInfo,
   GameInfo,
@@ -41,6 +43,8 @@ import { GameToolbar } from "./GameToolbar.js";
 import { SavesDialog } from "./SavesDialog.js";
 import { GameVersionLine } from "./GameVersionBar.js";
 import { DiagnosticPrompt } from "./DiagnosticPrompt.js";
+import { CrashDialog } from "./CrashDialog.js";
+import { describeExit } from "./crash.js";
 import { DiagnosticPanel } from "./DiagnosticPanel.js";
 import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { diagnosticRuntime, recordDiagnostic, submitAutomaticDiagnostics, submitDiagnostics, type DiagnosticReason } from "./diagnostics.js";
@@ -59,6 +63,19 @@ type Screen =
   | "linking"
   | "briefing"
   | "worldsim";
+
+/** What the player was doing when we sent them to link their account. */
+type LinkIntent =
+  | { kind: "new"; eraId: string; worldsim: boolean; classic: boolean }
+  | { kind: "quick"; eraId: string };
+
+/** A failed start, kept on the boot screen so the player can try again. */
+interface BootFailure {
+  message: string;
+  slot: string;
+  fresh: { preset: string; displayName?: string; setup: SetupOptions } | null;
+  hosted: boolean;
+}
 
 const IDLE: GameInfo = { running: false, hosted: false, port: null, slot: null, url: null };
 const LOG_LINES = 14;
@@ -133,6 +150,13 @@ export function App(): JSX.Element {
   /** Entry-gate refusal on the launcher: the error box offers Link account. */
   const [entitlementBlocked, setEntitlementBlocked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const afterLink = useRef<LinkIntent | null>(null);
+  const resumeAfterLink = useRef<(intent: LinkIntent) => void>(() => {});
+  const [bootFailure, setBootFailure] = useState<BootFailure | null>(null);
+  const [crash, setCrash] = useState<{ slot: string | null; message: string } | null>(null);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  const slotRef = useRef<string | null>(null);
   const [bootTitle, setBootTitle] = useState("Starting");
   const [bootProgress, setBootProgress] = useState<SetupProgress | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -142,6 +166,7 @@ export function App(): JSX.Element {
   const bootId = useRef(0);
   const creating = useRef(false);
   const [settings, setSettings] = useState(readSettings);
+  slotRef.current = info.slot;
   const [account, setAccount] = useState<LinkedAccount | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [accountChecked, setAccountChecked] = useState(false);
@@ -267,6 +292,9 @@ export function App(): JSX.Element {
         setAccountNotice(false);
         setEntitlementBlocked(false);
         rememberAccountNotice();
+        const intent = afterLink.current;
+        afterLink.current = null;
+        if (intent) resumeAfterLink.current(intent);
       } else if (Date.now() < deadline)
         timer = setTimeout(() => void poll(), 2500);
     };
@@ -302,14 +330,16 @@ export function App(): JSX.Element {
         setLog((lines) => [...lines, event.payload.line].slice(-LOG_LINES));
       }),
       listen<{ line: string }>("game:exited", (event) => {
+        const slot = slotRef.current;
+        const current = screenRef.current;
         setInfo(IDLE);
-        setScreen((current) => {
-          if (current === "playing" || current === "booting") {
-            setError(event.payload.line || "The game stopped.");
-            return "launcher";
-          }
-          return current;
-        });
+        if (current === "playing" || current === "worldsim") {
+          // The world stopped by itself: offer a restart instead of a dead end.
+          setEmbedded(false);
+          setCrash({ slot, message: describeExit(event.payload.line) });
+          setScreen("launcher");
+        }
+        // While booting, the start itself reports the failure with a retry.
         void refreshWorlds();
       }),
       listen("game:window-closed", () => {
@@ -345,20 +375,21 @@ export function App(): JSX.Element {
     }
   }, [refreshWorlds]);
 
-  const fail = (e: unknown) => {
+  const fail = (e: unknown, keepOnBoot?: Omit<BootFailure, "message">) => {
     const message = e instanceof Error ? e.message : String(e);
-    setError(message);
+    if (keepOnBoot) setBootFailure({ message, ...keepOnBoot });
+    else setError(message);
     setDiagnosticIncident({
-      reason: message.includes("stopped reporting progress") ? "stalled" : "error",
+      reason: message.includes("stopped making progress") ? "stalled" : "error",
       message,
       lines: [...log],
     });
     void submitAutomaticDiagnostics(
-      message.includes("stopped reporting progress") ? "stalled" : "error",
+      message.includes("stopped making progress") ? "stalled" : "error",
       message,
       diagnosticRuntime(screen, info.running ? "local-running" : "local-stopped"),
     );
-    setScreen("launcher");
+    if (!keepOnBoot) setScreen("launcher");
   };
 
   /**
@@ -375,6 +406,7 @@ export function App(): JSX.Element {
     cancelled.current = false;
     setBusy(true);
     setError(null);
+    setBootFailure(null);
     setLog([]);
     setBootProgress(null);
     setBootTitle(fresh ? "Building the world" : "Starting the world");
@@ -409,7 +441,7 @@ export function App(): JSX.Element {
                   polling = false;
                   rejectStalledSetup?.(
                     new Error(
-                      "World setup stopped reporting progress. The local game was stopped safely; retry the world or report diagnostics.",
+                      "World setup stopped making progress. The game was closed safely. Try again, or send a report.",
                     ),
                   );
                 }
@@ -493,7 +525,7 @@ export function App(): JSX.Element {
           setClassicPrompt({ slot, hosted });
           setScreen("launcher");
         } else {
-          fail(e);
+          fail(e, { slot, fresh, hosted });
         }
       }
     } finally {
@@ -525,14 +557,27 @@ export function App(): JSX.Element {
    * fills in a world they cannot create. The check runs again at creation in
    * case access changed mid-setup; that refusal keeps the form mounted.
    */
+  const refuseEntitlement = (
+    result: { linked: boolean; offline: boolean },
+    intent: LinkIntent,
+  ) => {
+    // Not linked yet: sign in right here and carry on with the same era.
+    if (!result.offline && !result.linked) {
+      afterLink.current = intent;
+      linkAccount();
+      return;
+    }
+    setError(entitlementError(result));
+    setEntitlementBlocked(true);
+  };
+
   const handleNewWorld = (eraId: string, worldsim = false, classicWorld = false) => {
     void (async () => {
       setError(null);
       setEntitlementBlocked(false);
       const result = await checkSingleplayerEntitlement();
       if (!result.ok) {
-        setError(entitlementError(result));
-        setEntitlementBlocked(true);
+        refuseEntitlement(result, { kind: "new", eraId, worldsim, classic: classicWorld });
         return;
       }
       setPendingWorldsim(worldsim);
@@ -542,6 +587,64 @@ export function App(): JSX.Element {
       setScreen("newWorld");
     })();
   };
+
+  /** Save a new world and boot it. Shared by the setup screen and Quick start. */
+  const startWorld = async (era: Era, name: string, displayName: string, setup: SetupOptions, classicWorld: boolean) => {
+    creating.current = true;
+    const slot = slugForWorld(
+      name,
+      allWorlds.map((w) => w.slot),
+    );
+    try {
+      await worlds.create(slot, name.trim() || era.label, era.preset, setup, classicWorld);
+      await refreshWorlds();
+    } catch (e) {
+      creating.current = false;
+      return fail(e);
+    }
+    const trimmed = displayName.trim();
+    try {
+      await boot(slot, {
+        preset: era.preset,
+        setup,
+        ...(trimmed ? { displayName: trimmed } : {}),
+      });
+    } finally {
+      creating.current = false;
+    }
+  };
+
+  /**
+   * Quick start: the era as the game recommends it. Normal difficulty and the
+   * defaults of the game that will run it, no setup screen, named for the era.
+   */
+  const handleQuickStart = (eraId: string) => {
+    void (async () => {
+      if (creating.current) return;
+      setError(null);
+      setEntitlementBlocked(false);
+      const result = await checkSingleplayerEntitlement();
+      if (!result.ok) {
+        refuseEntitlement(result, { kind: "quick", eraId });
+        return;
+      }
+      const era = eraById(eraId);
+      if (!era) return fail(new Error("Pick an era first."));
+      setPendingWorldsim(false);
+      setPendingClassic(false);
+      await startWorld(
+        era,
+        uniqueWorldName(era.label, allWorlds.map((w) => w.name)),
+        "",
+        defaultSetupOptions(capabilities ?? legacyCapabilities()),
+        false,
+      );
+    })();
+  };
+  resumeAfterLink.current = (intent) =>
+    intent.kind === "quick"
+      ? handleQuickStart(intent.eraId)
+      : handleNewWorld(intent.eraId, intent.worldsim, intent.classic);
 
   const handleCreate = async (
     name: string,
@@ -559,28 +662,7 @@ export function App(): JSX.Element {
     setSetupError(null);
     const era = eraById(pendingEra ?? "");
     if (!era) return fail(new Error("Pick an era first."));
-    creating.current = true;
-    const slot = slugForWorld(
-      name,
-      allWorlds.map((w) => w.slot),
-    );
-    try {
-      await worlds.create(slot, name.trim() || era.label, era.preset, setup, pendingClassic);
-      await refreshWorlds();
-    } catch (e) {
-      creating.current = false;
-      return fail(e);
-    }
-    const trimmed = displayName.trim();
-    try {
-      await boot(slot, {
-        preset: era.preset,
-        setup,
-        ...(trimmed ? { displayName: trimmed } : {}),
-      });
-    } finally {
-      creating.current = false;
-    }
+    await startWorld(era, name, displayName, setup, pendingClassic);
   };
 
   const handleContinue = (slot: string) => {
@@ -705,7 +787,10 @@ export function App(): JSX.Element {
         setEmbedded(!settings.separateWindow);
         setScreen("linking");
       })
-      .catch(fail);
+      .catch((e) => {
+        afterLink.current = null;
+        fail(e);
+      });
   };
   const signOut = () => {
     if (signingOut) return;
@@ -722,6 +807,7 @@ export function App(): JSX.Element {
       .finally(() => setSigningOut(false));
   };
   const returnToLauncher = async () => {
+    afterLink.current = null;
     if (info.slot) await captureStatistics(info.slot, true);
     await game.closeEmbedded();
     setEmbedded(false);
@@ -808,6 +894,22 @@ export function App(): JSX.Element {
       }}
     />
   );
+  const crashDialog = crash ? (
+    <CrashDialog
+      message={crash.message}
+      canRestart={crash.slot != null && allWorlds.some((w) => w.slot === crash.slot)}
+      onRestart={() => {
+        const slot = crash.slot;
+        setCrash(null);
+        if (slot) handleContinue(slot);
+      }}
+      onReport={() => {
+        setCrash(null);
+        setDiagnosticIncident({ reason: "error", message: crash.message, lines: log.slice(-LOG_LINES) });
+      }}
+      onBack={() => setCrash(null)}
+    />
+  ) : null;
   const savesWorld = savesFor ? allWorlds.find((w) => w.slot === savesFor) : null;
   const savesDialog = savesFor ? (
     <SavesDialog
@@ -827,6 +929,7 @@ export function App(): JSX.Element {
       {shortcutsOpen ? <ShortcutsDialog onClose={() => setShortcutsOpen(false)} /> : null}
       {diagnosticPanel}
       {diagnosticPrompt}
+      {crashDialog}
     </>
   );
   const latest = allWorlds[0] ?? null;
@@ -916,7 +1019,14 @@ export function App(): JSX.Element {
         <p>
           Complete sign-in in the game window. Your session stays in the app.
         </p>
-        <button onClick={() => setScreen("launcher")}>Back to launcher</button>
+        <button
+          onClick={() => {
+            afterLink.current = null;
+            setScreen("launcher");
+          }}
+        >
+          Back to launcher
+        </button>
       </main>,
     );
   }
@@ -995,6 +1105,16 @@ export function App(): JSX.Element {
         onCancel={cancelBoot}
         showDebug={settings.showBootLogs}
         progress={bootProgress}
+        failure={bootFailure}
+        onRetry={
+          bootFailure
+            ? () => void boot(bootFailure.slot, bootFailure.fresh, bootFailure.hosted)
+            : undefined
+        }
+        onBack={() => {
+          setBootFailure(null);
+          setScreen("launcher");
+        }}
       />,
     );
   }
@@ -1064,6 +1184,7 @@ export function App(): JSX.Element {
           void online.help(`help.era-photo-${eraId}`).catch(fail);
         }}
         onNewWorld={handleNewWorld}
+        onQuickStart={handleQuickStart}
         onContinue={handleContinue}
         onLoad={() => setScreen("worlds")}
         onPlayOnline={handlePlayOnline}
@@ -1093,6 +1214,7 @@ export function App(): JSX.Element {
       {settingsMenu}
       {diagnosticPanel}
       {diagnosticPrompt}
+      {crashDialog}
     </>
   );
 }
