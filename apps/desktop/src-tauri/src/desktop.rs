@@ -492,7 +492,10 @@ pub(crate) async fn game_stop(app: AppHandle, game: State<'_, Game>, quit: Optio
   if let Some(window) = app.get_webview_window("game") {
     let _ = window.close();
   }
-  let stopping = detach_locked(&mut game.0.lock().map_err(|_| "game state poisoned")?);
+  let stopping = {
+    let mut inner = game.0.lock().map_err(|_| "game state poisoned")?;
+    detach_locked(&mut inner)
+  };
   // The wait can take many seconds: do it on a blocking thread and outside
   // the lock so status checks and the UI keep answering.
   tauri::async_runtime::spawn_blocking(move || wait_stopped(stopping))
