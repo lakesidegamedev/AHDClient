@@ -595,7 +595,7 @@ struct BriefingWidgetView: View {
       if let image = UIImage(named: "ahd-mark") {
         Image(uiImage: image).resizable().scaledToFit()
       } else {
-        Text("AHD").font(.system(size: 9, weight: .black, design: .serif)).foregroundColor(Palette.cream.opacity(0.7))
+        Text("AHD").font(.system(size: 9, weight: .black, design: .default)).foregroundColor(Palette.cream.opacity(0.7))
       }
     }.frame(width: 16, height: 16).opacity(0.9)
   }
@@ -610,7 +610,7 @@ struct BriefingWidgetView: View {
         Image(uiImage: markImage).resizable().scaledToFit()
       } else {
         LinearGradient(colors: [accent.opacity(0.85), Palette.red], startPoint: .topLeading, endPoint: .bottomTrailing)
-        Text(monogram).font(.system(size: size * 0.36, weight: .semibold, design: .serif)).foregroundColor(Palette.cream)
+        Text(monogram).font(.system(size: size * 0.36, weight: .semibold, design: .default)).foregroundColor(Palette.cream)
       }
     }
     .frame(width: size, height: size)
@@ -622,7 +622,7 @@ struct BriefingWidgetView: View {
     HStack(alignment: .center, spacing: 7) {
       identity(size: isSmall ? 24 : 30)
       VStack(alignment: .leading, spacing: 1) {
-        Text(title).font(.system(size: isSmall ? 13 : 15, weight: .semibold, design: .serif))
+        Text(title).font(.system(size: isSmall ? 13 : 15, weight: .semibold, design: .default))
           .foregroundColor(Palette.cream).lineLimit(1).minimumScaleFactor(0.7)
         Text(subtitle.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.5)
           .foregroundColor(accent).lineLimit(1)
@@ -982,7 +982,7 @@ struct BriefingWidgetView: View {
       } else {
         ZStack {
           AccessoryWidgetBackground()
-          Text("AHD").font(.system(size: 12, weight: .bold, design: .serif))
+          Text("AHD").font(.system(size: 12, weight: .bold, design: .default))
         }
       }
     }
