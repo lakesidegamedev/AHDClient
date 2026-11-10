@@ -13,7 +13,7 @@ const resources = "../src-tauri/gen/android/app/src/main/res";
 const string = (name: string) => {
   const match = new RegExp(`<string name="${name}">([^<]*)</string>`).exec(read(`${resources}/values/strings.xml`));
   if (!match) throw new Error(`missing string ${name}`);
-  return match[1].replace(/\\'/g, "'");
+  return (match[1] ?? "").replace(/\\'/g, "'");
 };
 
 describe("Android language (2.11, A8)", () => {
