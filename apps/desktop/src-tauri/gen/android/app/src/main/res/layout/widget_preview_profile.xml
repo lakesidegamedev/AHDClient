@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static sample for the widget picker (Android 12 and up). Plain views only, so the launcher can draw it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="12dp" android:background="@drawable/briefing_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="30dp" android:layout_height="30dp" android:background="@drawable/briefing_monogram"
+            android:gravity="center" android:text="@string/widget_preview_monogram" android:textColor="@color/briefing_cream"
+            android:textSize="11sp" android:textStyle="bold" android:fontFamily="serif" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:layout_marginStart="8dp" android:orientation="vertical">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_preview_name"
+                android:textColor="@color/briefing_cream" android:textStyle="bold" android:textSize="15sp" android:fontFamily="serif" android:maxLines="1" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_preview_turn"
+                android:textColor="@color/briefing_gold" android:textSize="10sp" android:textStyle="bold" android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+    <FrameLayout android:layout_width="match_parent" android:layout_height="1px" android:layout_marginTop="6dp" android:background="@color/briefing_rule" />
+    <TextView style="@style/BriefingLabel" android:layout_marginTop="8dp" android:text="@string/widget_label_cash" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_preview_cash"
+        android:textColor="@color/briefing_cream" android:textSize="24sp" android:fontFamily="sans-serif-medium" android:maxLines="1" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView style="@style/BriefingLabel" android:text="@string/widget_short_state" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_preview_state"
+                android:textColor="@color/briefing_cream" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:maxLines="1" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView style="@style/BriefingLabel" android:text="@string/widget_short_national" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_preview_national"
+                android:textColor="@color/briefing_cream" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

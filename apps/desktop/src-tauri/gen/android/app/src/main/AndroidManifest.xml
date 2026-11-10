@@ -42,23 +42,23 @@
 
         <receiver android:name=".OverviewWidget" android:label="@string/widget_name_overview" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget_overview" />
         </receiver>
         <receiver android:name=".ProfileWidget" android:label="@string/widget_name_profile" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget_profile" />
         </receiver>
         <receiver android:name=".ElectionWidget" android:label="@string/widget_name_election" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget_election" />
         </receiver>
         <receiver android:name=".CorporationWidget" android:label="@string/widget_name_corporation" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget_corporation" />
         </receiver>
         <receiver android:name=".StocksWidget" android:label="@string/widget_name_stocks" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/briefing_widget_stocks" />
         </receiver>
         <service android:name=".BriefingRefreshJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />
 

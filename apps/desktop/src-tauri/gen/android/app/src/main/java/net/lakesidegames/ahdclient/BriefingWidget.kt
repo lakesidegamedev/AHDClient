@@ -740,7 +740,9 @@ object BriefingWidgets {
       val options = manager.getAppWidgetOptions(id)
       val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0).takeIf { it > 0 } ?: 280
       val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0).takeIf { it > 0 } ?: 320
-      val compact = heightDp < 250
+      val tier = WidgetSizing.tier(heightDp)
+      val compact = tier != WidgetSizing.Tier.FULL
+      val mini = tier == WidgetSizing.Tier.MINI
       val rowLimit = if (heightDp >= 380) 4 else if (heightDp >= 320) 2 else 0
       val card = if (ready) CompanionSafety.get("widget card", null as Card?) { card(sectionKey, data!!, compact) } else null
       val message = when {
@@ -779,7 +781,7 @@ object BriefingWidgets {
         views.setTextViewText(R.id.briefing_hero_note, card.heroNote ?: "")
 
         val chartHeight = if (compact) 28 else 56
-        val chart = if (card.chart.size >= 2) CompanionSafety.get("widget chart", null as android.graphics.Bitmap?) {
+        val chart = if (!mini && card.chart.size >= 2) CompanionSafety.get("widget chart", null as android.graphics.Bitmap?) {
           val scale: ((Double) -> String)? = if (compact) null
             else fun(value: Double): String = number(value, if (card.chartPercent) "%" else "")
           chartBitmap(context, card.chart, card.chartColor, widthDp - 24, chartHeight, scale)
@@ -792,7 +794,7 @@ object BriefingWidgets {
         // Stocks with several holdings list them in place of the figures when
         // the widget is short, like the iOS medium size.
         val holdingsInstead = sectionKey == "stocks" && card.rows.size > 1 && compact
-        val figureLimit = if (holdingsInstead) 0 else if (compact) (if (chart != null) 2 else 4) else 6
+        val figureLimit = if (holdingsInstead || mini) 0 else if (compact) (if (chart != null) 2 else 4) else 6
         val figures = card.figures.take(figureLimit)
         views.setViewVisibility(R.id.briefing_figures_label, visible(figures.isNotEmpty() && !compact && sectionKey != "stocks"))
         for (index in figureCells.indices) {
@@ -826,9 +828,10 @@ object BriefingWidgets {
         }
       }
       views.setTextViewText(R.id.briefing_updated, if (ready) {
-        val mins = (age / 60000).coerceAtLeast(0)
+        // A time of day stays true until the next refresh; "N minutes ago" would freeze.
+        val stamp = android.text.format.DateUtils.formatDateTime(context, data!!.optLong("updatedAt"), android.text.format.DateUtils.FORMAT_SHOW_TIME)
         listOfNotNull(if (sectionKey == "overview") null else nextTurn(context, data),
-          if (mins < 1) Texts.s(R.string.widget_updated_now) else Texts.s(R.string.widget_updated_ago, mins.toInt()))
+          Texts.s(R.string.widget_updated_at, stamp))
           .joinToString(" · ").replaceFirstChar { it.uppercase() }
       } else Texts.s(R.string.widget_multiplayer))
       views.setTextViewText(R.id.briefing_section, Texts.s(R.string.widget_section_of, labels[selected], selected + 1, sections.size))

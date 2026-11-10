@@ -201,6 +201,17 @@ preview more
 shot 11-more-large-font
 a shell settings put system font_scale 1.0
 a shell cmd uimode night no >/dev/null 2>&1
+# The widget picker samples, normal and large font (what a player sees under Widgets).
+a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://widgets" >/dev/null
+sleep 4
+shot 14-widgets
+a shell settings put system font_scale 1.3
+sleep 2
+a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://widgets" >/dev/null
+sleep 4
+shot 15-widgets-large-font
+a shell settings put system font_scale 1.0
+a shell input keyevent 4; sleep 2
 # No connection: opening a game page shows the cannot-reach screen over the page, dock still there.
 a shell svc wifi disable >/dev/null 2>&1
 a shell svc data disable >/dev/null 2>&1
