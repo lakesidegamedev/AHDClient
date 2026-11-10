@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { Launcher } from "./launcher/Launcher.js";
 import { gameRuntime, legacyCapabilities } from "./capabilities.js";
 import { ClassicDownload, formatDownloadSize } from "./ClassicDownload.js";
@@ -350,7 +350,10 @@ export function App(): JSX.Element {
         void recordProgress();
       }),
       // The main window was closed with a world running (Rust kept it open).
-      listen("app:close-requested", () => void closeRequestRef.current()),
+      listen("app:close-requested", () => {
+        void emit("app:close-handled");
+        void closeRequestRef.current();
+      }),
       // Open, never toggle: the menu accelerator and the in-game fallback
       // can both deliver the same keypress.
       listen("client:settings", () => setSettingsOpen(true)),

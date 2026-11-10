@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent, WebviewBuilder, LogicalPosition, LogicalSize};
+use tauri::{AppHandle, Emitter, Listener, Manager, State, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent, WebviewBuilder, LogicalPosition, LogicalSize};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -1419,10 +1419,14 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
             // The world keeps running behind the tray icon.
             api.prevent_close();
             let _ = window.hide();
-          } else if world_running(window.app_handle()) {
+          } else if world_running(window.app_handle()) && !CLOSE_PENDING.load(Ordering::SeqCst) {
             // Never drop a running world mid-write: the launcher saves, then
-            // asks Rust to stop it and quit.
+            // asks Rust to stop it and quit. If the launcher never answers
+            // (page frozen), the next close goes through and on_exit stops
+            // the world, so the window can always be closed.
             api.prevent_close();
+            CLOSE_PENDING.store(true, Ordering::SeqCst);
+            window.app_handle().once("app:close-handled", |_| CLOSE_PENDING.store(false, Ordering::SeqCst));
             let _ = window.emit("app:close-requested", ());
           }
         }
@@ -1440,6 +1444,9 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       }
     })
 }
+
+/// A close request is waiting for the launcher to answer.
+static CLOSE_PENDING: AtomicBool = AtomicBool::new(false);
 
 /// Stop the local game when the app exits so no world process outlives it.
 pub(crate) fn on_exit(app: &AppHandle) {
