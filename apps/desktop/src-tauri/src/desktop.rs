@@ -1264,8 +1264,48 @@ pub(crate) fn select_game_version(app: AppHandle, game: State<'_, Game>, version
 // Wiring
 // ---------------------------------------------------------------------------
 
+fn show_main_window(app: &AppHandle) {
+  if let Some(window) = app.get_window("main") {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+  }
+}
+
+/// Route an `ahdclient://` link. Only game pages that pass the same bounded
+/// same-origin check as the briefing are opened; everything else just brings
+/// the app to the front.
+fn handle_link(app: &AppHandle, url: &Url) {
+  show_main_window(app);
+  if let Some(path) = crate::links::widget_page(url) {
+    if let Ok(target) = format!("{ONLINE_URL}{path}").parse::<Url>() {
+      let app = app.clone();
+      tauri::async_runtime::spawn(async move { let _ = open_briefing_url(app, target).await; });
+    }
+  }
+}
+
+fn setup_deep_links(app: &AppHandle) {
+  use tauri_plugin_deep_link::DeepLinkExt;
+  // Installed packages register the scheme themselves; an AppImage or a dev
+  // build has to do it at run time.
+  #[cfg(any(target_os = "linux", windows))]
+  { let _ = app.deep_link().register_all(); }
+  if let Ok(Some(urls)) = app.deep_link().get_current() {
+    for url in urls { handle_link(app, &url); }
+  }
+  let handle = app.clone();
+  app.deep_link().on_open_url(move |event| {
+    for url in event.urls() { handle_link(&handle, &url); }
+  });
+}
+
 pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
   builder
+    // First on purpose: a second launch (or a clicked ahdclient:// link) hands
+    // its arguments to the running app, which comes to the front.
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
+    .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -1275,6 +1315,7 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .manage(crate::desktop_alerts::AlertState::default())
     .setup(|app| {
       crate::desktop_alerts::start(app.handle());
+      setup_deep_links(app.handle());
       app.set_menu(build_menu(app.handle())?)?;
       Ok(())
     })
