@@ -1,54 +1,81 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), install: vi.fn(), select: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), install: vi.fn(), select: vi.fn(), bundledInfo: vi.fn() }));
 
-vi.mock("./worlds.js", () => ({ gameVersions: mocks }));
+vi.mock("./worlds.js", () => ({ gameVersions: { list: mocks.list, install: mocks.install, select: mocks.select } }));
+vi.mock("./capabilities.js", () => ({ gameRuntime: { bundledInfo: mocks.bundledInfo } }));
 
-import { GameVersionBar } from "./GameVersionBar.js";
+import { GameVersionLine, GameVersionSetting } from "./GameVersionBar.js";
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-describe("GameVersionBar", () => {
-  it("does not list the bundled runtime twice", async () => {
-    mocks.list.mockResolvedValue([{ version: "1.8.1", installed: false, selected: false }]);
-    render(<GameVersionBar />);
-
-    expect(screen.getByText("Game runtime")).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Bundled game 1.8.3" })).toBeTruthy();
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+describe("GameVersionLine", () => {
+  it("shows the real version the game reports", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: "1.20.0", gameCommit: null, clientVersion: null });
+    render(<GameVersionLine />);
+    expect(await screen.findByText("Game 1.20.0")).toBeTruthy();
   });
 
-  it("downloads and selects the newest published runtime automatically", async () => {
-    mocks.list
-      .mockResolvedValueOnce([
-        { version: "1.9.0", installed: false, selected: false },
-        { version: "1.8.0", installed: false, selected: false },
-      ])
-      .mockResolvedValueOnce([{ version: "1.9.0", installed: true, selected: true }]);
-    mocks.install.mockResolvedValue(undefined);
-    mocks.select.mockResolvedValue(undefined);
-
-    render(<GameVersionBar />);
-
-    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("1.9.0"));
-    expect(mocks.select).toHaveBeenCalledWith("1.9.0");
+  it("shows nothing when the version is unknown", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: null, gameCommit: null, clientVersion: null });
+    const { container } = render(<GameVersionLine />);
+    await waitFor(() => expect(mocks.bundledInfo).toHaveBeenCalled());
+    expect(container.textContent).toBe("");
   });
+});
 
-  it("never replaces the newer bundled runtime with an older published runtime", async () => {
+describe("GameVersionSetting", () => {
+  it("lists other versions with their size and never installs or selects on its own", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: "1.20.0", gameCommit: null, clientVersion: null });
     mocks.list.mockResolvedValue([
-      { version: "1.8.1", installed: false, selected: false },
+      { version: "1.20.0", installed: false, selected: false, sizeBytes: 90_000_000 },
+      { version: "1.19.2", installed: false, selected: false, sizeBytes: 84_000_000 },
     ]);
+    render(<GameVersionSetting />);
 
-    render(<GameVersionBar />);
-
-    await waitFor(() => expect(mocks.list).toHaveBeenCalled());
+    expect(await screen.findByRole("option", { name: "1.19.2 · download 80 MB" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Included with the app (1.20.0)" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /^1\.20\.0/ })).toBeNull();
     expect(mocks.install).not.toHaveBeenCalled();
     expect(mocks.select).not.toHaveBeenCalled();
-    expect(screen.getByRole("option", { name: "1.8.1 · download" })).toBeTruthy();
+  });
+
+  it("keeps a newer published version out of the way until it is chosen, then installs and selects it", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: "1.20.0", gameCommit: null, clientVersion: null });
+    mocks.list.mockResolvedValue([{ version: "1.21.0", installed: false, selected: false, sizeBytes: null }]);
+    mocks.install.mockResolvedValue(undefined);
+    mocks.select.mockResolvedValue(undefined);
+    render(<GameVersionSetting />);
+
+    const picker = await screen.findByRole("combobox");
+    await screen.findByRole("option", { name: "1.21.0 · download" });
+    fireEvent.change(picker, { target: { value: "1.21.0" } });
+
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("1.21.0"));
+    expect(mocks.select).toHaveBeenCalledWith("1.21.0");
+  });
+
+  it("goes back to the included game with a null selection", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: "1.19.2", gameCommit: null, clientVersion: null });
+    mocks.list.mockResolvedValue([{ version: "1.19.2", installed: true, selected: true, sizeBytes: null }]);
+    mocks.select.mockResolvedValue(undefined);
+    render(<GameVersionSetting />);
+
+    const picker = await screen.findByRole("combobox");
+    await waitFor(() => expect((picker as HTMLSelectElement).value).toBe("1.19.2"));
+    fireEvent.change(picker, { target: { value: "bundled" } });
+    await waitFor(() => expect(mocks.select).toHaveBeenCalledWith(null));
+  });
+
+  it("says so when the list cannot be fetched", async () => {
+    mocks.bundledInfo.mockResolvedValue({ gameVersion: "1.20.0", gameCommit: null, clientVersion: null });
+    mocks.list.mockRejectedValue(new Error("offline"));
+    render(<GameVersionSetting />);
+    expect(await screen.findByText(/Could not check for other versions/)).toBeTruthy();
   });
 });

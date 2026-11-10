@@ -62,6 +62,8 @@ export interface GameVersion {
   version: string;
   installed: boolean;
   selected: boolean;
+  /** Download size in bytes for this computer, when known. */
+  sizeBytes?: number | null;
 }
 
 export const gameVersions = {
