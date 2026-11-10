@@ -1,12 +1,14 @@
 package net.lakesidegames.briefing
 
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.webkit.CookieManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -33,7 +35,16 @@ object NativePush {
     "party" to "Party", "treasury" to "Treasury", "standing" to "Standing", "system" to "System",
   )
   private const val FALLBACK_BODY = "You have new activity. Open your inbox to catch up."
+  private const val GROUP = "ahd-alerts"
+  private const val GROUP_NAME = "Inbox alerts"
+  private const val INBOX_PATH = "/notifications"
+  private const val HREF_EXTRA = "ahd.href"
   private val lock = Any()
+  /**
+   * Asked with the alert's page before one is shown: true when the player is already reading
+   * that page (or the inbox), so no banner is raised for it. Set by the app, read on the push thread.
+   */
+  @Volatile var holdBack: ((String?) -> Boolean)? = null
   private val worker = Executors.newSingleThreadExecutor()
   private var busy = false
   private var tokenPending = false
@@ -64,6 +75,44 @@ object NativePush {
     FirebaseApp.initializeApp(context) != null
   }
 
+  /** The saved on/off choice only; cheap enough for the UI thread. */
+  fun isEnabled(context: Context): Boolean = read(context.applicationContext).optBoolean("enabled")
+
+  /**
+   * Every alert channel, under one "Inbox alerts" group, so Android Settings lists them together
+   * from the moment alerts are turned on and a player can silence one kind. Safe to repeat: the
+   * system keeps any choice the player already made on an existing channel.
+   */
+  fun createChannels(context: Context) {
+    if (Build.VERSION.SDK_INT < 26) return
+    NativeSafety.run("alert channels") {
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      manager.createNotificationChannelGroup(NotificationChannelGroup(GROUP, GROUP_NAME))
+      ensureChannel(manager, CHANNEL, "Inbox activity", null)
+      CATEGORY_CHANNELS.forEach { (thread, name) -> ensureChannel(manager, "ahd-$thread", name, thread) }
+    }
+  }
+
+  private fun ensureChannel(manager: NotificationManager, id: String, name: String, thread: String?) {
+    if (Build.VERSION.SDK_INT < 26) return
+    val importance = if (thread == "crisis") NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT
+    manager.createNotificationChannel(NotificationChannel(id, name, importance).apply {
+      description = if (thread == null) "New activity in your A House Divided inbox." else "$name alerts from your A House Divided inbox."
+      group = GROUP
+    })
+  }
+
+  /** Takes alerts the player no longer needs off the shade. `matches` is asked each alert's page. */
+  fun clearShown(context: Context, matches: (String?) -> Boolean) {
+    NativeSafety.run("clear shown alerts") {
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      manager.activeNotifications.forEach { active ->
+        val href = active.notification.extras?.getString(HREF_EXTRA)
+        if (href != null && matches(href)) manager.cancel(active.tag, active.id)
+      }
+    }
+  }
+
   fun status(context: Context): JSONObject = synchronized(lock) {
     val state = read(context)
     val header = session()
@@ -84,6 +133,7 @@ object NativePush {
       NotificationManagerCompat.from(context).cancelAll()
     }
     save(context, state)
+    if (enabled) createChannels(context)
     if (!enabled && FirebaseApp.getApps(context).isNotEmpty()) {
       FirebaseMessaging.getInstance().isAutoInitEnabled = false
     }
@@ -243,33 +293,43 @@ object NativePush {
         // Servers before category threads send none; those alerts keep the original channel.
         val thread = data["thread"]?.takeIf { it in CATEGORY_CHANNELS }
         val channel = thread?.let { "ahd-$it" } ?: CHANNEL
-        if (Build.VERSION.SDK_INT >= 26) {
-          val name = thread?.let { CATEGORY_CHANNELS[it] } ?: "Inbox activity"
-          val importance = if (thread == "crisis") NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT
-          manager.createNotificationChannel(NotificationChannel(channel, name, importance).apply {
-            description = if (thread == null) "New activity in your A House Divided inbox." else "$name alerts from your A House Divided inbox."
-          })
-        }
+        val href = gamePath(data["href"]) ?: INBOX_PATH
+        // The player is reading this very page: no banner for it.
+        if (NativeSafety.get("alert hold back", false) { holdBack?.invoke(href) == true }) return@run
+        createChannels(context)
         val title = text(data["title"], 120) ?: "A House Divided"
         val body = text(data["body"], 400) ?: FALLBACK_BODY
         val subtitle = text(data["subtitle"], 120)
         // Each alert gets its own entry; a retried delivery of the same alert replaces itself.
         val id = data["id"]?.takeIf { Regex("[0-9a-f]{24}").matches(it) }?.hashCode() ?: NOTIFICATION_ID
         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return@run
-        intent.data = Uri.parse("ahdclient://page" + (gamePath(data["href"]) ?: "/notifications"))
+        intent.data = Uri.parse("ahdclient://page$href")
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pending = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val icon = context.resources.getIdentifier("ic_stat_ahd", "drawable", context.packageName)
         // A locked phone set to hide sensitive content shows only this.
         val hidden = NotificationCompat.Builder(context, channel).setSmallIcon(icon).setContentTitle("A House Divided")
           .setContentText(subtitle?.substringBefore(" \u00b7 ")?.let { "New $it alert" } ?: "New inbox activity").build()
+        val group = "ahd-${thread ?: "inbox"}"
+        // "Open inbox" goes to the inbox whatever page the alert itself is about.
+        val inboxIntent = Intent(intent).apply { data = Uri.parse("ahdclient://page$INBOX_PATH") }
+        val inbox = PendingIntent.getActivity(context, id xor 0x1b0c, inboxIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channel).setSmallIcon(icon)
           .setContentTitle(title).setContentText(body).setSubText(subtitle)
           .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-          .setGroup("ahd-${thread ?: "inbox"}")
+          .setGroup(group).addAction(0, "Open inbox", inbox).addExtras(Bundle().apply { putString(HREF_EXTRA, href) })
           .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true).setShowWhen(true)
           .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(hidden).build()
-        try { manager.notify(id, notification) } catch (_: SecurityException) { }
+        // One summary per group, so several alerts fold into a single entry that opens the inbox.
+        val summary = NotificationCompat.Builder(context, channel).setSmallIcon(icon)
+          .setContentTitle("A House Divided").setContentText("New inbox activity")
+          .setGroup(group).setGroupSummary(true).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+          .setContentIntent(inbox).setAutoCancel(true)
+          .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(hidden).build()
+        try {
+          manager.notify(id, notification)
+          manager.notify(group.hashCode(), summary)
+        } catch (_: SecurityException) { }
       }
     }
   }

@@ -111,6 +111,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private var inboxVisitedAt = 0L
   private var ticks = 0
   private var previewing = false
+  /** The game path on screen while the app is in front, for alerts: none is raised for the page being read. */
+  @Volatile private var viewingPath: String? = null
 
   // What the dock knows, all in memory: disk and network are read on worker threads only.
   private var identity: String? = null
@@ -237,6 +239,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     handler.removeCallbacks(follow)
     handler.removeCallbacks(fetch)
     handler.post(follow)
+    net.lakesidegames.briefing.NativePush.holdBack = { href -> AlertsPolicy.isViewing(href, viewingPath) }
+    handler.post { CompanionSafety.run("alerts viewing") { updateViewing() } }
     // Coming back to the app is a reason to look again, without waiting for the timer.
     handler.post { CompanionSafety.run("dock foreground refresh") { requestRefresh(force = true) } }
     handler.postDelayed(fetch, STATUS_INTERVAL_MS)
@@ -244,6 +248,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   }
 
   fun pause() {
+    viewingPath = null
     handler.removeCallbacks(follow)
     handler.removeCallbacks(fetch)
     dock.pause()
@@ -338,6 +343,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       "expanded" -> dock.setExpanded(true, animate = false)
       "state" -> dock.openMenu("state", animate = false)
       "more" -> dock.openMenu("more", animate = false)
+      // Design review only: the one-time sheet over the dock, buttons inert.
+      "alerts" -> NativeAlerts.present(activity, AlertsPolicy.Mode.ASK, preview = true)
     }
   }
 
@@ -364,6 +371,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       when {
         link.app == AppAction.BRIEFING -> { pendingTopLevel = null; webView.loadUrl("$LAUNCHER?screen=briefing") }
         link.app == AppAction.INBOX -> loadTopLevel("$site/notifications")
+        link.app == AppAction.ALERTS -> NativeAlerts.showManager(activity)
         link.app == AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
         link.app == AppAction.LAUNCHER -> { pendingTopLevel = null; webView.loadUrl(LAUNCHER) }
         // Wiki, Discord, Patreon, support mail: outside the game WebView, never loaded in it.
@@ -494,6 +502,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       // A new part of the game can mean a different state or company in the tabs; throttled to once a minute.
       handler.post { CompanionSafety.run("dock section refresh") { requestRefresh(force = false) } }
     }
+    updateViewing()
     if (inbox && !leftInbox) inboxVisitedAt = System.currentTimeMillis()
     if (!previewing) dock.showSelected(tabId)
     showStatus()
@@ -638,11 +647,31 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       if (snapshot != null) { statusNow = snapshot.first; inboxNow = snapshot.second }
       applyModel()
       showStatus()
+      CompanionSafety.run("alerts offer") { offerAlerts() }
     }
     if (refreshAgain) {
       refreshAgain = false
       requestRefresh(force = false)
     }
+  }
+
+  /** Records the page on screen and takes alerts about it off the shade. Main thread only. */
+  private fun updateViewing() {
+    val url = webView.url
+    val path = if (!previewing && pageOf(url) == Page.SITE) Uri.parse(url).let { u ->
+      (u.encodedPath ?: "/") + (u.encodedQuery?.let { "?$it" } ?: "")
+    } else null
+    viewingPath = path
+    if (path != null && !authPage) {
+      val context = activity.applicationContext
+      net.lakesidegames.briefing.NativePush.clearShown(context) { href -> AlertsPolicy.isViewing(href, path) }
+    }
+  }
+
+  /** The first signed-in status load on a game page is the moment to ask about alerts, once. */
+  private fun offerAlerts() {
+    if (previewing || !accountLive() || page != Page.SITE || statusNow == null) return
+    NativeAlerts.askOnce(activity, signedIn = true, statusLoaded = true, onGamePage = true)
   }
 
   /** Redraws the dock from the figures held in memory. Cheap; safe to call often. */

@@ -11,6 +11,7 @@ import android.graphics.Color
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -21,6 +22,18 @@ class MainActivity : TauriActivity() {
   private var nav: NativeNav? = null
   private var dockBack: OnBackPressedCallback? = null
   private var pendingDockPreview: String? = null
+  private var permissionAnswer: ((Boolean) -> Unit)? = null
+  private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val answer = permissionAnswer
+    permissionAnswer = null
+    if (answer != null) CompanionSafety.run("notification permission result") { answer(granted) }
+  }
+
+  /** The system's notification prompt (Android 13 and later); [answer] gets the player's choice. */
+  fun requestNotificationPermission(answer: (Boolean) -> Unit) {
+    permissionAnswer = answer
+    if (!CompanionSafety.run("notification permission request") { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) permissionAnswer = null
+  }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
@@ -85,7 +98,7 @@ class MainActivity : TauriActivity() {
       // builds only; a store build ignores the link, so no page or app can fake a dock.
       intent.data = null
       if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return
-      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "off") } ?: "collapsed"
+      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "off") } ?: "collapsed"
       applyDockPreview()
       return
     }

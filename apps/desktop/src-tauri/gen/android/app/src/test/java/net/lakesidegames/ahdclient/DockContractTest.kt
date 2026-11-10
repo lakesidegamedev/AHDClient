@@ -103,7 +103,7 @@ class DockContractTest {
   @Test fun theAppSectionLeadsMoreAndSitsBesideTheGameRows() {
     val sheet = player.withApp(true).sheets.getValue("more")
     assertEquals("Everything", sheet.title)
-    assertEquals(listOf("Briefing", "Inbox", "Ask", "Back to launcher"), sheet.sections.first().links.map { it.label })
+    assertEquals(listOf("Briefing", "Inbox", "Alerts", "Ask", "Back to launcher"), sheet.sections.first().links.map { it.label })
     assertTrue(sheet.sections.first().links.all { it.icon != null && it.icon!!.width == 11 && it.icon!!.height == 11 })
   }
 
