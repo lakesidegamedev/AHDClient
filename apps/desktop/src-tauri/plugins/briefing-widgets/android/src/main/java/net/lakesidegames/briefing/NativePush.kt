@@ -312,7 +312,7 @@ object NativePush {
           .setContentText(subtitle?.substringBefore(" \u00b7 ")?.let { "New $it alert" } ?: "New inbox activity").build()
         val group = "ahd-${thread ?: "inbox"}"
         // "Open inbox" goes to the inbox whatever page the alert itself is about.
-        val inboxIntent = Intent(intent).apply { data = Uri.parse("ahdclient://page$INBOX_PATH") }
+        val inboxIntent = Intent(intent).setData(Uri.parse("ahdclient://page$INBOX_PATH"))
         val inbox = PendingIntent.getActivity(context, id xor 0x1b0c, inboxIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channel).setSmallIcon(icon)
           .setContentTitle(title).setContentText(body).setSubText(subtitle)
