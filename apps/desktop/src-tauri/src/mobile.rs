@@ -9,7 +9,7 @@
 //! NativeNav.swift), which loads the launcher page directly; Android's system
 //! back button walks the same history.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -30,6 +30,17 @@ struct LauncherHome(Mutex<Option<Url>>);
 /// Generation counter for the account-link watcher so a second Link tap
 /// retires the first watcher instead of racing it.
 struct LinkWatch(AtomicU64);
+
+/// Set when a widget, alert or other link has chosen where the app opens, so
+/// "open into the game" leaves the player where that link sent them.
+struct LaunchLink(AtomicBool);
+
+/// Set once the webview starts any navigation to a remote page. If that
+/// happens before the launch check, someone else already chose the page.
+struct LeftLauncher(AtomicBool);
+
+/// Let a cold-launch link or alert land before deciding.
+const AUTO_OPEN_DELAY: Duration = Duration::from_millis(900);
 
 const LINK_POLL: Duration = Duration::from_millis(2500);
 const LINK_DEADLINE: Duration = Duration::from_secs(10 * 60);
@@ -163,6 +174,9 @@ pub(crate) fn navigate_main(app: &AppHandle, url: Url) -> Result<(), String> {
 
 pub(crate) fn open_widget_link(app: &AppHandle, url: &Url) {
   if url.scheme() != "ahdclient" { return; }
+  if !is_launcher_request(url) {
+    if let Some(flag) = app.try_state::<LaunchLink>() { flag.0.store(true, Ordering::SeqCst); }
+  }
   // `ahdclient://ask` opens the native Ask sheet (iOS delivers it here;
   // Android handles it in MainActivity).
   if url.host_str() == Some("ask") {
@@ -307,7 +321,12 @@ fn navigation_policy(app: &AppHandle, url: &Url) -> bool {
       tauri::async_runtime::spawn(async move { let _ = present_native_ask(app).await; });
       false
     }
-    MobileNavigationAction::InApp => true,
+    MobileNavigationAction::InApp => {
+      if !is_app_origin(url) && !is_frame_scheme(url) {
+        if let Some(flag) = app.try_state::<LeftLauncher>() { flag.0.store(true, Ordering::SeqCst); }
+      }
+      true
+    }
     MobileNavigationAction::External => {
       open_externally(app, url);
       false
@@ -372,6 +391,30 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     }
   }
   Ok(())
+}
+
+/// Take a signed-in player straight into the live game as the app starts,
+/// unless they turned that off, a link already chose the page, or they got
+/// somewhere on their own. Runs once per launch; the way back to the launcher
+/// is unchanged. Cookie reads happen on this worker, never the main thread.
+fn schedule_auto_open(app: &AppHandle) {
+  let app = app.clone();
+  tauri::async_runtime::spawn(async move {
+    tokio::time::sleep(AUTO_OPEN_DELAY).await;
+    if !crate::launch::open_game_on_start(&app) { return; }
+    let worker = app.clone();
+    let session = tauri::async_runtime::spawn_blocking(move || crate::briefing::session_header(&worker).ok())
+      .await.ok().flatten().unwrap_or_default();
+    let account = crate::launch::session_fingerprint(&session);
+    let link = app.state::<LaunchLink>().0.load(Ordering::SeqCst) || app.state::<LeftLauncher>().0.load(Ordering::SeqCst);
+    if !crate::launch::should_auto_open(true, account.is_some(), link) { return; }
+    let on_launcher = main_webview(&app).and_then(|view| view.url().map_err(|e| e.to_string())).map(|url| is_app_origin(&url)).unwrap_or(false);
+    if !on_launcher { return; }
+    let path = account.as_deref().and_then(|account| crate::launch::saved_game_path(&app, account)).unwrap_or_else(|| "/".into());
+    if let Ok(url) = format!("{ONLINE_URL}{path}").parse::<Url>() {
+      let _ = navigate_main(&app, url);
+    }
+  });
 }
 
 /// `target` is "live". The sandbox is desktop-only: it is a supporter perk
@@ -479,6 +522,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
   builder
     .manage(LauncherHome(Mutex::new(None)))
     .manage(LinkWatch(AtomicU64::new(0)))
+    .manage(LaunchLink(AtomicBool::new(false)))
+    .manage(LeftLauncher(AtomicBool::new(false)))
     .invoke_handler(tauri::generate_handler![
       get_push_status,
       configure_push,
@@ -493,9 +538,11 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       open_online_window,
       open_help_destination,
       open_ask_window,
+      crate::launch::set_open_game_on_start,
     ])
     .setup(|app| {
       create_main_window(app.handle())?;
+      schedule_auto_open(app.handle());
       Ok(())
     })
 }

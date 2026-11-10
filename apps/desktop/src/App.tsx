@@ -23,7 +23,7 @@ import {
   setStatisticsConsent,
 } from "./statisticsDelivery.js";
 import { SettingsMenu } from "./SettingsMenu.js";
-import { applySettings, readSettings, writeSettings } from "./settings.js";
+import { applySettings, readSettings, syncOpenGameOnStart, writeSettings } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
 import {
   cacheSingleplayerEntitlement,
@@ -138,7 +138,10 @@ export function App(): JSX.Element {
   );
   useEffect(() => {
     applySettings(settings);
-    if (mobile) return;
+    if (mobile) {
+      void syncOpenGameOnStart(settings.openGameOnStart);
+      return;
+    }
     void setStatisticsConsent(settings.shareStatistics)
       .then(() => flushStatistics())
       .catch(() => {});

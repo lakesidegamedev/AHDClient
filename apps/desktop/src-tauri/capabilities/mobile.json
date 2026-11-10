@@ -20,7 +20,8 @@
     "allow-submit-diagnostics",
     "allow-get-push-status",
     "allow-configure-push",
-    "allow-send-test-push"
+    "allow-send-test-push",
+    "allow-set-open-game-on-start"
   ],
   "webviews": [
     "main"

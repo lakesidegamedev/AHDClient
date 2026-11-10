@@ -278,6 +278,20 @@ do {
   check(kept.count <= DockLayoutCache.keep, "cache trimmed to \(DockLayoutCache.keep) (kept \(kept.count))")
 }
 
+// MARK: Last game page
+
+do {
+  let temp = FileManager.default.temporaryDirectory.appendingPathComponent("last-game-test-\(UUID().uuidString)", isDirectory: true)
+  defer { try? FileManager.default.removeItem(at: temp) }
+  check(LastGameStore.load(directory: temp) == nil, "no saved page at first")
+  LastGameStore.save(path: "/country/fr?tab=trade", account: "acct1", directory: temp)
+  check(LastGameStore.load(directory: temp)?.path == "/country/fr?tab=trade" && LastGameStore.load(directory: temp)?.account == "acct1", "page and session saved")
+  LastGameStore.save(path: "//evil.example/", account: "acct1", directory: temp)
+  check(LastGameStore.load(directory: temp)?.path == "/country/fr?tab=trade", "a protocol-relative path is refused")
+  LastGameStore.clear(directory: temp)
+  check(LastGameStore.load(directory: temp) == nil, "cleared with the session")
+}
+
 // MARK: The canned preview fixture
 
 check(DockFixture.layout.tabs.count == 5, "preview fixture decodes to 5 tabs")

@@ -282,6 +282,38 @@ enum DockLayoutCache {
   }
 }
 
+/// The last live game page the player read and the session that read it, so a
+/// signed-in launch can open straight back there (the Rust side reads this
+/// file; see launch.rs). Path and query only, never a host. Same directory and
+/// backup exclusion as the layout cache, and gone with the session.
+enum LastGameStore {
+  private struct Saved: Codable { var path: String; var account: String }
+  private static func file(_ directory: URL) -> URL { directory.appendingPathComponent("last-game.json") }
+
+  static func save(path: String, account: String, directory: URL = DockLayoutCache.defaultDirectory) {
+    guard path.utf8.count <= 300, path.hasPrefix("/"), !path.hasPrefix("//") else { return }
+    let current = load(directory: directory)
+    if current?.path == path && current?.account == account { return }
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    var url = file(directory)
+    guard let data = try? JSONEncoder().encode(Saved(path: path, account: account)) else { return }
+    do { try data.write(to: url, options: .atomic) } catch { return }
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? url.setResourceValues(values)
+  }
+
+  static func load(directory: URL = DockLayoutCache.defaultDirectory) -> (path: String, account: String)? {
+    guard let data = try? Data(contentsOf: file(directory)), data.count <= 4096,
+      let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return nil }
+    return (saved.path, saved.account)
+  }
+
+  static func clear(directory: URL = DockLayoutCache.defaultDirectory) {
+    try? FileManager.default.removeItem(at: file(directory))
+  }
+}
+
 // MARK: - Fetch
 
 enum DockLayoutClient {
