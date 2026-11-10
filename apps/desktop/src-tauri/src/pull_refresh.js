@@ -1,5 +1,5 @@
 // Pull down from the top of a remote page to reload it, as in Safari. Injected
-// on iOS only. WKWebView rubber-bands natively; this only watches the touches,
+// on iOS and Android. WKWebView rubber-bands natively; this only watches the touches,
 // never cancels them, and so cannot block scrolling. It stays out of the way of
 // anything that scrolls or pulls on its own: inner scroll containers that are
 // not at their top, form fields, canvases and maps, and elements marked

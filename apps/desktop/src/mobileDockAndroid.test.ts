@@ -211,3 +211,46 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(dock).not.toContain("indent = anyIcon");
   });
 });
+
+describe("Android loading bar and cannot-reach screen", () => {
+  const chrome = android("LoadChrome.kt");
+  const rules = android("LoadRules.kt");
+  const nav = android("NativeNav.kt");
+  const activity = android("MainActivity.kt");
+
+  it("wraps the client the WebView has and forwards all five wry overrides to it first", () => {
+    expect(nav).toContain("WebViewCompat.getWebViewClient(webView)");
+    expect(nav).toContain("WebViewFeature.GET_WEB_VIEW_CLIENT");
+    expect(nav).toContain("webView.setWebViewClient(LoadWatchingClient(current, chrome))");
+    expect(chrome).toContain("return inner.shouldInterceptRequest(view, request)");
+    expect(chrome).toContain("inner.shouldOverrideUrlLoading(view, request)");
+    expect(chrome).toContain("inner.onPageStarted(view, url, favicon)");
+    expect(chrome).toContain("inner.onPageFinished(view, url)");
+    expect(chrome).toContain("inner.onReceivedError(view, request, error)");
+    // The inner client runs before the screen decides anything, and the app replaces neither client.
+    expect(chrome.indexOf("inner.onReceivedError")).toBeLessThan(chrome.indexOf("LoadRules.showsError"));
+    expect(activity).not.toContain("setWebChromeClient");
+    expect(nav).not.toContain("setWebChromeClient");
+  });
+
+  it("keeps the dock's page tracking and Back history rules intact", () => {
+    expect(nav).toContain("private fun loadTopLevel(url: String)");
+    expect(nav).toContain("webView.clearHistory()");
+    expect(nav).toContain("fun rebuildDock()");
+    // The screen is a native view, never a page in the WebView, so it adds no history entry and no game URL.
+    expect(chrome).not.toContain("loadDataWithBaseURL");
+  });
+
+  it("uses the same words as the iPhone screen", () => {
+    expect(rules).toContain('TITLE = "Cannot reach the game"');
+    expect(rules).toContain('DETAIL = "Check your connection and try again."');
+    expect(rules).toContain('RETRY = "Retry"');
+    expect(rules).toContain('BACK = "Back to launcher"');
+  });
+
+  it("draws a 2 dp bar just above the dock and sits under it", () => {
+    expect(chrome).toContain("(2 * density).toInt()");
+    expect(nav.indexOf("content.addView(chrome")).toBeLessThan(nav.indexOf("content.addView(dock"));
+    expect(chrome).toContain("source.bottomMargin");
+  });
+});

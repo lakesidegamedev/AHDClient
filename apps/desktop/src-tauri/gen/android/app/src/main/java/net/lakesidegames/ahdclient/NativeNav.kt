@@ -96,6 +96,14 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     pendingTopLevelAt = android.os.SystemClock.elapsedRealtime()
     webView.loadUrl(url)
   }
+  /** Loading bar and the cannot-reach-the-game screen, drawn just under the dock. */
+  private val chrome = LoadChrome(activity, webView) { backToLauncher() }
+
+  private fun backToLauncher() {
+    pendingTopLevel = null
+    webView.loadUrl(LAUNCHER)
+  }
+
   private var page: Page? = null
   private var tabId: String? = null
   private var onInbox = false
@@ -149,6 +157,12 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
 
   fun attach() {
     val content = activity.findViewById<FrameLayout>(android.R.id.content) ?: return
+    if (chrome.parent == null) {
+      // Under the dock, over the page; it follows the WebView's margins (so it ends where the dock begins).
+      content.addView(chrome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+      webView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> CompanionSafety.run("load chrome layout") { chrome.syncTo(webView) } }
+      CompanionSafety.run("load watching client") { watchLoads() }
+    }
     if (dock.parent == null) {
       // A transparent overlay: only the dock surface takes touches.
       content.addView(dock, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -171,6 +185,17 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       CompanionSafety.run("dock user agent marker") { markUserAgent() }
     }
     ViewCompat.requestApplyInsets(webView)
+  }
+
+  /**
+   * Puts the loading bar and the cannot-reach screen in front of the client the WebView already has.
+   * That client (the app's navigation, request and script handling) is called first for everything.
+   */
+  private fun watchLoads() {
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_CLIENT)) return
+    val current = WebViewCompat.getWebViewClient(webView)
+    if (current is LoadWatchingClient) return
+    webView.setWebViewClient(LoadWatchingClient(current, chrome))
   }
 
   /**
