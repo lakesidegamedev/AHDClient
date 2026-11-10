@@ -9,14 +9,14 @@ const plist = read("../src-tauri/Info.ios.plist");
 const css = read("./launcher/launcher.css");
 
 describe("iPad enablement", () => {
-  it("targets iPhone and iPad for the app and iPhone only for the widget extension", () => {
+  it("targets iPhone and iPad for the app and the widget extension", () => {
     const families = [
       ...script.matchAll(/'TARGETED_DEVICE_FAMILY'\]?\s*(?:=>|=)\s*'([^']+)'/g),
     ].map((m) => m[1]);
-    expect(families).toEqual(["1,2", "1"]);
+    expect(families).toEqual(["1,2", "1,2"]);
     expect(script).toMatch(/\['base'\]\['TARGETED_DEVICE_FAMILY'\] = '1,2'/);
     expect(script).toMatch(
-      /'SKIP_INSTALL' => 'YES',\s*'TARGETED_DEVICE_FAMILY' => '1'/,
+      /'SKIP_INSTALL' => 'YES',\s*'TARGETED_DEVICE_FAMILY' => '1,2'/,
     );
   });
 
@@ -78,5 +78,14 @@ describe("iOS appearance", () => {
     expect(script).toContain('launchScreen="YES"');
     expect(script).toContain('red="0.0784313725" green="0.0784313725" blue="0.1098039216"');
     expect(script).toContain("props['UILaunchScreen'] = { 'UIColorName' => 'LaunchBackground' }");
+  });
+
+  it("offers extra large Overview and Stocks widgets and no text under 9 pt", () => {
+    const widgets = read("../src-tauri/ios-widgets/AHDWidgets.swift");
+    expect(widgets.match(/\.systemExtraLarge\]/g)?.length).toBe(2);
+    expect(widgets).toContain("private var extraLargeLayout");
+    expect(widgets).not.toMatch(/\.font\(\.system\(size: [0-8],/);
+    const nav = read("../src-tauri/plugins/briefing-widgets/ios/Sources/NativeNav.swift");
+    expect(nav).toContain("guard figures != widgetFigures else { return }");
   });
 });

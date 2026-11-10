@@ -235,7 +235,7 @@ private struct TrendChart: View {
           Spacer(minLength: 0)
           Text(scale(low))
         }
-        .font(.system(size: 7, weight: .medium)).monospacedDigit()
+        .font(.system(size: 9, weight: .medium)).monospacedDigit()
         .foregroundColor(Palette.cream.opacity(0.6)).lineLimit(1).padding(.vertical, 2)
       }
     }
@@ -281,7 +281,9 @@ struct BriefingWidgetView: View {
 
   private var data: BriefingStatus? { entry.saved?.data }
   private var isSmall: Bool { family == .systemSmall }
-  private var isLarge: Bool { family == .systemLarge }
+  private var isExtraLarge: Bool { family == .systemExtraLarge }
+  /// Large and extra large share the roomy type sizes.
+  private var isLarge: Bool { family == .systemLarge || isExtraLarge }
 
   private var accessory: Accessory? {
     if #available(iOSApplicationExtension 16.0, *) {
@@ -622,7 +624,7 @@ struct BriefingWidgetView: View {
       VStack(alignment: .leading, spacing: 1) {
         Text(title).font(.system(size: isSmall ? 13 : 15, weight: .semibold, design: .serif))
           .foregroundColor(Palette.cream).lineLimit(1).minimumScaleFactor(0.7)
-        Text(subtitle.uppercased()).font(.system(size: 8, weight: .semibold)).tracking(0.5)
+        Text(subtitle.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.5)
           .foregroundColor(accent).lineLimit(1)
       }
       Spacer(minLength: 2)
@@ -631,7 +633,7 @@ struct BriefingWidgetView: View {
   }
 
   private func label(_ text: String) -> some View {
-    Text(text.uppercased()).font(.system(size: 8, weight: .medium)).tracking(0.4)
+    Text(text.uppercased()).font(.system(size: 9, weight: .medium)).tracking(0.4)
       .foregroundColor(Palette.cream.opacity(0.55)).lineLimit(1)
   }
 
@@ -749,9 +751,9 @@ struct BriefingWidgetView: View {
           Circle().fill(Palette.gain.opacity(0.85)).frame(width: 4, height: 4)
           Text(saved.updatedAt, style: .relative).multilineTextAlignment(.trailing)
         }.frame(maxWidth: 76, alignment: .trailing)
-      }.font(.system(size: 8, weight: .medium)).foregroundColor(Palette.cream.opacity(0.5)).lineLimit(1)
+      }.font(.system(size: 9, weight: .medium)).foregroundColor(Palette.cream.opacity(0.5)).lineLimit(1)
     } else {
-      Text("TAP TO OPEN").font(.system(size: 8, weight: .bold)).tracking(0.5).foregroundColor(Palette.gold.opacity(0.8))
+      Text("TAP TO OPEN").font(.system(size: 9, weight: .bold)).tracking(0.5).foregroundColor(Palette.gold.opacity(0.8))
     }
   }
 
@@ -772,7 +774,7 @@ struct BriefingWidgetView: View {
       VStack(alignment: .leading, spacing: 1) {
         Text(row.title).font(.system(size: 11, weight: .semibold)).foregroundColor(Palette.cream).lineLimit(1)
         if !compact {
-          Text(row.detail.uppercased()).font(.system(size: 7, weight: .medium)).tracking(0.4)
+          Text(row.detail.uppercased()).font(.system(size: 9, weight: .medium)).tracking(0.4)
             .foregroundColor(Palette.cream.opacity(0.5)).lineLimit(1)
         }
       }
@@ -899,6 +901,35 @@ struct BriefingWidgetView: View {
     }
   }
 
+  /// iPad only: two columns, the hero and chart on the left, figures and rows on the right.
+  private var extraLargeLayout: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      header
+      rule
+      HStack(alignment: .top, spacing: 18) {
+        VStack(alignment: .leading, spacing: 8) {
+          if section == "overview" { countdownHero } else if let hero = hero { heroView(hero) }
+          if chartValues.count >= 2 { chart(height: 96, scaled: true) }
+          if section != "stocks", !figures.isEmpty, chartValues.count < 2 {
+            figureGrid(Array(figures.prefix(6)))
+          }
+          Spacer(minLength: 0)
+        }.frame(maxWidth: .infinity, alignment: .topLeading)
+        VStack(alignment: .leading, spacing: 8) {
+          if section != "stocks", !figures.isEmpty, chartValues.count >= 2 {
+            label("Green and red: change per turn")
+            figureGrid(Array(figures.prefix(6)))
+          }
+          if !rows.isEmpty {
+            rowList(limit: section == "stocks" ? 8 : 4, compact: section != "stocks", titled: true)
+          }
+          Spacer(minLength: 0)
+        }.frame(maxWidth: .infinity, alignment: .topLeading)
+      }
+      footer
+    }
+  }
+
   private var emptyLayout: some View {
     VStack(alignment: .leading, spacing: 8) {
       header
@@ -915,6 +946,8 @@ struct BriefingWidgetView: View {
       emptyLayout
     } else if isSmall {
       smallLayout
+    } else if isExtraLarge {
+      extraLargeLayout
     } else if isLarge {
       largeLayout
     } else {
@@ -1053,7 +1086,7 @@ struct AHDOverviewWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "AHDOverview", provider: BriefingProvider()) { BriefingWidgetView(entry: $0, section: "overview") }
       .configurationDisplayName("AHD Overview").description("Next turn countdown, actions, inbox and mail, funds, influence and favorability with their change per turn, and the latest turn's changes.")
-      .supportedFamilies(families([.systemMedium, .systemLarge], inline: true))
+      .supportedFamilies(families([.systemMedium, .systemLarge, .systemExtraLarge], inline: true))
   }
 }
 struct AHDProfileWidget: Widget {
@@ -1081,7 +1114,7 @@ struct AHDStocksWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "AHDStocks", provider: BriefingProvider()) { BriefingWidgetView(entry: $0, section: "stocks") }
       .configurationDisplayName("AHD Stocks").description("Quotes and holding values for the companies you own shares in.")
-      .supportedFamilies(families([.systemSmall, .systemMedium, .systemLarge]))
+      .supportedFamilies(families([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge]))
   }
 }
 

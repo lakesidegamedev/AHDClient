@@ -28,8 +28,8 @@ app['settings'] ||= {}
 app['settings']['base'] ||= {}
 app['settings']['base']['AHD_WIDGET_KEYCHAIN_GROUP'] = keychain
 # iPhone and iPad (1,2). Shipping the iPad family is irreversible: a version that
-# has shipped with it can never drop it. The widget extension below stays
-# iPhone only ('1'); an iPad app may embed an iPhone-only extension.
+# has shipped with it can never drop it. The widget extension below also targets
+# iPhone and iPad so the widgets can be added on an iPad Home Screen.
 app['settings']['base']['TARGETED_DEVICE_FAMILY'] = '1,2'
 app['settings']['configs'] ||= {}
 app['settings']['configs']['debug'] ||= {}
@@ -65,7 +65,7 @@ spec['targets']['AHDWidgets'] = {
       'PRODUCT_NAME' => 'AHDWidgets',
       'PRODUCT_BUNDLE_IDENTIFIER' => 'net.lakesidegames.ahdclient.widgets',
       'SWIFT_VERSION' => '5.0', 'SKIP_INSTALL' => 'YES',
-      'TARGETED_DEVICE_FAMILY' => '1',
+      'TARGETED_DEVICE_FAMILY' => '1,2',
       'APPLICATION_EXTENSION_API_ONLY' => 'YES',
       'CODE_SIGN_STYLE' => 'Automatic'
     }
