@@ -420,10 +420,30 @@ fn launcher_script(dir: &std::path::Path) -> Result<PathBuf, String> {
 /// would only be needed for a supervisor that stopped answering its pipe.
 const STOP_TIMEOUT: Duration = Duration::from_secs(20);
 
-fn stop_locked(inner: &mut GameInner) {
+/// A world taken out of the shared state, still shutting down. Holding the
+/// world lease here keeps the same world from being opened again until its
+/// database has finished writing.
+struct Stopping {
+  child: Option<CommandChild>,
+  exited: Option<Arc<AtomicBool>>,
+  _lease: Option<File>,
+}
+
+/// Clears the running world from the shared state and hands back what still
+/// has to be shut down. Quick: the slow wait happens in `wait_stopped`, off
+/// the lock.
+fn detach_locked(inner: &mut GameInner) -> Stopping {
   inner.generation = inner.generation.wrapping_add(1);
-  let exited = inner.exited.take();
-  if let Some(mut child) = inner.child.take() {
+  let stopping = Stopping { child: inner.child.take(), exited: inner.exited.take(), _lease: inner.world_lease.take() };
+  inner.port = None;
+  inner.slot = None;
+  inner.hosted = false;
+  stopping
+}
+
+fn wait_stopped(stopping: Stopping) {
+  let Stopping { child, exited, .. } = stopping;
+  if let Some(mut child) = child {
     // Ask the Node supervisor to stop its server and MongoDB first. A direct
     // kill terminates only the supervisor and can strand the world processes.
     if child.write(b"shutdown\n").is_ok() {
@@ -441,10 +461,16 @@ fn stop_locked(inner: &mut GameInner) {
       let _ = child.kill();
     }
   }
-  inner.port = None;
-  inner.slot = None;
-  inner.hosted = false;
-  inner.world_lease = None;
+}
+
+fn stop_locked(inner: &mut GameInner) {
+  wait_stopped(detach_locked(inner));
+}
+
+/// True while a world is running, which is when closing the window has to
+/// save first.
+pub(crate) fn world_running(app: &AppHandle) -> bool {
+  app.try_state::<Game>().and_then(|g| g.0.lock().ok().map(|i| i.child.is_some())).unwrap_or(false)
 }
 
 fn acquire_world_lease(home: &std::path::Path) -> Result<File, String> {
@@ -461,14 +487,21 @@ pub(crate) fn game_status(game: State<'_, Game>) -> Result<GameInfo, String> {
 }
 
 #[tauri::command]
-pub(crate) async fn game_stop(app: AppHandle, game: State<'_, Game>) -> Result<GameInfo, String> {
+pub(crate) async fn game_stop(app: AppHandle, game: State<'_, Game>, quit: Option<bool>) -> Result<GameInfo, String> {
   if let Some(view) = app.get_webview("game-embedded") { let _ = view.close(); }
   if let Some(window) = app.get_webview_window("game") {
     let _ = window.close();
   }
-  let mut inner = game.0.lock().map_err(|_| "game state poisoned")?;
-  stop_locked(&mut inner);
-  Ok(inner.info())
+  let stopping = detach_locked(&mut game.0.lock().map_err(|_| "game state poisoned")?);
+  // The wait can take many seconds: do it on a blocking thread and outside
+  // the lock so status checks and the UI keep answering.
+  tauri::async_runtime::spawn_blocking(move || wait_stopped(stopping))
+    .await
+    .map_err(|e| format!("stopping the world failed: {e}"))?;
+  if quit == Some(true) {
+    app.exit(0);
+  }
+  Ok(game.0.lock().map_err(|_| "game state poisoned")?.info())
 }
 
 /// Start the local game for a world slot. Resolves once the server says it is
@@ -1378,9 +1411,17 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     ])
     .on_window_event(|window, event| {
       if let WindowEvent::CloseRequested { api, .. } = event {
-        if window.label() == "main" && crate::tray::keep_running(window.app_handle()) {
-          api.prevent_close();
-          let _ = window.hide();
+        if window.label() == "main" {
+          if crate::tray::keep_running(window.app_handle()) {
+            // The world keeps running behind the tray icon.
+            api.prevent_close();
+            let _ = window.hide();
+          } else if world_running(window.app_handle()) {
+            // Never drop a running world mid-write: the launcher saves, then
+            // asks Rust to stop it and quit.
+            api.prevent_close();
+            let _ = window.emit("app:close-requested", ());
+          }
         }
       }
       if window.label() == "main" && matches!(event, WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }) {

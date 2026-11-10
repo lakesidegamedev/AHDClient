@@ -413,6 +413,11 @@ describe("GameToolbar", () => {
         });
         expect(screen.queryByRole("status", { name: "Running turn" })).toBeNull();
         expect(screen.getByText("Played 3 of 5 turns. A vote is waiting for you.", { selector: "small" })).toBeTruthy();
+        expect(screen.queryByText(/Campaign funds/)).toBeNull();
+        await act(async () => {
+          screen.getByRole("button", { name: "Summary" }).click();
+        });
+        expect(screen.getByRole("dialog", { name: "Turn summary" })).toBeTruthy();
         expect(screen.getByText(/Campaign funds \+750, actions -6/)).toBeTruthy();
         expect(screen.getByText(/Legislation: 2/)).toBeTruthy();
         expect(screen.getByText("Turn 12: New leader")).toBeTruthy();

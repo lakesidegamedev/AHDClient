@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { game } from "./worlds.js";
 import { UpdateChip } from "./UpdateChip.js";
+import { useDialog } from "./useDialog.js";
 import type { BatchDigest, SingleplayerStatus, TurnBatch } from "./worlds.js";
 
 /** Turn counts the End turn control offers in a normal world. */
@@ -21,6 +22,8 @@ interface Props {
   /** Worldsim only: return to the world statistics screen. */
   onViewStats?: (() => void) | undefined;
   onTurnAdvanced?: (turn: number) => void;
+  /** Tells the shell a toolbar dialog is open, so it can hide the embedded game view. */
+  onDialogOpenChange?: ((open: boolean) => void) | undefined;
 }
 
 interface TurnState {
@@ -71,12 +74,15 @@ function batchLine(batch: TurnBatch): string {
   return batch.stop && batch.stop.kind !== "requested" ? `${played}. ${batch.stop.message}` : `${played}.`;
 }
 
-function BatchDigestPanel({ batch, onDismiss }: { batch: TurnBatch; onDismiss: () => void }): JSX.Element {
+/** The batch digest as a dialog, so it is never trapped inside the 48 px strip or hidden under the game view. */
+function BatchDigestDialog({ batch, onClose, onDismiss }: { batch: TurnBatch; onClose: () => void; onDismiss: () => void }): JSX.Element {
   const digest: BatchDigest | null = batch.digest;
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialog(dialogRef, onClose);
   return (
-    <details className="client-toolbar-digest">
-      <summary>Summary</summary>
-      <div role="region" aria-label="Turn summary">
+    <div className="client-settings-backdrop" role="presentation">
+      <section ref={dialogRef} className="client-diagnostic-dialog client-toolbar-digest" role="dialog" aria-modal="true" aria-labelledby="turn-summary-title">
+        <h2 id="turn-summary-title">Turn summary</h2>
         <p><b>{batchLine(batch)}</b></p>
         {batch.stop && batch.stop.details.length > 0 && (
           <ul>
@@ -120,9 +126,12 @@ function BatchDigestPanel({ batch, onDismiss }: { batch: TurnBatch; onDismiss: (
             )}
           </>
         )}
-        <button type="button" onClick={onDismiss}>Dismiss</button>
-      </div>
-    </details>
+        <div>
+          <button className="secondary" type="button" onClick={onDismiss}>Dismiss</button>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -145,6 +154,7 @@ export function GameToolbar({
   onOpenUpdates,
   onViewStats,
   onTurnAdvanced,
+  onDialogOpenChange,
 }: Props): JSX.Element {
   const [turnState, setTurnState] = useState<TurnState | null>(null);
   const [availability, setAvailability] = useState<"open" | "sealed" | null>(null);
@@ -155,6 +165,7 @@ export function GameToolbar({
   const [turnError, setTurnError] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState<number>(1);
   const [batch, setBatch] = useState<TurnBatch | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   /** Guards the interval against overlapping reads on a slow local server. */
   const refreshing = useRef(false);
   const lastTurn = useRef<number | null>(null);
@@ -207,6 +218,11 @@ export function GameToolbar({
 
   const advancedRef = useRef(onTurnAdvanced);
   advancedRef.current = onTurnAdvanced;
+  const summaryShown = summaryOpen && batch != null && batch.status !== "running";
+  useEffect(() => {
+    onDialogOpenChange?.(summaryShown);
+    return () => { if (summaryShown) onDialogOpenChange?.(false); };
+  }, [summaryShown, onDialogOpenChange]);
   const batchRunning = batch?.status === "running";
   const batchId = batch?.id ?? null;
 
@@ -411,7 +427,12 @@ export function GameToolbar({
         </button>
       )}
       {batch && !batchRunning && <small className="client-toolbar-briefing" role="status" title={batchLine(batch)}>{batchLine(batch)}</small>}
-      {batch && !batchRunning && <BatchDigestPanel batch={batch} onDismiss={() => setBatch(null)} />}
+      {batch && !batchRunning && (
+        <button type="button" className="client-toolbar-quiet" onClick={() => setSummaryOpen(true)}>Summary</button>
+      )}
+      {batch && !batchRunning && summaryOpen && (
+        <BatchDigestDialog batch={batch} onClose={() => setSummaryOpen(false)} onDismiss={() => { setSummaryOpen(false); setBatch(null); }} />
+      )}
       {turnBriefing && <small className="client-toolbar-briefing" role="status" title={turnBriefing}>{turnBriefing}</small>}
       {headOfState && (
         <small
