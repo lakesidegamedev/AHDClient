@@ -12,18 +12,18 @@
             android:orientation="horizontal" android:gravity="center_vertical">
             <TextView android:id="@+id/briefing_monogram" android:layout_width="30dp" android:layout_height="30dp"
                 android:background="@drawable/briefing_monogram" android:gravity="center" android:textColor="@color/briefing_cream"
-                android:textSize="11sp" android:textStyle="bold" android:fontFamily="serif" android:maxLines="1" />
+                android:textSize="11sp" android:textStyle="bold" android:fontFamily="sans-serif-medium" android:maxLines="1" />
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
                 android:layout_marginStart="8dp" android:orientation="vertical">
                 <TextView android:id="@+id/briefing_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:textColor="@color/briefing_cream" android:textStyle="bold" android:textSize="15sp" android:fontFamily="serif"
+                    android:textColor="@color/briefing_cream" android:textStyle="bold" android:textSize="15sp" android:fontFamily="sans-serif-medium"
                     android:maxLines="1" android:ellipsize="end" />
                 <TextView android:id="@+id/briefing_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.06" android:textAllCaps="true"
                     android:maxLines="1" android:ellipsize="end" />
             </LinearLayout>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp"
-                android:text="@string/widget_brand" android:textColor="#B3F7F0DB" android:textSize="10sp" android:textStyle="bold" android:fontFamily="serif" />
+                android:text="@string/widget_brand" android:textColor="#B3F7F0DB" android:textSize="10sp" android:textStyle="bold" android:fontFamily="sans-serif-medium" />
         </LinearLayout>
         <FrameLayout android:layout_width="match_parent" android:layout_height="1px"
             android:layout_marginTop="6dp" android:background="@color/briefing_rule" />
