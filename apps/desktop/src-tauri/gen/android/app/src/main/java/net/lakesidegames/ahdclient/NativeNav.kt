@@ -83,6 +83,18 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   val dock = NativeDock(activity, this)
   private val handler = Handler(Looper.getMainLooper())
   private var lastGameUrl: String? = null
+
+  // A top level dock destination being loaded. Once it is showing, the history
+  // before it is cleared so Back goes within the section, then leaves the app.
+  private var pendingTopLevel: String? = null
+  private var pendingTopLevelAt = 0L
+
+  /** Loads a game page the dock treats as a top level destination (no new Back step). */
+  private fun loadTopLevel(url: String) {
+    pendingTopLevel = url
+    pendingTopLevelAt = android.os.SystemClock.elapsedRealtime()
+    webView.loadUrl(url)
+  }
   private var page: Page? = null
   private var tabId: String? = null
   private var onInbox = false
@@ -270,11 +282,11 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     CompanionSafety.run("dock ${tab.label}") {
       val site = siteOrigin()
       when {
-        tab.app == AppAction.BRIEFING -> if (!again) webView.loadUrl("$LAUNCHER?screen=briefing")
+        tab.app == AppAction.BRIEFING -> if (!again) { pendingTopLevel = null; webView.loadUrl("$LAUNCHER?screen=briefing") }
         tab.app == AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
         // Back to the page the player was last reading; tapping Game again goes to the site's home page.
-        tab.id == "app-game" -> webView.loadUrl(if (again) "$site/" else lastGameUrl ?: "$site/")
-        tab.href != null -> DockModel.safePath(tab.href)?.let { webView.loadUrl(site + it) }
+        tab.id == "app-game" -> loadTopLevel(if (again) "$site/" else lastGameUrl ?: "$site/")
+        tab.href != null -> DockModel.safePath(tab.href)?.let { loadTopLevel(site + it) }
       }
     }
   }
@@ -284,13 +296,13 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     CompanionSafety.run("dock link ${link.id}") {
       val site = siteOrigin()
       when {
-        link.app == AppAction.BRIEFING -> webView.loadUrl("$LAUNCHER?screen=briefing")
-        link.app == AppAction.INBOX -> webView.loadUrl("$site/notifications")
+        link.app == AppAction.BRIEFING -> { pendingTopLevel = null; webView.loadUrl("$LAUNCHER?screen=briefing") }
+        link.app == AppAction.INBOX -> loadTopLevel("$site/notifications")
         link.app == AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
-        link.app == AppAction.LAUNCHER -> webView.loadUrl(LAUNCHER)
+        link.app == AppAction.LAUNCHER -> { pendingTopLevel = null; webView.loadUrl(LAUNCHER) }
         // Wiki, Discord, Patreon, support mail: outside the game WebView, never loaded in it.
         link.external -> openExternal(link.href)
-        else -> DockModel.safePath(link.href)?.let { webView.loadUrl(site + it) }
+        else -> DockModel.safePath(link.href)?.let { loadTopLevel(site + it) }
       }
     }
   }
@@ -362,9 +374,21 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     }
   }
 
+  /** Clears Back history the first tick the awaited top level page is showing, never earlier (it would clear the page being loaded). */
+  private fun clearHistoryWhenReached(url: String?) {
+    val target = pendingTopLevel ?: return
+    if (DockRouting.reachedTopLevel(target, url)) {
+      pendingTopLevel = null
+      webView.clearHistory()
+    } else if (android.os.SystemClock.elapsedRealtime() - pendingTopLevelAt > DockRouting.TOP_LEVEL_WAIT_MS) {
+      pendingTopLevel = null
+    }
+  }
+
   private fun followPage() {
     val url = webView.url
     val now = pageOf(url) ?: return
+    clearHistoryWhenReached(url)
     val uri = if (now == Page.SITE) Uri.parse(url) else null
     val path = uri?.path
     if (now == Page.SITE) lastGameUrl = url
