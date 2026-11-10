@@ -59,6 +59,8 @@ vi.mock("./worlds.js", () => ({
         }
       : undefined,
   slugForWorld: () => "test-world",
+  uniqueWorldName: (base: string) => base,
+  ERAS: [],
 }));
 vi.mock("./statisticsDelivery.js", () => mocks.stats);
 vi.mock("./SettingsMenu.js", () => ({
@@ -83,13 +85,16 @@ vi.mock("./SettingsMenu.js", () => ({
 vi.mock("./launcher/Launcher.js", () => ({
   Launcher: ({
     onNewWorld,
+    onQuickStart,
     error,
   }: {
     onNewWorld: (era: string, worldsim?: boolean) => void;
+    onQuickStart: (era: string) => void;
     error: string | null;
   }) => (
     <main>
       <button onClick={() => onNewWorld("1953")}>New world</button>
+      <button onClick={() => onQuickStart("1953")}>Quick start</button>
       {error && <p role="alert">{error}</p>}
     </main>
   ),
@@ -124,7 +129,15 @@ vi.mock("./screens/NewWorldScreen.js", () => ({
 }));
 vi.mock("./screens/WorldsScreen.js", () => ({ WorldsScreen: () => null }));
 vi.mock("./screens/BootScreen.js", () => ({
-  BootScreen: ({ onCancel }: { onCancel: () => void }) => <main><p>Booting</p><button onClick={onCancel}>Cancel loading</button></main>,
+  BootScreen: ({ onCancel, failure, onRetry, onBack }: { onCancel: () => void; failure?: { message: string } | null; onRetry?: () => void; onBack: () => void }) => (
+    <main>
+      <p>Booting</p>
+      {failure && <p role="alert">{failure.message}</p>}
+      {onRetry && <button onClick={onRetry}>Try again</button>}
+      <button onClick={onBack}>Back to launcher from boot</button>
+      <button onClick={onCancel}>Cancel loading</button>
+    </main>
+  ),
 }));
 vi.mock("./screens/PlayingScreen.js", () => ({
   PlayingScreen: () => <p>Playing</p>,
@@ -302,7 +315,7 @@ describe("App singleplayer integration", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
     expect((await screen.findByRole("alert", {}, { timeout: 3_000 })).textContent)
-      .toContain("stopped reporting progress");
+      .toContain("stopped making progress");
     expect(screen.getByRole("dialog", { name: "Report this problem?" })).toBeTruthy();
   });
 
@@ -455,5 +468,74 @@ describe("App singleplayer integration", () => {
     expect(screen.getByRole("button", { name: "Create" })).toBeTruthy();
     expect(mocks.game.start).not.toHaveBeenCalled();
     expect(mocks.worlds.create).not.toHaveBeenCalled();
+  });
+  it("keeps a failed start on the boot screen and starts it again on Try again", async () => {
+    prepare();
+    mocks.game.setup.mockRejectedValueOnce(new Error("setup failed")).mockResolvedValue({ ok: true });
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "New world" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("setup failed");
+    expect(screen.getByText("Booting")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(mocks.game.openWindow).toHaveBeenCalledWith("/create-character", false));
+    expect(mocks.game.start).toHaveBeenCalledTimes(2);
+    expect(mocks.worlds.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("quick start creates a world with the game defaults and skips setup", async () => {
+    prepare();
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Quick start" }));
+    await waitFor(() =>
+      expect(mocks.worlds.create).toHaveBeenCalledWith(
+        "test-world",
+        "1953",
+        "1953-default",
+        expect.objectContaining({ mode: "normal", difficulty: "normal", autonomyLevel: "v6" }),
+        false,
+      ),
+    );
+    await waitFor(() => expect(mocks.game.openWindow).toHaveBeenCalledWith("/create-character", false));
+  });
+
+  it("links the account in place and carries on with the same era", async () => {
+    prepare();
+    let linked = false;
+    mocks.online.link.mockImplementation(async () => {
+      linked = true;
+    });
+    mocks.online.account.mockImplementation(async () =>
+      linked
+        ? { linked: true, displayName: "Ada", supporter: false, singleplayer: { entitled: true, expiresAt: new Date(Date.now() + 60_000).toISOString() } }
+        : null,
+    );
+    mocks.game.closeEmbedded.mockResolvedValue(undefined);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "Quick start" }));
+    expect(mocks.online.link).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.worlds.create).toHaveBeenCalled());
+    expect(mocks.worlds.create.mock.calls[0]?.[2]).toBe("1953-default");
+  });
+
+  it("offers a restart when the world stops by itself", async () => {
+    prepare({ ...normalStatus, hasCharacter: true, characterName: "Ada" });
+    mocks.worlds.list.mockResolvedValue([{ slot: "test-world", name: "Test world", preset: "1953-default" }]);
+    const handlers: Record<string, (event: { payload: { line: string } }) => void> = {};
+    mocks.listen.mockImplementation(async (name: string, cb: (event: { payload: { line: string } }) => void) => {
+      handlers[name] = cb;
+      return vi.fn();
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "New world" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(mocks.game.openWindow).toHaveBeenCalledWith("/profile", false));
+    await waitFor(() => expect(mocks.game.status).toHaveBeenCalled());
+    act(() => handlers["game:exited"]?.({ payload: { line: "game exited with code Some(137)" } }));
+    expect(await screen.findByText(/may have run out of memory/)).toBeTruthy();
+    mocks.game.start.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "Restart world" }));
+    await waitFor(() => expect(mocks.game.start).toHaveBeenCalled());
   });
 });

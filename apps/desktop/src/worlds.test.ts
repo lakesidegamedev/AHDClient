@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ERAS, eraById, eraForPreset, slugForWorld } from "./worlds.js";
+import { ERAS, eraById, eraForPreset, slugForWorld, uniqueWorldName } from "./worlds.js";
 
 describe("eras", () => {
   it("includes the incoming 2027 game seed", () => {
@@ -36,5 +36,16 @@ describe("slugForWorld", () => {
 
   it("keeps slots short enough for any filesystem", () => {
     expect(slugForWorld("x".repeat(200), []).length).toBeLessThanOrEqual(48);
+  });
+});
+
+describe("uniqueWorldName", () => {
+  it("keeps a free name", () => {
+    expect(uniqueWorldName("2027", [])).toBe("2027");
+  });
+  it("numbers a taken name, ignoring case", () => {
+    expect(uniqueWorldName("2027", ["2027"])).toBe("2027 2");
+    expect(uniqueWorldName("2027", ["2027", "2027 2"])).toBe("2027 3");
+    expect(uniqueWorldName("Cold War", ["cold war"])).toBe("Cold War 2");
   });
 });

@@ -81,6 +81,8 @@ interface Props {
   onClassicEra?: (eraId: string) => void;
   onPhotoSource?: (eraId: string) => void;
   onNewWorld: (eraId: string, worldsim?: boolean) => void;
+  /** Start the chosen era now with the recommended settings, skipping setup. */
+  onQuickStart?: (eraId: string) => void;
   onContinue: (slot: string) => void;
   onLoad: () => void;
   onPlayOnline: (target: OnlineTarget) => void;
@@ -133,6 +135,7 @@ export function Launcher({
   onClassicEra,
   onPhotoSource,
   onNewWorld,
+  onQuickStart,
   onContinue,
   onLoad,
   onPlayOnline,
@@ -455,6 +458,16 @@ export function Launcher({
                     {choosingEra ? (de ? "Neues Spiel starten" : "Start new game") : (de ? "Neues Spiel" : "New Game")}{" "}
                   <span aria-hidden="true">&#8594;</span>
                 </button>
+                {choosingEra && mode === "sp" && onQuickStart && (
+                  <button
+                    className="launcher-btn launcher-btn-secondary"
+                    onClick={() => onQuickStart(eraId)}
+                    disabled={continueBusy}
+                    title={de ? "Startet sofort mit den empfohlenen Einstellungen" : "Starts right away with the recommended settings"}
+                  >
+                    {de ? "Schnellstart" : "Quick start"}
+                  </button>
+                )}
                 {!choosingEra && (
                   <button
                     className="launcher-btn launcher-btn-secondary"

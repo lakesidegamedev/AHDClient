@@ -172,4 +172,6 @@ export const gameRuntime = {
     }
   },
   bundledInfo: () => invoke<BundledGameInfo>("bundled_game_info"),
+  /** Fetch the database program in the background. True when a download happened. */
+  warmRuntime: () => invoke<boolean>("warm_runtime"),
 };

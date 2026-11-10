@@ -255,6 +255,16 @@ export function eraForPreset(
  * Directory-safe slot from a display name, unique among the slots taken.
  * "Cold War, 1953" becomes "cold-war-1953", then "cold-war-1953-2" if needed.
  */
+/** A world name not already used: "1953", then "1953 2", "1953 3". */
+export function uniqueWorldName(base: string, taken: readonly string[]): string {
+  const used = new Set(taken.map((name) => name.trim().toLowerCase()));
+  if (!used.has(base.trim().toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const candidate = `${base} ${n}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
 export function slugForWorld(name: string, taken: readonly string[]): string {
   const base =
     name

@@ -114,6 +114,31 @@
   );
   animation: boot-progress-sheen 1.8s ease-in-out infinite;
 }
+.boot-progress.indeterminate span {
+  width: 35%;
+  transition: none;
+  animation: boot-progress-slide 1.6s ease-in-out infinite;
+}
+.boot-elapsed {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.boot-failure {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgb(225 38 48 / 45%);
+  border-radius: 10px;
+  background: rgb(225 38 48 / 8%);
+}
+.boot-failure span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+@keyframes boot-progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
 .boot-progress-labels {
   display: flex;
   justify-content: space-between;

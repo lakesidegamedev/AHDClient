@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BootScreen } from './BootScreen.js';
 
 afterEach(cleanup);
@@ -48,5 +49,36 @@ describe('BootScreen', () => {
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
       '100',
     );
+  });
+
+  it('shows an indeterminate bar, not an invented percent, before real progress', () => {
+    render(<BootScreen {...base} lines={['[ahd] one', '[ahd] two']} />);
+    const bar = screen.getByRole('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBeNull();
+    expect(bar.className).toContain('indeterminate');
+    expect(screen.getByText(/Time so far 0:00/)).toBeTruthy();
+  });
+
+  it('names the first-run database download', () => {
+    render(<BootScreen {...base} lines={['[ahd] MongoDB download: 30%']} />);
+    expect(screen.getByText('Downloading the database')).toBeTruthy();
+    expect(screen.getByText(/First time only. 30% done./)).toBeTruthy();
+  });
+
+  it('keeps the player on a retry screen after a failure', async () => {
+    const onRetry = vi.fn();
+    render(
+      <BootScreen
+        {...base}
+        failure={{ message: 'The game exited before it was ready:\nstack line one' }}
+        onRetry={onRetry}
+        onBack={() => {}}
+      />,
+    );
+    expect(screen.getByRole('alert').textContent).toContain('The game exited before it was ready:');
+    expect(screen.getByText('Details')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 });
