@@ -8,6 +8,8 @@
     "windows"
   ],
   "permissions": [
+    "allow-get-tray-settings",
+    "allow-set-keep-in-tray",
     "allow-get-push-status",
     "allow-configure-push",
     "allow-send-test-push",

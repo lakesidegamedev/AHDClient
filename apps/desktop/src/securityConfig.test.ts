@@ -312,6 +312,8 @@ describe("desktop security configuration", () => {
       "game-back",
       "game-forward",
       "game-zoom",
+      "get-tray-settings",
+      "set-keep-in-tray",
     ]) {
       expect(identifiers).toContain(`allow-${command}`);
       expect(

@@ -4,6 +4,7 @@ import { GameVersionSetting } from "./GameVersionBar.js";
 import { PushControl } from "./PushControl.js";
 import { AUTOSAVE_CHOICES } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
+import { TrayControl } from "./TrayControl.js";
 import { UpdateControl } from "./UpdateControl.js";
 import { useDialog } from "./useDialog.js";
 import "./settings.css";
@@ -92,6 +93,7 @@ function SettingsDialog({ mobile = false, settings, onChange, onClose, onReportI
           </Section>
           <Section id="client-settings-notifications" title={de ? "Benachrichtigungen" : "Notifications"}>
             <PushControl mobile={mobile} onOpenedPage={onClose} />
+            {!mobile && <TrayControl />}
           </Section>
           {!mobile && (
             <Section id="client-settings-game" title={de ? "Einzelspieler" : "Singleplayer"}>

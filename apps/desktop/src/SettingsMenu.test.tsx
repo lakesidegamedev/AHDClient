@@ -12,6 +12,10 @@ vi.mock("./PushControl.js", () => ({
   PushControl: ({ mobile = true }: { mobile?: boolean }) => <p>{mobile ? "Push notifications" : "Desktop alerts"}</p>,
 }));
 
+vi.mock("./TrayControl.js", () => ({
+  TrayControl: () => <p>Keep running in the tray when I close the window</p>,
+}));
+
 describe("SettingsMenu", () => {
   afterEach(cleanup);
 

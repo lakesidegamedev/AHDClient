@@ -31,6 +31,8 @@ mod briefing;
 #[cfg_attr(desktop, allow(dead_code))]
 mod launch;
 mod links;
+#[cfg(desktop)]
+mod tray;
 mod native_auth;
 mod webview_cookies;
 

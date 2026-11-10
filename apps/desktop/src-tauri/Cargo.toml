@@ -45,6 +45,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-deep-link = "2"
+tauri = { version = "2", features = ["unstable", "tray-icon"] }
 flate2 = "1"
 fs2 = "0.4"
 tar = "0.4"

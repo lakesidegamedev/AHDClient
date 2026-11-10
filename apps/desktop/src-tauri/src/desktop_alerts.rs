@@ -94,6 +94,7 @@ fn save(app: &AppHandle, saved: &Saved) -> Result<(), String> {
   std::fs::write(&temporary, serde_json::to_vec(saved).map_err(|_| "Cannot save alert settings.")?)
     .and_then(|_| std::fs::rename(&temporary, &path)).map_err(|_| "Cannot save alert settings.".into())
 }
+pub(crate) fn alerts_enabled(app: &AppHandle) -> bool { read(app).enabled != Some(false) }
 fn fingerprint(header: &str) -> String {
   Sha256::digest(header.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -227,6 +228,8 @@ pub(crate) async fn configure_push(app: AppHandle, enabled: bool) -> Result<serd
   } else {
     set_message(&app, false, "Desktop alerts are off.");
   }
+  #[cfg(desktop)]
+  crate::tray::refresh_alerts_label(&app);
   Ok(status(&app))
 }
 

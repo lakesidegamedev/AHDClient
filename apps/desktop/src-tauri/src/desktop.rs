@@ -1264,7 +1264,7 @@ pub(crate) fn select_game_version(app: AppHandle, game: State<'_, Game>, version
 // Wiring
 // ---------------------------------------------------------------------------
 
-fn show_main_window(app: &AppHandle) {
+pub(crate) fn show_main_window(app: &AppHandle) {
   if let Some(window) = app.get_window("main") {
     let _ = window.unminimize();
     let _ = window.show();
@@ -1313,8 +1313,10 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
     .manage(crate::desktop_alerts::AlertState::default())
+    .manage(crate::tray::TrayState::default())
     .setup(|app| {
       crate::desktop_alerts::start(app.handle());
+      crate::tray::setup(app.handle());
       setup_deep_links(app.handle());
       app.set_menu(build_menu(app.handle())?)?;
       Ok(())
@@ -1327,6 +1329,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       crate::desktop_alerts::get_push_status,
       crate::desktop_alerts::configure_push,
       crate::desktop_alerts::send_test_push,
+      crate::tray::get_tray_settings,
+      crate::tray::set_keep_in_tray,
       crate::briefing::get_briefing,
       crate::briefing::open_briefing_page,
       crate::briefing::open_game_page,
@@ -1373,6 +1377,12 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       update_install_kind,
     ])
     .on_window_event(|window, event| {
+      if let WindowEvent::CloseRequested { api, .. } = event {
+        if window.label() == "main" && crate::tray::keep_running(window.app_handle()) {
+          api.prevent_close();
+          let _ = window.hide();
+        }
+      }
       if window.label() == "main" && matches!(event, WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }) {
         if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
           let logical = size.to_logical::<f64>(scale);
