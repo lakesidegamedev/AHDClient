@@ -1,4 +1,4 @@
-import { FEATURE_OPTIONS, type FeatureFlagKey } from "./featureOptions.js";
+import { legacyCapabilities, type Capabilities } from "../capabilities.js";
 
 /** Values accepted by the singleplayer setup route. */
 export type SetupMode = "normal" | "head-of-state" | "worldsim";
@@ -16,27 +16,53 @@ export interface SetupOptions {
   mode: SetupMode;
   difficulty: SetupDifficulty;
   autonomyLevel: SetupAutonomy;
-  featureFlags: Record<FeatureFlagKey, boolean>;
+  featureFlags: Record<string, boolean>;
 }
 
 export const SETUP_OPTIONS_STORAGE_KEY = "ahdclient.lastSetup.v1";
 
-export function defaultFeatureFlags(): Record<FeatureFlagKey, boolean> {
-  return Object.fromEntries(FEATURE_OPTIONS.map((option) => [option.key, option.defaultValue])) as Record<FeatureFlagKey, boolean>;
+export function defaultFeatureFlags(capabilities: Capabilities = legacyCapabilities()): Record<string, boolean> {
+  return Object.fromEntries(capabilities.featureFlags.map((flag) => [flag.key, flag.defaultEnabled]));
 }
 
 /**
- * The default new world. Autonomy is v6 (NPP engine 6), which is also what the
- * game's setup route falls back to for new local worlds since 2026-10-14. The
- * live multiplayer world is unaffected and stays on its own setting.
+ * The default new world. Autonomy is v6 (NPP engine 6) for the legacy table; a
+ * runtime that reports its own default wins. The live multiplayer world is
+ * unaffected and stays on its own setting.
  */
-export function defaultSetupOptions(): SetupOptions {
-  return { mode: "normal", difficulty: "normal", autonomyLevel: "v6", featureFlags: defaultFeatureFlags() };
+export function defaultSetupOptions(capabilities: Capabilities = legacyCapabilities()): SetupOptions {
+  return {
+    mode: "normal",
+    difficulty: "normal",
+    autonomyLevel: capabilities.defaultAutonomyLevel as SetupAutonomy,
+    featureFlags: defaultFeatureFlags(capabilities),
+  };
+}
+
+/**
+ * Keep only what the runtime knows. Unknown flags are dropped, missing flags
+ * take the runtime default, and a mode, difficulty or autonomy tier the runtime
+ * does not offer falls back to its default. Used for stored preferences and
+ * again right before a world is created, so only known keys are ever sent.
+ */
+export function filterSetupToCapabilities(setup: SetupOptions, capabilities: Capabilities): SetupOptions {
+  const fallback = defaultSetupOptions(capabilities);
+  const featureFlags: Record<string, boolean> = { ...fallback.featureFlags };
+  for (const flag of capabilities.featureFlags) {
+    const value = setup.featureFlags[flag.key];
+    if (typeof value === "boolean") featureFlags[flag.key] = value;
+  }
+  return {
+    mode: capabilities.modes.includes(setup.mode) ? setup.mode : fallback.mode,
+    difficulty: capabilities.difficulties.includes(setup.difficulty) ? setup.difficulty : fallback.difficulty,
+    autonomyLevel: capabilities.autonomyLevels.includes(setup.autonomyLevel) ? setup.autonomyLevel : fallback.autonomyLevel,
+    featureFlags,
+  };
 }
 
 /** Read the last setup safely. Invalid or stale local storage falls back per field. */
-export function readSetupOptions(): SetupOptions {
-  const fallback = defaultSetupOptions();
+export function readSetupOptions(capabilities: Capabilities = legacyCapabilities()): SetupOptions {
+  const fallback = defaultSetupOptions(capabilities);
   if (typeof localStorage === "undefined") return fallback;
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(SETUP_OPTIONS_STORAGE_KEY) ?? "null");
@@ -47,12 +73,12 @@ export function readSetupOptions(): SetupOptions {
     const autonomyLevel: SetupAutonomy = value.autonomyLevel === "off" || /^v[0-6]$/.test(String(value.autonomyLevel)) ? value.autonomyLevel as SetupAutonomy : fallback.autonomyLevel;
     const flags = { ...fallback.featureFlags };
     if (value.featureFlags && typeof value.featureFlags === "object") {
-      for (const option of FEATURE_OPTIONS) {
+      for (const option of capabilities.featureFlags) {
         const flag = (value.featureFlags as Record<string, unknown>)[option.key];
         if (typeof flag === "boolean") flags[option.key] = flag;
       }
     }
-    return { mode, difficulty, autonomyLevel, featureFlags: flags };
+    return filterSetupToCapabilities({ mode, difficulty, autonomyLevel, featureFlags: flags }, capabilities);
   } catch {
     return fallback;
   }

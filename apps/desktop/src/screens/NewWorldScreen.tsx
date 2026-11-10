@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Era } from "../worlds.js";
 import { themeForEra } from "../launcher/CommandGlobe.js";
 import type { SetupAutonomy, SetupDifficulty, SetupMode, SetupOptions } from "./setupOptions.js";
-import { readSetupOptions, writeSetupOptions } from "./setupOptions.js";
-import { FEATURE_OPTIONS, type FeatureFlagKey } from "./featureOptions.js";
+import { filterSetupToCapabilities, readSetupOptions, writeSetupOptions } from "./setupOptions.js";
+import { FEATURE_OPTIONS } from "./featureOptions.js";
+import { legacyCapabilities, type Capabilities, type CapabilityFlag } from "../capabilities.js";
 import type { ClientLanguage } from "../i18n.js";
 
 export type { SetupOptions } from "./setupOptions.js";
@@ -11,6 +12,8 @@ export type { SetupOptions } from "./setupOptions.js";
 interface Props {
   language?: ClientLanguage;
   era: Era;
+  /** What the game runtime supports. Absent means the older client-side table. */
+  capabilities?: Capabilities | undefined;
   taken: readonly string[];
   onBack: () => void;
   /** The third argument is optional for existing callers while they migrate. */
@@ -106,6 +109,7 @@ const DIFFICULTIES: readonly DifficultyOption[] = [
 export function NewWorldScreen({
   language = "en",
   era,
+  capabilities,
   taken,
   onBack,
   onCreate,
@@ -117,7 +121,8 @@ export function NewWorldScreen({
 }: Props): JSX.Element {
   const de = language === "de";
   const [name, setName] = useState(`${era.subtitle}, ${era.label}`);
-  const [savedSetup] = useState(readSetupOptions);
+  const caps = useMemo(() => capabilities ?? legacyCapabilities(), [capabilities]);
+  const [savedSetup] = useState(() => readSetupOptions(caps));
   /**
    * A stored "worldsim" is a leftover from the Worldsim tab, not a choice for
    * this screen: singleplayer setup opens on Normal unless Worldsim asked for
@@ -130,6 +135,11 @@ export function NewWorldScreen({
   const [autonomyLevel, setAutonomyLevel] = useState<SetupAutonomy>(savedSetup.autonomyLevel);
   const selectedDifficulty: DifficultyOption =
     DIFFICULTIES.find((option) => option.value === difficulty) ?? NORMAL_DIFFICULTY;
+  const autonomyOptions = AUTONOMY_OPTIONS.filter((option) => caps.autonomyLevels.includes(option.value));
+  const difficultyOptions = DIFFICULTIES.filter((option) => caps.difficulties.includes(option.value));
+  const hasMode = (value: SetupMode) => caps.modes.includes(value);
+  const eraPreset = caps.presets.find((preset) => preset.preset === era.preset);
+  const presidentOnly = caps.source === "manifest" && eraPreset?.playerCountries.length === 1 && eraPreset.playerCountries[0]!.name === "United States";
   const autonomyControl = (option: (typeof AUTONOMY_OPTIONS)[number]) => (
     <label key={option.value}>
       <input
@@ -146,7 +156,7 @@ export function NewWorldScreen({
       <small>{option.description}</small>
     </label>
   );
-  const [featureFlags, setFeatureFlags] = useState<Record<FeatureFlagKey, boolean>>(savedSetup.featureFlags);
+  const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>(savedSetup.featureFlags);
   const [localShareStatistics, setLocalShareStatistics] = useState(true);
   const duplicate = taken.some((existing) => existing.trim().toLowerCase() === name.trim().toLowerCase());
   const theme = themeForEra(era.id);
@@ -162,7 +172,9 @@ export function NewWorldScreen({
     onStatisticsChange?.(next);
   };
 
-  const featureGroups = ["World systems", "Politics", "Economy", "Player systems"] as const;
+  const featureGroups = ["World systems", "Politics", "Economy", "Player systems", "More settings"] as const;
+  const categoryOf = (flag: CapabilityFlag): string =>
+    FEATURE_OPTIONS.find((option) => option.key === flag.key)?.category ?? "More settings";
   /**
    * The onboarding checklist is player UI: with no character in Worldsim it
    * has nothing to attach to. Hidden in that mode with a note, but still
@@ -170,16 +182,17 @@ export function NewWorldScreen({
    * Every other flag drives the shared turn loop and applies to Worldsim too.
    */
   const visibleFeatures = (category: (typeof featureGroups)[number]) =>
-    FEATURE_OPTIONS.filter(
+    caps.featureFlags.filter(
       (option) =>
-        option.category === category &&
+        categoryOf(option) === category &&
         !(worldsim && option.key === "onboardingChecklistEnabled"),
     );
-  const featureControl = (option: (typeof FEATURE_OPTIONS)[number]) => (
+  const advancedFeatures = caps.featureFlags.filter((option) => categoryOf(option) === "Advanced world settings");
+  const featureControl = (option: CapabilityFlag) => (
     <label className="screen-feature" key={option.key}>
       <input
         type="checkbox"
-        checked={featureFlags[option.key]}
+        checked={featureFlags[option.key] ?? option.defaultEnabled}
         onChange={(event) => setFeatureFlags((current) => ({ ...current, [option.key]: event.target.checked }))}
       />
       <span><strong>{option.label}</strong><small>{option.description}</small></span>
@@ -213,9 +226,9 @@ export function NewWorldScreen({
           <div className="screen-section-heading"><span>01</span><div><h2 id="campaign-options-title">{de ? "Deine Kampagne" : "Your campaign"}</h2><p>{de ? "Benenne die Welt und wähle deinen Einstieg." : "Name the world and choose how you enter it."}</p></div></div>
           <fieldset className="screen-choice-group">
             <legend>{de ? "Spielmodus" : "Play mode"}</legend>
-            <label><input type="radio" name="play-mode" value="normal" checked={mode === "normal"} onChange={() => setMode("normal")} /> <strong>Normal</strong><small>Climb from citizen to power through a character in the world.</small></label>
-            <label><input type="radio" name="play-mode" value="head-of-state" checked={mode === "head-of-state"} onChange={() => setMode("head-of-state")} /> <strong>Permanent head of state <span className="client-beta">Beta</span></strong><small>You enter as head of state and remain head of state. You do not play the normal climb.</small></label>
-            <label><input type="radio" name="play-mode" value="worldsim" checked={worldsim} onChange={() => setMode("worldsim")} /> <strong>Worldsim <span className="client-beta">Beta</span></strong><small>Simulate the world without creating a character.</small></label>
+            {hasMode("normal") && <label><input type="radio" name="play-mode" value="normal" checked={mode === "normal"} onChange={() => setMode("normal")} /> <strong>Normal</strong><small>Climb from citizen to power through a character in the world.</small></label>}
+            {hasMode("head-of-state") && <label><input type="radio" name="play-mode" value="head-of-state" checked={mode === "head-of-state"} onChange={() => setMode("head-of-state")} /> <strong>Permanent head of state <span className="client-beta">Beta</span></strong><small>{presidentOnly ? "Start as President of the United States and stay in office. You do not play the normal climb." : "You enter as head of state and remain head of state. You do not play the normal climb."}</small></label>}
+            {hasMode("worldsim") && <label><input type="radio" name="play-mode" value="worldsim" checked={worldsim} onChange={() => setMode("worldsim")} /> <strong>Worldsim <span className="client-beta">Beta</span></strong><small>Simulate the world without creating a character.</small></label>}
           </fieldset>
           </section>
 
@@ -225,7 +238,7 @@ export function NewWorldScreen({
           <section className="screen-setup-panel" aria-labelledby="simulation-options-title">
           <div className="screen-section-heading"><span>02</span><div><h2 id="simulation-options-title">Simulation</h2><p>{de ? "Lege Schwierigkeit und politische Autonomie fest." : "Set the challenge and political autonomy."}</p></div></div>
           <div className="screen-field-group">
-            <label className="screen-field"><span>Difficulty</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as SetupDifficulty)}>{DIFFICULTIES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label className="screen-field"><span>Difficulty</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as SetupDifficulty)}>{difficultyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             <small>{DIFFICULTY_HELP}</small>
             <small>{selectedDifficulty.description}</small>
             <small>{selectedDifficulty.skill}</small>
@@ -234,17 +247,19 @@ export function NewWorldScreen({
           <fieldset className="screen-choice-group">
             <legend>Autonomy</legend>
             <small>{AUTONOMY_HELP}</small>
-            {AUTONOMY_OPTIONS.filter((option) => !OLD_AUTONOMY.includes(option.value)).map(autonomyControl)}
-            <details>
-              <summary>Older autonomy tiers</summary>
-              {AUTONOMY_OPTIONS.filter((option) => OLD_AUTONOMY.includes(option.value)).map(autonomyControl)}
-            </details>
+            {autonomyOptions.filter((option) => !OLD_AUTONOMY.includes(option.value)).map(autonomyControl)}
+            {autonomyOptions.some((option) => OLD_AUTONOMY.includes(option.value)) && (
+              <details>
+                <summary>Older autonomy tiers</summary>
+                {autonomyOptions.filter((option) => OLD_AUTONOMY.includes(option.value)).map(autonomyControl)}
+              </details>
+            )}
           </fieldset>
           </section>
 
           <section className="screen-features screen-setup-panel" aria-labelledby="feature-settings-title">
             <div className="screen-section-heading"><span>03</span><div><h2 id="feature-settings-title">World systems</h2><p>Fine-tune the mechanics active in this save.</p></div></div>
-            {featureGroups.map((category) => (
+            {featureGroups.filter((category) => visibleFeatures(category).length > 0).map((category) => (
               <fieldset key={category} className="screen-feature-group">
                 <legend>{category}</legend>
                 {visibleFeatures(category).map(featureControl)}
@@ -253,10 +268,12 @@ export function NewWorldScreen({
             {worldsim && (
               <small>Onboarding checklist is hidden here: Worldsim has no player to onboard. It stays as stored.</small>
             )}
-            <details>
-              <summary>Advanced world settings</summary>
-              <div className="screen-feature-list">{FEATURE_OPTIONS.filter((option) => option.category === "Advanced world settings").map(featureControl)}</div>
-            </details>
+            {advancedFeatures.length > 0 && (
+              <details>
+                <summary>Advanced world settings</summary>
+                <div className="screen-feature-list">{advancedFeatures.map(featureControl)}</div>
+              </details>
+            )}
           </section>
 
           <label className="screen-consent">
@@ -279,9 +296,9 @@ export function NewWorldScreen({
             </p>
           )}
           <div className="screen-launch-bar">
-            <p className="launcher-caption">{worldsim ? "This mode opens the world simulator after setup and does not create a character." : "Character creation happens in the game after the world starts."}<small>Seeds thirty countries · about one minute</small></p>
+            <p className="launcher-caption">{worldsim ? "This mode opens the world simulator after setup and does not create a character." : "Character creation happens in the game after the world starts."}{caps.source === "legacy" && <small>Seeds thirty countries · about one minute</small>}</p>
             <div className="launcher-actions">
-              <button className="launcher-btn launcher-btn-primary" onClick={() => onCreate(name, "", { mode, difficulty, autonomyLevel, featureFlags })} disabled={!name.trim()}>Create and play <span aria-hidden="true">&#8594;</span></button>
+              <button className="launcher-btn launcher-btn-primary" onClick={() => onCreate(name, "", filterSetupToCapabilities({ mode, difficulty, autonomyLevel, featureFlags }, caps))} disabled={!name.trim()}>Create and play <span aria-hidden="true">&#8594;</span></button>
             </div>
           </div>
         </div>

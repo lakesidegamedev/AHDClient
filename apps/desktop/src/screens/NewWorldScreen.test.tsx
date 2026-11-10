@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { NewWorldScreen } from "./NewWorldScreen.js";
 import type { Era } from "../worlds.js";
 import { SETUP_OPTIONS_STORAGE_KEY } from "./setupOptions.js";
+import { resolveCapabilities } from "../capabilities.js";
 
 vi.mock("../launcher/CommandGlobe.js", () => ({ themeForEra: () => ({ phosphor: "#0f0" }) }));
 
@@ -204,5 +205,33 @@ describe("NewWorldScreen", () => {
       "nppOffensiveJoinEnabled",
     ];
     expect(FEATURE_OPTIONS.map((option) => option.key).sort()).toEqual([...bundled].sort());
+  });
+});
+
+describe("NewWorldScreen with a runtime manifest", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.removeItem(SETUP_OPTIONS_STORAGE_KEY);
+  });
+
+  const caps = resolveCapabilities({
+    schemaVersion: 1,
+    defaultPreset: "2027-default",
+    presets: [{ preset: "1953-default", era: "1953", seedable: true, playerCountries: [{ id: "US", name: "United States" }], computerCountries: [], backgroundCountries: [] }],
+    modes: ["normal", "head-of-state"],
+    difficulties: ["normal"],
+    autonomyLevels: ["v5", "v6"],
+    defaultAutonomyLevel: "v6",
+    featureFlags: [{ key: "forexEnabled", label: "Foreign exchange", description: "Currency.", defaultEnabled: true }],
+  });
+
+  it("sends only keys the runtime knows and drops stale stored ones", async () => {
+    localStorage.setItem(SETUP_OPTIONS_STORAGE_KEY, JSON.stringify({ mode: "worldsim", difficulty: "hard", autonomyLevel: "v3", featureFlags: { forexEnabled: false, coldWarEnabled: true } }));
+    const onCreate = vi.fn();
+    render(<NewWorldScreen era={era} capabilities={caps} taken={[]} onBack={vi.fn()} onCreate={onCreate} />);
+    expect(screen.queryByRole("radio", { name: /Worldsim/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: /Start as President of the United States/ })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Create and play/ }));
+    expect(onCreate.mock.calls[0]?.[2]).toEqual({ mode: "normal", difficulty: "normal", autonomyLevel: "v6", featureFlags: { forexEnabled: false } });
   });
 });
