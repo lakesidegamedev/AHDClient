@@ -427,6 +427,7 @@ describe("iOS dock preview fixture", () => {
   it("uses no em or en dashes in any dock source", () => {
     for (const file of [
       "NativeNav.swift",
+      "NativeLoad.swift",
       "NativeDock.swift",
       "NativeDockCore.swift",
       "NativeDockModel.swift",
@@ -436,5 +437,39 @@ describe("iOS dock preview fixture", () => {
     ]) {
       expect(read(file)).not.toMatch(/[–—]/);
     }
+  });
+});
+
+describe("iOS load feedback contract", () => {
+  const load = read("NativeLoad.swift");
+  const nav = read("NativeNav.swift");
+  const dockFile = read("NativeDock.swift");
+
+  it("wraps wry's navigation delegate and forwards to it", () => {
+    expect(load).toContain("final class NativeLoadDelegate: NSObject, WKNavigationDelegate");
+    expect(load).toContain("let proxy = NativeLoadDelegate(inner: webview.navigationDelegate)");
+    expect(load).toContain("forwardingTarget(for aSelector: Selector!)");
+    expect(load).toContain("inner?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)");
+    expect(load).toContain("inner?.webView?(webView, didFinish: navigation)");
+    // The proxy observes loads; it must never answer a navigation policy itself.
+    expect(load).not.toContain("decidePolicyFor");
+  });
+
+  it("ignores cancelled loads and only reports game pages", () => {
+    expect(load).toContain("NSURLErrorCancelled");
+    expect(load).toContain("NativeNavController.gameHosts.contains");
+  });
+
+  it("offers Retry and Back to launcher on the screen", () => {
+    expect(load).toContain('"Cannot reach the game"');
+    expect(load).toContain('"Retry"');
+    expect(load).toContain('"Back to launcher"');
+    expect(load).toContain("estimatedProgress");
+  });
+
+  it("is installed by the nav host and has an offline preview state", () => {
+    expect(nav).toContain("loadView.install(in: host, webView: webView, above: slot.topAnchor)");
+    expect(nav).toContain('state == "offline"');
+    expect(dockFile).toContain('"offline"');
   });
 });

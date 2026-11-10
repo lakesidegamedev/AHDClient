@@ -20,7 +20,7 @@ for kind in iPhone iPad; do
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1
   xcrun simctl ui "$udid" appearance light
   xcrun simctl install "$udid" "$app" || continue
-  for state in collapsed expanded sheet more signedout; do
+  for state in collapsed expanded sheet more signedout offline; do
     xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1
     xcrun simctl launch "$udid" "$bundle" -AHDDockPreview "$state" >/dev/null
     sleep 26
