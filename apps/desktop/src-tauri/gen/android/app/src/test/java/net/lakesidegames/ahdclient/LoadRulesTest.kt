@@ -7,6 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LoadRulesTest {
+  init { TestTexts.install() }
+
   private val url = "https://ahousedividedgame.com/country/fr"
 
   @Test fun showsTheScreenForTheGamePageWhenThereIsNoConnection() {

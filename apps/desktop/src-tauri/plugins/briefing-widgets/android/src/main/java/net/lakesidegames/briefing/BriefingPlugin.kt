@@ -146,7 +146,7 @@ class BriefingPlugin(private val activity: Activity) : Plugin(activity), Applica
 
   private fun statusSafely(): JSONObject = NativeSafety.get("push status", JSONObject()
     .put("enabled", false).put("permissionGranted", false).put("available", false)
-    .put("registered", false).put("message", "Push is unavailable in this build.")) {
+    .put("registered", false).put("message", T.s(R.string.push_status_build))) {
     NativePush.status(activity)
   }
 }

@@ -108,12 +108,11 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
       if (links.isEmpty()) null else if (links.size == section.links.size) section else DockSection(section.id, section.title, links)
     }
     val sections = listOf(appSection(signedIn)) + game
-    val merged = sheets + ("more" to DockSheet(existing?.title ?: MORE_LABEL, sections))
+    val merged = sheets + ("more" to DockSheet(existing?.title ?: Texts.s(R.string.dock_more), sections))
     return DockModel(tabs, merged, fromGame)
   }
 
   companion object {
-    const val MORE_LABEL = "More"
     const val APP_SECTION_ID = "app"
     private const val APP_SECTION_TITLE = "App"
     private const val DUPLICATE_INBOX_ID = "notifications"
@@ -258,11 +257,11 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
 
     fun appSection(signedIn: Boolean): DockSection {
       val links = ArrayList<DockLink>()
-      links.add(DockLink("app-briefing", "Briefing", null, BRIEFING_ICON, AppAction.BRIEFING))
-      if (signedIn) links.add(DockLink("app-inbox", "Inbox", null, INBOX_ICON, AppAction.INBOX))
-      if (signedIn) links.add(DockLink("app-alerts", "Alerts", null, ALERTS_ICON, AppAction.ALERTS))
-      links.add(DockLink("app-ask", "Ask", null, ASK_ICON, AppAction.ASK))
-      links.add(DockLink("app-launcher", "Back to launcher", null, LAUNCHER_ICON, AppAction.LAUNCHER))
+      links.add(DockLink("app-briefing", Texts.s(R.string.dock_briefing), null, BRIEFING_ICON, AppAction.BRIEFING))
+      if (signedIn) links.add(DockLink("app-inbox", Texts.s(R.string.dock_inbox), null, INBOX_ICON, AppAction.INBOX))
+      if (signedIn) links.add(DockLink("app-alerts", Texts.s(R.string.dock_alerts), null, ALERTS_ICON, AppAction.ALERTS))
+      links.add(DockLink("app-ask", Texts.s(R.string.dock_ask), null, ASK_ICON, AppAction.ASK))
+      links.add(DockLink("app-launcher", Texts.s(R.string.dock_launcher), null, LAUNCHER_ICON, AppAction.LAUNCHER))
       return DockSection(APP_SECTION_ID, APP_SECTION_TITLE, links)
     }
 
@@ -272,10 +271,10 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
      */
     fun fallback(signedIn: Boolean): DockModel {
       val tabs = listOf(
-        DockTab("app-game", "Game", GAME_ICON, href = "/", activePrefixes = listOf("/")),
-        DockTab("app-briefing", "Briefing", BRIEFING_ICON, app = AppAction.BRIEFING),
-        DockTab("app-ask", "Ask", ASK_ICON, app = AppAction.ASK),
-        DockTab("app-more", "More", MORE_ICON, sheet = "more"),
+        DockTab("app-game", Texts.s(R.string.dock_game), GAME_ICON, href = "/", activePrefixes = listOf("/")),
+        DockTab("app-briefing", Texts.s(R.string.dock_briefing), BRIEFING_ICON, app = AppAction.BRIEFING),
+        DockTab("app-ask", Texts.s(R.string.dock_ask), ASK_ICON, app = AppAction.ASK),
+        DockTab("app-more", Texts.s(R.string.dock_more), MORE_ICON, sheet = "more"),
       )
       return DockModel(tabs, emptyMap(), fromGame = false).withApp(signedIn)
     }

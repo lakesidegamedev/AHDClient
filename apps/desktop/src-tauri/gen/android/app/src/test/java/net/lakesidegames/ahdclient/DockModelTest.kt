@@ -9,6 +9,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DockModelTest {
+  init { TestTexts.install() }
+
   private val icon = """{"name":"x","grid":["010","111","010"]}"""
 
   private fun tab(id: String, extra: String) = """{"id":"$id","label":"Tab $id","icon":$icon$extra}"""

@@ -142,7 +142,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
             linkError = ""
           } else {
             phase = AskPhase.UNAVAILABLE
-            unavailableMessage = if (!online()) "You're offline. Ask will be ready when you reconnect."
+            unavailableMessage = if (!online()) T.s(R.string.ask_offline_ready)
               else askPlayerMessage(failure)
           }
           chrome()
@@ -260,7 +260,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
         post("Ask delete failure") {
           history = (history + item).sortedByDescending { it.updated }
           listener?.onHistory()
-          listener?.onSnack("That chat could not be deleted. ${askPlayerMessage(failure)}")
+          listener?.onSnack(T.s(R.string.ask_snack_delete_failed, askPlayerMessage(failure)))
         }
       }
     }
@@ -286,7 +286,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
 
   fun openConversation(id: String) {
     if (sending) {
-      listener?.onSnack("Wait for this answer to finish first.")
+      listener?.onSnack(T.s(R.string.ask_snack_wait_answer))
       return
     }
     showingHistory = false
@@ -360,15 +360,15 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     val question = raw.trim()
     if (!canSend(question)) return
     if (preview) {
-      listener?.onSnack("This is a preview. Questions are not sent.")
+      listener?.onSnack(T.s(R.string.ask_snack_preview))
       return
     }
     if (!online()) {
-      listener?.onSnack("You're offline. Check your connection and try again.")
+      listener?.onSnack(T.s(R.string.ask_err_offline))
       return
     }
     val urls = attachments.mapNotNull { it.url }
-    val message = newMessage(question.ifBlank { "Please look at this photo." }, urls)
+    val message = newMessage(question.ifBlank { T.s(R.string.ask_photo_prompt) }, urls)
     messages += message
     attachments.clear()
     draft = ""
@@ -390,7 +390,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     activeReqId = ""
     stopRequested = false
     message.state = AskMessageState.PENDING
-    message.status = "Thinking"
+    message.status = T.s(R.string.ask_status_thinking)
     message.error = null
     message.revision++
     chrome()
@@ -444,7 +444,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
             }
             failure is NativeAskAuthRequired -> {
               message.state = AskMessageState.FAILED
-              message.error = "Your Ask sign-in ended. Link your game account again to keep asking."
+              message.error = T.s(R.string.ask_err_signin_ended)
               finish(message)
               signOutLocally()
               return@post
@@ -452,7 +452,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
             else -> {
               message.state = AskMessageState.FAILED
               message.status = null
-              message.error = if (!online()) "You're offline. Check your connection and try again." else askPlayerMessage(failure)
+              message.error = if (!online()) T.s(R.string.ask_err_offline) else askPlayerMessage(failure)
               (failure as? AskHttpException)?.usage?.let { usage = it }
             }
           }
@@ -464,7 +464,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     }
     if (!submitted) {
       message.state = AskMessageState.FAILED
-      message.error = "Ask is unavailable right now. Try again."
+      message.error = T.s(R.string.ask_err_unavailable)
       finish(message)
     }
   }
@@ -483,7 +483,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     val message = activeMessage ?: return
     if (stopRequested) return
     stopRequested = true
-    message.status = "Stopping"
+    message.status = T.s(R.string.ask_status_stopping)
     message.revision++
     touch(message)
     val reqId = activeReqId
@@ -504,7 +504,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     if (sending || preview) return
     if (message.state == AskMessageState.DROPPED && conversationID.isNotBlank()) {
       message.state = AskMessageState.PENDING
-      message.status = "Getting the rest of the answer"
+      message.status = T.s(R.string.ask_status_recovering)
       message.error = null
       message.revision++
       activeMessage = message
@@ -558,7 +558,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     message.feedback = rating
     message.revision++
     listener?.onMessage(message)
-    listener?.onSnack(if (rating == "up") "Thanks. Marked as helpful." else "Thanks. This answer was reported for review.")
+    listener?.onSnack(if (rating == "up") T.s(R.string.ask_snack_helpful) else T.s(R.string.ask_snack_reported))
     if (preview) return
     submit("Ask feedback") {
       try {
@@ -568,7 +568,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
           message.feedback = previous
           message.revision++
           listener?.onMessage(message)
-          listener?.onSnack("Your rating was not saved. ${askPlayerMessage(failure)}")
+          listener?.onSnack(T.s(R.string.ask_snack_rating_failed, askPlayerMessage(failure)))
         }
       }
     }
@@ -577,7 +577,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
   fun share() {
     val id = conversationID
     if (id.isBlank() || messages.none { it.state == AskMessageState.DONE }) {
-      listener?.onSnack("Ask a question first, then share the chat.")
+      listener?.onSnack(T.s(R.string.ask_snack_share_first))
       return
     }
     if (preview) {
@@ -598,7 +598,7 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
 
   fun attachPhoto(uri: Uri) {
     if (attachments.size >= 4) {
-      listener?.onSnack("You can attach up to four photos.")
+      listener?.onSnack(T.s(R.string.ask_snack_four_photos))
       return
     }
     val attachment = AskAttachment(nextLocalId++, "photo.jpg")
@@ -627,10 +627,10 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
       } catch (failure: Exception) {
         post("Ask photo failure") {
           attachment.uploading = false
-          attachment.error = if (failure is SecurityException) "That photo could not be opened." else askPlayerMessage(failure)
+          attachment.error = if (failure is SecurityException) T.s(R.string.ask_err_photo_open) else askPlayerMessage(failure)
           listener?.onAttachments()
           chrome()
-          listener?.onSnack(attachment.error ?: "That photo could not be attached.")
+          listener?.onSnack(attachment.error ?: T.s(R.string.ask_err_photo_attach))
         }
       }
     }
@@ -663,12 +663,12 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
     } else {
       val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
       resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-      if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw Exception("That file is not a photo Ask can read.")
+      if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw AskCopyException(T.s(R.string.ask_err_not_photo))
       var sample = 1
       while (Math.max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 2048) sample *= 2
       resolver.openInputStream(uri)?.use {
         BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-      } ?: throw Exception("That photo could not be opened.")
+      } ?: throw AskCopyException(T.s(R.string.ask_err_photo_open))
     }
     val scale = Math.min(1f, 2048f / Math.max(decoded.width, decoded.height))
     val sized = if (scale < 1f) Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
@@ -703,13 +703,13 @@ internal class AskSession(context: Context, cookies: Map<String, String>, val pr
 
   fun renderMap(spec: String, done: (String?, String?) -> Unit) {
     mapCache.get(spec)?.let { done(it, null); return }
-    if (preview) { done(null, "Maps are drawn when you are online."); return }
+    if (preview) { done(null, T.s(R.string.ask_map_preview)); return }
     submit("Ask map") {
       try {
         val svg = api.renderMap(spec)
         post("Ask map UI") { mapCache.put(spec, svg); done(svg, null) }
       } catch (failure: Exception) {
-        post("Ask map failure") { done(null, if (!online()) "This map will appear when you are back online." else "This map could not be drawn.") }
+        post("Ask map failure") { done(null, if (!online()) T.s(R.string.ask_map_offline) else T.s(R.string.ask_err_map)) }
       }
     }
   }

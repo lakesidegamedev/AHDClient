@@ -44,6 +44,7 @@ class LoadChrome(context: Context, private val webView: WebView, private val onB
     }
   }
   private val screen = LinearLayout(context)
+  private val screenTexts = ArrayList<Pair<TextView, Int>>()
 
   private val poll = object : Runnable {
     override fun run() {
@@ -72,21 +73,21 @@ class LoadChrome(context: Context, private val webView: WebView, private val onB
     screen.isClickable = true
     screen.setPadding(dp(32), dp(32), dp(32), dp(32))
     val title = TextView(context).apply {
-      text = LoadRules.TITLE
+      text = Texts.s(LoadRules.TITLE)
       setTextColor(Color.parseColor("#F4F4F5"))
       textSize = 20f
       typeface = Typeface.DEFAULT_BOLD
       gravity = Gravity.CENTER
     }
     val detail = TextView(context).apply {
-      text = LoadRules.DETAIL
+      text = Texts.s(LoadRules.DETAIL)
       setTextColor(Color.parseColor("#A1A1AA"))
       textSize = 15f
       gravity = Gravity.CENTER
       setPadding(0, dp(8), 0, dp(24))
     }
     val retry = Button(context).apply {
-      text = LoadRules.RETRY
+      text = Texts.s(LoadRules.RETRY)
       isAllCaps = false
       setTextColor(Color.parseColor("#14141C"))
       background = GradientDrawable().apply { setColor(gold); cornerRadius = dp(10).toFloat() }
@@ -95,13 +96,14 @@ class LoadChrome(context: Context, private val webView: WebView, private val onB
       setOnClickListener { retryNow() }
     }
     val back = Button(context).apply {
-      text = LoadRules.BACK
+      text = Texts.s(LoadRules.BACK)
       isAllCaps = false
       setTextColor(Color.parseColor("#E4E4E7"))
       background = null
       minimumHeight = dp(48)
       setOnClickListener { CompanionSafety.run("offline back to launcher") { hideError(); onBack() } }
     }
+    screenTexts.addAll(listOf(title to LoadRules.TITLE, detail to LoadRules.DETAIL, retry to LoadRules.RETRY, back to LoadRules.BACK))
     screen.addView(title)
     screen.addView(detail)
     screen.addView(retry, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -130,6 +132,8 @@ class LoadChrome(context: Context, private val webView: WebView, private val onB
   fun showError(url: String?) {
     failedUrl = url
     stopLoading()
+    Texts.syncFromCookie()
+    for ((view, id) in screenTexts) view.text = Texts.s(id)
     screen.visibility = VISIBLE
     visibility = VISIBLE
   }

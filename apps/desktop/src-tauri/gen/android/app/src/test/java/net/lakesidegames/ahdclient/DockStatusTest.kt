@@ -11,6 +11,8 @@ import org.junit.Test
 import java.util.Locale
 
 class DockStatusTest {
+  init { TestTexts.install() }
+
   @Before fun locale() = Locale.setDefault(Locale.US)
 
   private fun snapshot(extra: String = "") = JSONObject(

@@ -111,13 +111,13 @@ internal object NativeAskConsent {
   const val PRIVACY_URL = "https://ask.lakesidegames.net/privacy"
 
   /** Used only when the Ask server predates the aiProviders field. */
-  val fallback = listOf(
-    "Meta" to "Muse Spark models. On Meta's contributor tier, Meta may use the question and answer to train its models",
-    "Ollama" to "Ollama Cloud hosted models",
-    "DeepSeek" to "DeepSeek models, operated from China",
-    "Command Code" to "MiniMax models",
-    "OpenRouter" to "relays to the vendor of the chosen model",
-    "Google" to "Gemini models",
+  val fallback get() = listOf(
+    "Meta" to T.s(R.string.ask_provider_meta),
+    "Ollama" to T.s(R.string.ask_provider_ollama),
+    "DeepSeek" to T.s(R.string.ask_provider_deepseek),
+    "Command Code" to T.s(R.string.ask_provider_command),
+    "OpenRouter" to T.s(R.string.ask_provider_openrouter),
+    "Google" to T.s(R.string.ask_provider_google),
   )
 
   fun recipients(profile: JSONObject): List<Pair<String, String>> {
@@ -162,6 +162,7 @@ object NativeAskController {
   fun attach(activity: Activity, webView: WebView) {
     this.activity = activity
     this.webView = webView
+    T.init(activity); T.sync()
   }
 
   fun present() = show(preview = false)
@@ -175,6 +176,7 @@ object NativeAskController {
   private fun show(preview: Boolean) {
     mainHandler.post {
       NativeSafety.run("native Ask presentation") {
+        T.sync()
         val host = activity ?: webView?.context?.findActivity() ?: return@run
         if (host.isFinishing) return@run
         val current = sheet

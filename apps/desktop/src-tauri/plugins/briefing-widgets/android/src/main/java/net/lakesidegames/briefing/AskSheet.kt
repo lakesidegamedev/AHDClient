@@ -57,10 +57,10 @@ internal interface AskSheetHost {
 }
 
 /** Starter questions for an empty chat. Tapping one fills the box. */
-private val ASK_STARTERS = listOf(
-  "What did I miss while I was away?",
-  "How do actions and action points work?",
-  "What happens during a game turn, and in what order?",
+private fun askStarters() = listOf(
+  T.s(R.string.ask_starter_missed),
+  T.s(R.string.ask_starter_actions),
+  T.s(R.string.ask_starter_turn),
 )
 
 /**
@@ -96,7 +96,7 @@ internal class AskSheet(
   private val attachmentRow = ui.horizontal()
   private val inputLayout = TextInputLayout(context, null, com.google.android.material.R.attr.textInputFilledStyle)
   private val input = TextInputEditText(inputLayout.context)
-  private val attachButton = ui.iconButton(R.drawable.ask_ic_add_photo, "Attach a photo") { attach() }
+  private val attachButton = ui.iconButton(R.drawable.ask_ic_add_photo, T.s(R.string.ask_attach_photo)) { attach() }
   private val sendButton = MaterialButton(context, null, com.google.android.material.R.attr.materialIconButtonFilledStyle)
   private val hint = ui.text("", AskUi.Type.LABEL_MEDIUM, ui.onSurfaceVariant)
   private val historyAdapter = HistoryAdapter()
@@ -266,13 +266,13 @@ internal class AskSheet(
   }
 
   private fun buildToolbar() {
-    toolbar.title = "Ask"
+    toolbar.title = T.s(R.string.ask_title)
     toolbar.setTitleTextAppearance(context, ui.styleOf(AskUi.Type.TITLE_LARGE))
     toolbar.setSubtitleTextAppearance(context, ui.styleOf(AskUi.Type.BODY_SMALL))
     toolbar.setSubtitleTextColor(ui.onSurfaceVariant)
     toolbar.setTitleTextColor(ui.onSurface)
     toolbar.navigationIcon = ui.icon(R.drawable.ask_ic_close, ui.onSurfaceVariant)
-    toolbar.navigationContentDescription = "Close Ask"
+    toolbar.navigationContentDescription = T.s(R.string.ask_close)
     toolbar.setNavigationOnClickListener {
       NativeSafety.run("Ask navigation") {
         when {
@@ -284,17 +284,17 @@ internal class AskSheet(
     }
     toolbar.overflowIcon = ui.icon(R.drawable.ask_ic_more, ui.onSurfaceVariant)
     val menu = toolbar.menu
-    menu.add(Menu.NONE, MENU_NEW, 1, "New chat").apply {
+    menu.add(Menu.NONE, MENU_NEW, 1, T.s(R.string.ask_menu_new)).apply {
       icon = ui.icon(R.drawable.ask_ic_add, ui.onSurfaceVariant)
       setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
-    menu.add(Menu.NONE, MENU_HISTORY, 2, "Chat history").apply {
+    menu.add(Menu.NONE, MENU_HISTORY, 2, T.s(R.string.ask_menu_history)).apply {
       icon = ui.icon(R.drawable.ask_ic_history, ui.onSurfaceVariant)
       setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
-    menu.add(Menu.NONE, MENU_SHARE, 3, "Share chat").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-    menu.add(Menu.NONE, MENU_REFRESH, 4, "Refresh").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-    menu.add(Menu.NONE, MENU_PROVIDERS, 5, "AI providers").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+    menu.add(Menu.NONE, MENU_SHARE, 3, T.s(R.string.ask_menu_share)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+    menu.add(Menu.NONE, MENU_REFRESH, 4, T.s(R.string.ask_menu_refresh)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+    menu.add(Menu.NONE, MENU_PROVIDERS, 5, T.s(R.string.ask_menu_providers)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
     toolbar.setOnMenuItemClickListener { item ->
       NativeSafety.run("Ask menu") {
         when (item.itemId) {
@@ -319,7 +319,7 @@ internal class AskSheet(
     progress.trackColor = 0
     progress.trackThickness = ui.dp(3)
     progress.visibility = View.INVISIBLE
-    progress.contentDescription = "Loading"
+    progress.contentDescription = T.s(R.string.ask_loading)
   }
 
   private fun buildContent() {
@@ -386,7 +386,7 @@ internal class AskSheet(
     inputLayout.boxStrokeWidth = 0
     inputLayout.boxStrokeWidthFocused = 0
     inputLayout.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    input.hint = "Ask a question"
+    input.hint = T.s(R.string.ask_input_hint)
     input.setHintTextColor(ui.onSurfaceVariant)
     input.setTextColor(ui.onSurface)
     input.textSize = 16f
@@ -396,7 +396,7 @@ internal class AskSheet(
     input.imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_EXTRACT_UI
     input.setRawInputType(android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
       android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE)
-    input.contentDescription = "Your question"
+    input.contentDescription = T.s(R.string.ask_input_desc)
     input.setOnEditorActionListener { _, action, _ ->
       if (action == EditorInfo.IME_ACTION_SEND) { NativeSafety.run("Ask send key") { send() }; true } else false
     }
@@ -446,9 +446,9 @@ internal class AskSheet(
     if (!session.canSend(question)) {
       val length = question.trim().length
       when {
-        session.uploading -> snack("Wait for the photo to finish uploading.")
-        length in 1..4 -> snack("Ask a slightly longer question.")
-        length > 500 -> snack("Keep questions under 500 characters.")
+        session.uploading -> snack(T.s(R.string.ask_snack_wait_photo))
+        length in 1..4 -> snack(T.s(R.string.ask_snack_longer))
+        length > 500 -> snack(T.s(R.string.ask_snack_too_long))
       }
       return
     }
@@ -461,7 +461,7 @@ internal class AskSheet(
   }
 
   private fun attach() {
-    if (!host.pickPhoto()) snack("Photos are not available on this device.")
+    if (!host.pickPhoto()) snack(T.s(R.string.ask_snack_no_photos))
   }
 
   // ---- Session callbacks ---------------------------------------------------
@@ -472,17 +472,17 @@ internal class AskSheet(
     val history = ready && session.showingHistory
     historyBack.isEnabled = session.showingHistory || session.reviewingConsent
 
-    toolbar.title = if (history) "History" else "Ask"
+    toolbar.title = if (history) T.s(R.string.ask_history) else T.s(R.string.ask_title)
     toolbar.subtitle = when {
       history -> null
-      phase == AskPhase.CHECKING -> "Checking your game account"
-      phase == AskPhase.SIGNED_OUT -> "Not linked yet"
-      session.profileName.isNotBlank() -> "Signed in as ${session.profileName}"
+      phase == AskPhase.CHECKING -> T.s(R.string.ask_checking)
+      phase == AskPhase.SIGNED_OUT -> T.s(R.string.ask_not_linked)
+      session.profileName.isNotBlank() -> T.s(R.string.ask_signed_in_as, session.profileName)
       else -> null
     }
     val back = history || session.reviewingConsent
     toolbar.navigationIcon = ui.icon(if (back) R.drawable.ask_ic_back else R.drawable.ask_ic_close, ui.onSurfaceVariant)
-    toolbar.navigationContentDescription = if (back) "Back to chat" else "Close Ask"
+    toolbar.navigationContentDescription = if (back) T.s(R.string.ask_back_to_chat) else T.s(R.string.ask_close)
     toolbar.menu.findItem(MENU_NEW)?.isVisible = ready && (history || session.messages.isNotEmpty())
     toolbar.menu.findItem(MENU_HISTORY)?.isVisible = ready && !history
     toolbar.menu.findItem(MENU_SHARE)?.isVisible = ready && !history
@@ -503,9 +503,9 @@ internal class AskSheet(
     val usage = session.usage
     val bannerCopy = when {
       !ready || history -> null
-      !session.online() -> "You're offline. Ask will be ready when you reconnect."
+      !session.online() -> T.s(R.string.ask_offline_ready)
       usage?.outOfQuestions == true -> if (usage.resetAt > 0)
-        "You've used today's questions. More arrive in ${askResetIn(usage.resetAt)}." else "You've used today's questions."
+        T.s(R.string.ask_banner_used_reset, askResetIn(usage.resetAt)) else T.s(R.string.ask_banner_used)
       else -> null
     }
     banner.visibility = if (bannerCopy == null) View.GONE else View.VISIBLE
@@ -521,10 +521,10 @@ internal class AskSheet(
     val usage = session.usage ?: return ""
     if (usage.limit <= 0) return ""
     val parts = mutableListOf<String>()
-    parts += "${askCount(usage.remaining)} of ${askCount(usage.limit)} questions left"
+    parts += T.s(R.string.ask_questions_left, askCount(usage.remaining), askCount(usage.limit))
     val left = session.followupsLeft
-    if (session.conversationID.isNotBlank() && left != null) parts += if (left > 0) "$left ${if (left == 1) "follow-up" else "follow-ups"} left" else "no follow-ups left"
-    else if (usage.resetAt > 0 && usage.remaining <= 3) parts += "resets in ${askResetIn(usage.resetAt)}"
+    if (session.conversationID.isNotBlank() && left != null) parts += if (left > 0) T.n(R.plurals.ask_followups_left, left, left) else T.s(R.string.ask_no_followups)
+    else if (usage.resetAt > 0 && usage.remaining <= 3) parts += T.s(R.string.ask_resets_in, askResetIn(usage.resetAt))
     return parts.joinToString(" · ")
   }
 
@@ -533,8 +533,8 @@ internal class AskSheet(
     val question = input.text?.toString().orEmpty()
     val ready = session.canSend(question)
     sendButton.icon = ui.icon(if (sending) R.drawable.ask_ic_stop else R.drawable.ask_ic_send, ui.onAccent)
-    sendButton.contentDescription = if (sending) "Stop answer" else "Send question"
-    TooltipCompatSafe.set(sendButton, if (sending) "Stop" else "Send")
+    sendButton.contentDescription = if (sending) T.s(R.string.ask_stop_answer) else T.s(R.string.ask_send_question)
+    TooltipCompatSafe.set(sendButton, if (sending) T.s(R.string.ask_tip_stop) else T.s(R.string.ask_tip_send))
     sendButton.isEnabled = sending || ready
     sendButton.backgroundTintList = ColorStateList.valueOf(when {
       sending -> ui.onSurfaceVariant
@@ -615,16 +615,16 @@ internal class AskSheet(
         historyEmpty.gravity = Gravity.CENTER_HORIZONTAL
         historyEmpty.setPadding(ui.dp(32), ui.dp(48), ui.dp(32), ui.dp(32))
         historyEmpty.addView(ui.badge(R.drawable.ask_ic_history))
-        historyEmpty.addView(centered("Your chats did not load", AskUi.Type.TITLE_MEDIUM, ui.onSurface), ui.matchWrap(top = 16))
+        historyEmpty.addView(centered(T.s(R.string.ask_history_failed), AskUi.Type.TITLE_MEDIUM, ui.onSurface), ui.matchWrap(top = 16))
         historyEmpty.addView(centered(session.historyError, AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 6))
-        historyEmpty.addView(ui.outlinedButton("Try again") { session.loadHistory() }, ui.wrap(top = 16))
+        historyEmpty.addView(ui.outlinedButton(T.s(R.string.ask_try_again)) { session.loadHistory() }, ui.wrap(top = 16))
       }
       else -> {
         historyEmpty.gravity = Gravity.CENTER_HORIZONTAL
         historyEmpty.setPadding(ui.dp(32), ui.dp(48), ui.dp(32), ui.dp(32))
         historyEmpty.addView(ui.badge(R.drawable.ask_ic_history))
-        historyEmpty.addView(centered("No chats yet", AskUi.Type.TITLE_MEDIUM, ui.onSurface), ui.matchWrap(top = 16))
-        historyEmpty.addView(centered("Questions you ask appear here so you can pick them up later.",
+        historyEmpty.addView(centered(T.s(R.string.ask_no_chats), AskUi.Type.TITLE_MEDIUM, ui.onSurface), ui.matchWrap(top = 16))
+        historyEmpty.addView(centered(T.s(R.string.ask_no_chats_body),
           AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 6))
       }
     }
@@ -641,9 +641,9 @@ internal class AskSheet(
         clipToOutline = true
         attachment.thumbnail?.let(::setImageBitmap)
         contentDescription = when {
-          attachment.error != null -> "Photo failed to attach"
-          attachment.uploading -> "Photo uploading"
-          else -> "Attached photo"
+          attachment.error != null -> T.s(R.string.ask_photo_failed)
+          attachment.uploading -> T.s(R.string.ask_photo_uploading)
+          else -> T.s(R.string.ask_photo_attached)
         }
         alpha = if (attachment.error != null) 0.4f else 1f
       }
@@ -667,7 +667,7 @@ internal class AskSheet(
         minWidth = ui.dp(24); minHeight = ui.dp(24); minimumWidth = ui.dp(24); minimumHeight = ui.dp(24)
         setPadding(ui.dp(5), ui.dp(5), ui.dp(5), ui.dp(5))
         backgroundTintList = ColorStateList.valueOf(ui.onSurfaceVariant)
-        contentDescription = "Remove photo"
+        contentDescription = T.s(R.string.ask_remove_photo)
         setOnClickListener { NativeSafety.run("Ask remove photo") { session.removeAttachment(attachment) } }
       }
       // 24dp visual, 48dp touch target via the expanded hit rect below.
@@ -694,10 +694,10 @@ internal class AskSheet(
       val title = session.history.firstOrNull { it.id == session.conversationID }?.title ?: "A House Divided"
       val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "Ask: $title")
+        putExtra(Intent.EXTRA_SUBJECT, T.s(R.string.ask_share_subject, title))
         putExtra(Intent.EXTRA_TEXT, url)
       }
-      activity.startActivity(Intent.createChooser(send, "Share chat"))
+      activity.startActivity(Intent.createChooser(send, T.s(R.string.ask_menu_share)))
     }
   }
 
@@ -731,13 +731,13 @@ internal class AskSheet(
     }
     val column = ui.vertical().apply { gravity = Gravity.CENTER_HORIZONTAL }
     column.addView(ui.badge(R.drawable.ask_ic_forum, 64))
-    column.addView(centered("Ask about A House Divided", AskUi.Type.TITLE_LARGE, ui.onSurface).apply {
+    column.addView(centered(T.s(R.string.ask_intro_title), AskUi.Type.TITLE_LARGE, ui.onSurface).apply {
       ViewCompat.setAccessibilityHeading(this, true)
     }, ui.matchWrap(top = 16))
-    column.addView(centered("Rules, your character, elections and markets. Answers can use the current state of the game.",
+    column.addView(centered(T.s(R.string.ask_intro_body),
       AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 8))
-    column.addView(ui.text("Try asking", AskUi.Type.LABEL_LARGE, ui.onSurfaceVariant), ui.matchWrap(top = 28, bottom = 8))
-    ASK_STARTERS.forEach { starter ->
+    column.addView(ui.text(T.s(R.string.ask_try_asking), AskUi.Type.LABEL_LARGE, ui.onSurfaceVariant), ui.matchWrap(top = 28, bottom = 8))
+    askStarters().forEach { starter ->
       column.addView(suggestion(starter, R.drawable.ask_ic_arrow_outward) {
         input.setText(starter)
         input.setSelection(starter.length)
@@ -766,11 +766,10 @@ internal class AskSheet(
   private fun linkCard() {
     val column = ui.vertical().apply { gravity = Gravity.CENTER_HORIZONTAL }
     column.addView(ui.badge(R.drawable.ask_ic_link, 64))
-    column.addView(centered("Link your game account", AskUi.Type.TITLE_LARGE, ui.onSurface), ui.matchWrap(top = 16))
-    column.addView(centered("Ask answers from your own game: your character, party, offices and companies. " +
-      "Link the account you play with to start.", AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 8))
-    column.addView(ui.filledButton("Link game account") { host.linkAccount() }, ui.matchWrap(top = 24))
-    column.addView(ui.textButton("I already linked it") { session.connect() }, ui.matchWrap(top = 4))
+    column.addView(centered(T.s(R.string.ask_link_title), AskUi.Type.TITLE_LARGE, ui.onSurface), ui.matchWrap(top = 16))
+    column.addView(centered(T.s(R.string.ask_link_body), AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 8))
+    column.addView(ui.filledButton(T.s(R.string.ask_link_button)) { host.linkAccount() }, ui.matchWrap(top = 24))
+    column.addView(ui.textButton(T.s(R.string.ask_link_done)) { session.connect() }, ui.matchWrap(top = 4))
     if (session.linkError.isNotBlank()) {
       column.addView(centered(session.linkError, AskUi.Type.BODY_SMALL, ui.error), ui.matchWrap(top = 8))
     }
@@ -780,9 +779,9 @@ internal class AskSheet(
   private fun unavailable() {
     val column = ui.vertical().apply { gravity = Gravity.CENTER_HORIZONTAL }
     column.addView(ui.badge(R.drawable.ask_ic_refresh, 64))
-    column.addView(centered("Ask could not connect", AskUi.Type.TITLE_LARGE, ui.onSurface), ui.matchWrap(top = 16))
+    column.addView(centered(T.s(R.string.ask_connect_failed), AskUi.Type.TITLE_LARGE, ui.onSurface), ui.matchWrap(top = 16))
     column.addView(centered(session.unavailableMessage, AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 8))
-    column.addView(ui.filledButton(if (session.checking) "Trying again" else "Try again") { session.connect() }.apply {
+    column.addView(ui.filledButton(if (session.checking) T.s(R.string.ask_trying_again) else T.s(R.string.ask_try_again)) { session.connect() }.apply {
       isEnabled = !session.checking
     }, ui.matchWrap(top = 24))
     statePane.addView(column, ui.matchWrap(top = 32))
@@ -790,13 +789,11 @@ internal class AskSheet(
 
   /** The consent screen. Nothing reaches an outside service until Allow. */
   private fun consent(review: Boolean) {
-    statePane.addView(ui.text("Ask uses outside AI services", AskUi.Type.HEADLINE_SMALL, ui.onSurface).apply {
+    statePane.addView(ui.text(T.s(R.string.ask_consent_title), AskUi.Type.HEADLINE_SMALL, ui.onSurface).apply {
       ViewCompat.setAccessibilityHeading(this, true)
     }, ui.matchWrap(top = 8))
     statePane.addView(ui.text(
-      "Ask answers with AI models run by other companies. When you send a question, it goes to one of the " +
-        "services below. They receive the text you type, earlier messages in the same chat, any photo you attach, and, " +
-        "if you ask about your own character, your own game records. Your username, email and account IDs are not sent.",
+      T.s(R.string.ask_consent_body),
       AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 12))
     val list = ui.vertical().apply {
       background = ui.rounded(ui.containerLow, 16f, ui.outlineVariant)
@@ -811,18 +808,18 @@ internal class AskSheet(
       list.addView(item, ui.matchWrap())
     }
     statePane.addView(list, ui.matchWrap(top = 16))
-    statePane.addView(ui.text("Each service has its own terms and data handling. Every answer names the model and service that wrote it.",
+    statePane.addView(ui.text(T.s(R.string.ask_consent_terms),
       AskUi.Type.BODY_SMALL, ui.onSurfaceVariant), ui.matchWrap(top = 12))
-    statePane.addView(ui.textButton("Read the Ask privacy notice") { host.openLink(NativeAskConsent.PRIVACY_URL) }.apply {
+    statePane.addView(ui.textButton(T.s(R.string.ask_consent_privacy)) { host.openLink(NativeAskConsent.PRIVACY_URL) }.apply {
       gravity = Gravity.START or Gravity.CENTER_VERTICAL
       setPadding(0, paddingTop, 0, paddingBottom)
     }, ui.wrap(top = 2))
     if (review) {
-      statePane.addView(ui.filledButton("Keep using Ask") { session.reviewingConsent = false; onChrome() }, ui.matchWrap(top = 16))
-      statePane.addView(ui.outlinedButton("Withdraw permission") { session.withdrawConsent() }, ui.matchWrap(top = 8))
+      statePane.addView(ui.filledButton(T.s(R.string.ask_consent_keep)) { session.reviewingConsent = false; onChrome() }, ui.matchWrap(top = 16))
+      statePane.addView(ui.outlinedButton(T.s(R.string.ask_consent_withdraw)) { session.withdrawConsent() }, ui.matchWrap(top = 8))
     } else {
-      statePane.addView(ui.filledButton("Allow and continue") { session.grantConsent() }, ui.matchWrap(top = 16))
-      statePane.addView(centered("Ask sends nothing until you allow it.", AskUi.Type.BODY_SMALL, ui.onSurfaceVariant), ui.matchWrap(top = 10))
+      statePane.addView(ui.filledButton(T.s(R.string.ask_consent_allow)) { session.grantConsent() }, ui.matchWrap(top = 16))
+      statePane.addView(centered(T.s(R.string.ask_consent_nothing), AskUi.Type.BODY_SMALL, ui.onSurfaceVariant), ui.matchWrap(top = 10))
     }
   }
 
@@ -920,9 +917,9 @@ internal class AskSheet(
   private fun copy(message: AskMessage) {
     NativeSafety.run("Ask copy") {
       val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-      clipboard.setPrimaryClip(ClipData.newPlainText("Ask answer", message.answer))
+      clipboard.setPrimaryClip(ClipData.newPlainText(T.s(R.string.ask_clip_label), message.answer))
       // Android 13+ shows its own clipboard confirmation.
-      if (Build.VERSION.SDK_INT < 33) snack("Answer copied")
+      if (Build.VERSION.SDK_INT < 33) snack(T.s(R.string.ask_answer_copied))
     }
   }
 
@@ -940,10 +937,10 @@ internal class AskSheet(
     private val meta = ui.vertical()
     private val actions = ui.horizontal()
     private val followups = ui.vertical()
-    private val copyButton = ui.iconButton(R.drawable.ask_ic_copy, "Copy answer") { copy(message) }
-    private val upButton = ui.iconButton(R.drawable.ask_ic_thumb_up, "Helpful") { session.feedback(message, "up") }
-    private val downButton = ui.iconButton(R.drawable.ask_ic_thumb_down, "Not helpful") { session.feedback(message, "down") }
-    private val shareButton = ui.iconButton(R.drawable.ask_ic_share, "Share chat") { session.share() }
+    private val copyButton = ui.iconButton(R.drawable.ask_ic_copy, T.s(R.string.ask_copy_answer)) { copy(message) }
+    private val upButton = ui.iconButton(R.drawable.ask_ic_thumb_up, T.s(R.string.ask_helpful)) { session.feedback(message, "up") }
+    private val downButton = ui.iconButton(R.drawable.ask_ic_thumb_down, T.s(R.string.ask_not_helpful)) { session.feedback(message, "down") }
+    private val shareButton = ui.iconButton(R.drawable.ask_ic_share, T.s(R.string.ask_menu_share)) { session.share() }
     private var renderedText: String? = null
     private var renderedState: AskMessageState? = null
     private val markdown = AskMarkdownRenderer(ui, { host.openLink(it) }, ::mapInto)
@@ -968,7 +965,7 @@ internal class AskSheet(
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = ui.rounded(ui.containerHighest, 12f)
             clipToOutline = true
-            contentDescription = "Attached photo"
+            contentDescription = T.s(R.string.ask_photo_attached)
           }
           photos.addView(image, LinearLayout.LayoutParams(ui.dp(72), ui.dp(72)).apply { marginStart = ui.dp(8) })
           session.loadUpload(url) { bitmap -> if (bitmap != null) image.setImageBitmap(bitmap) }
@@ -1021,8 +1018,8 @@ internal class AskSheet(
       val canRate = message.answerId > 0 || session.preview
       upButton.visibility = if (canRate) View.VISIBLE else View.GONE
       downButton.visibility = if (canRate) View.VISIBLE else View.GONE
-      tint(upButton, message.feedback == "up", "Helpful")
-      tint(downButton, message.feedback == "down", "Not helpful")
+      tint(upButton, message.feedback == "up", T.s(R.string.ask_helpful))
+      tint(downButton, message.feedback == "down", T.s(R.string.ask_not_helpful))
       shareButton.visibility = if (session.conversationID.isNotBlank()) View.VISIBLE else View.GONE
       if (renderedState != null && renderedState != state && state == AskMessageState.DONE) ui.arrive(actions)
       renderedState = state
@@ -1035,7 +1032,7 @@ internal class AskSheet(
 
     private fun statusCopy(): String {
       val base = message.status?.trimEnd('.', '…')?.ifBlank { null }
-        ?: if (message.state == AskMessageState.STREAMING) "Writing" else "Thinking"
+        ?: if (message.state == AskMessageState.STREAMING) T.s(R.string.ask_status_writing) else T.s(R.string.ask_status_thinking)
       val checks = if (message.checks > 0) " · ${message.checks} ${if (message.checks == 1) "check" else "checks"}" else ""
       return "$base$checks"
     }
@@ -1048,13 +1045,13 @@ internal class AskSheet(
             background = ui.rounded(ui.errorContainer, 16f)
             setPadding(ui.dp(16), ui.dp(12), ui.dp(8), ui.dp(4))
           }
-          card.addView(ui.text(message.error ?: "Ask could not finish this answer.", AskUi.Type.BODY_MEDIUM, ui.onErrorContainer),
+          card.addView(ui.text(message.error ?: T.s(R.string.ask_err_finish_short), AskUi.Type.BODY_MEDIUM, ui.onErrorContainer),
             ui.matchWrap().apply { marginEnd = ui.dp(8) })
           val retryable = message.state == AskMessageState.DROPPED ||
             (message.error?.contains("used", ignoreCase = true) != true && message === session.messages.lastOrNull())
           if (retryable && !session.preview) {
             card.addView(MaterialButton(context, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
-              text = if (message.state == AskMessageState.DROPPED) "Get the answer" else "Try again"
+              text = if (message.state == AskMessageState.DROPPED) T.s(R.string.ask_get_answer) else T.s(R.string.ask_try_again)
               setTextColor(ui.onErrorContainer)
               icon = ui.icon(R.drawable.ask_ic_refresh, ui.onErrorContainer)
               iconTint = ColorStateList.valueOf(ui.onErrorContainer)
@@ -1066,8 +1063,8 @@ internal class AskSheet(
           notice.visibility = View.VISIBLE
         }
         AskMessageState.STOPPED -> {
-          notice.addView(ui.text(if (message.answer.isBlank()) "Stopped before the answer started. This did not use a question."
-            else "Stopped. The rest of this answer was not written.", AskUi.Type.BODY_SMALL, ui.onSurfaceVariant))
+          notice.addView(ui.text(if (message.answer.isBlank()) T.s(R.string.ask_stopped_early)
+            else T.s(R.string.ask_stopped), AskUi.Type.BODY_SMALL, ui.onSurfaceVariant))
           notice.visibility = View.VISIBLE
         }
         else -> notice.visibility = View.GONE
@@ -1077,16 +1074,16 @@ internal class AskSheet(
     private fun renderMeta() {
       meta.removeAllViews()
       if (message.state != AskMessageState.DONE) { meta.visibility = View.GONE; return }
-      if (message.vizBlocked) meta.addView(ui.text("Charts and maps are used up for today, so this answer comes without them.",
+      if (message.vizBlocked) meta.addView(ui.text(T.s(R.string.ask_viz_blocked),
         AskUi.Type.BODY_SMALL, ui.onSurfaceVariant), ui.matchWrap(bottom = 6))
       message.reportUrl?.let { path ->
-        meta.addView(ui.outlinedButton("Open the full report") {
+        meta.addView(ui.outlinedButton(T.s(R.string.ask_open_report)) {
           host.openLink(if (path.startsWith("/")) "$NATIVE_ASK_ORIGIN$path" else path)
         }.apply { icon = ui.icon(R.drawable.ask_ic_arrow_outward, ui.link); iconTint = ColorStateList.valueOf(ui.link) },
           ui.wrap(bottom = 6))
       }
       if (message.liveSources.isNotEmpty()) {
-        meta.addView(ui.text("Live game data: ${message.liveSources.joinToString(", ")}", AskUi.Type.BODY_SMALL, ui.onSurfaceVariant),
+        meta.addView(ui.text(T.s(R.string.ask_live_data, message.liveSources.joinToString(", ")), AskUi.Type.BODY_SMALL, ui.onSurfaceVariant),
           ui.matchWrap(bottom = 4))
       }
       if (message.citations.isNotEmpty()) {
@@ -1098,8 +1095,8 @@ internal class AskSheet(
         }
         val list = ui.vertical()
         fun refresh() {
-          toggle.text = if (sourcesOpen) "Hide sources" else "Sources (${message.citations.size})"
-          toggle.contentDescription = if (sourcesOpen) "Hide sources" else "Show ${message.citations.size} sources"
+          toggle.text = if (sourcesOpen) T.s(R.string.ask_sources_hide) else T.s(R.string.ask_sources_count, message.citations.size)
+          toggle.contentDescription = if (sourcesOpen) T.s(R.string.ask_sources_hide) else T.s(R.string.ask_sources_show, message.citations.size)
           list.visibility = if (sourcesOpen) View.VISIBLE else View.GONE
         }
         message.citations.forEachIndexed { index, citation ->
@@ -1129,12 +1126,12 @@ internal class AskSheet(
       val wanted = show && message.state == AskMessageState.DONE && message.followups.isNotEmpty()
       if (!wanted) { followups.visibility = View.GONE; followups.removeAllViews(); return }
       if (followups.childCount > 0) { followups.visibility = View.VISIBLE; return }
-      followups.addView(ui.text("Follow up", AskUi.Type.LABEL_LARGE, ui.onSurfaceVariant), ui.matchWrap(top = 4, bottom = 8))
+      followups.addView(ui.text(T.s(R.string.ask_follow_up), AskUi.Type.LABEL_LARGE, ui.onSurfaceVariant), ui.matchWrap(top = 4, bottom = 8))
       message.followups.forEach { text ->
         followups.addView(suggestion(text, R.drawable.ask_ic_send) {
           stickToBottom = true
           session.sendFollowup(text)
-        }.apply { contentDescription = "Ask: $text" }, ui.matchWrap(bottom = 8))
+        }.apply { contentDescription = T.s(R.string.ask_follow_up_desc, text) }, ui.matchWrap(bottom = 8))
       }
       followups.visibility = View.VISIBLE
       ui.arrive(followups, 80)
@@ -1146,13 +1143,13 @@ internal class AskSheet(
     frame.background = ui.rounded(ui.containerHigh, 16f)
     frame.clipToOutline = true
     val title = NativeSafety.get("Ask map title", "") { org.json.JSONObject(spec).optString("title") }
-    frame.contentDescription = if (title.isNotBlank()) "Map: $title" else "Map"
+    frame.contentDescription = if (title.isNotBlank()) T.s(R.string.ask_map_titled, title) else T.s(R.string.ask_map)
     val loading = ui.horizontal().apply {
       gravity = Gravity.CENTER
       addView(CircularProgressIndicator(context).apply {
         isIndeterminate = true; indicatorSize = ui.dp(18); trackThickness = ui.dp(2); setIndicatorColor(ui.accent)
       })
-      addView(ui.text("Drawing the map", AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant),
+      addView(ui.text(T.s(R.string.ask_drawing_map), AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant),
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = ui.dp(12) })
     }
     frame.addView(loading, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -1169,7 +1166,7 @@ internal class AskSheet(
       NativeSafety.run("Ask map show") {
         frame.removeAllViews()
         if (svg == null) {
-          frame.addView(ui.text(failure ?: "This map could not be drawn.", AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant).apply {
+          frame.addView(ui.text(failure ?: T.s(R.string.ask_err_map), AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant).apply {
             gravity = Gravity.CENTER
           }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
           return@run
@@ -1213,7 +1210,7 @@ internal class AskSheet(
       val out = mutableListOf<HistoryRow>()
       var lastLabel = ""
       list.forEach { item ->
-        val label = if (item.pinned) "Pinned" else bucket(item.updated)
+        val label = if (item.pinned) T.s(R.string.ask_bucket_pinned) else bucket(item.updated)
         if (label != lastLabel) { out += HistoryRow.Header(label); lastLabel = label }
         out += HistoryRow.Chat(item)
       }
@@ -1275,8 +1272,8 @@ internal class AskSheet(
         NativeSafety.run("Ask chat menu") {
           val current = item ?: return@run
           val popup = androidx.appcompat.widget.PopupMenu(context, row, Gravity.END)
-          popup.menu.add(0, 1, 0, "Open")
-          popup.menu.add(0, 2, 1, "Delete")
+          popup.menu.add(0, 1, 0, T.s(R.string.ask_open))
+          popup.menu.add(0, 2, 1, T.s(R.string.ask_delete))
           popup.setOnMenuItemClickListener { choice ->
             NativeSafety.run("Ask chat menu choice") {
               if (choice.itemId == 1) session.openConversation(current.id) else delete(current)
@@ -1287,7 +1284,7 @@ internal class AskSheet(
         }
         true
       }
-      ViewCompat.addAccessibilityAction(row, "Delete chat") { _, _ ->
+      ViewCompat.addAccessibilityAction(row, T.s(R.string.ask_delete_chat)) { _, _ ->
         NativeSafety.run("Ask delete action") { item?.let(::delete) }
         true
       }
@@ -1308,7 +1305,7 @@ internal class AskSheet(
 
   private fun delete(item: AskConversationSummary) {
     session.deleteLater(item)
-    snack("Chat deleted", "Undo", { session.undoDelete(item.id) }) { undone ->
+    snack(T.s(R.string.ask_chat_deleted), T.s(R.string.ask_undo), { session.undoDelete(item.id) }) { undone ->
       if (!undone) session.commitDelete(item.id)
     }
   }
@@ -1348,16 +1345,16 @@ internal class AskSheet(
   }
 
   private fun bucket(time: Long): String {
-    if (time <= 0) return "Earlier"
+    if (time <= 0) return T.s(R.string.ask_bucket_earlier)
     val now = Calendar.getInstance()
     val then = Calendar.getInstance().apply { timeInMillis = time }
     val days = ((startOfDay(now) - startOfDay(then)) / DateUtils.DAY_IN_MILLIS).toInt()
     return when {
-      days <= 0 -> "Today"
-      days == 1 -> "Yesterday"
-      days < 7 -> "This week"
-      days < 31 -> "This month"
-      else -> "Earlier"
+      days <= 0 -> T.s(R.string.ask_bucket_today)
+      days == 1 -> T.s(R.string.ask_bucket_yesterday)
+      days < 7 -> T.s(R.string.ask_bucket_week)
+      days < 31 -> T.s(R.string.ask_bucket_month)
+      else -> T.s(R.string.ask_bucket_earlier)
     }
   }
 

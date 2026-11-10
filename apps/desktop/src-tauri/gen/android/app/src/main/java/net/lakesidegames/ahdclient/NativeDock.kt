@@ -572,8 +572,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       menu.sections.forEachIndexed { sectionIndex, section ->
         if (section.title.isNotEmpty()) entries.add(Entry.Heading("section-$sectionIndex-${section.id}", section.title))
         section.links.forEachIndexed { linkIndex, link ->
-          val badge = if (link.app == AppAction.INBOX && unread > 0) "$unread unread" else ""
-          val spoken = (if (badge.isNotEmpty()) "${link.label}, $badge" else link.label) + if (link.external) ", opens outside the game" else ""
+          val badge = if (link.app == AppAction.INBOX && unread > 0) Texts.s(R.string.dock_unread_count, unread) else ""
+          val spoken = (if (badge.isNotEmpty()) "${link.label}, $badge" else link.label) + if (link.external) Texts.s(R.string.dock_opens_outside) else ""
           // Keyed by position: ids may repeat across sections.
           entries.add(Entry.Row(RowSpec("link-$sectionIndex-$linkIndex-${link.id}", link.label, badge, spoken, link = link,
             icon = link.icon, reserveIcon = true, external = link.external)))
@@ -597,7 +597,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       val keys = entries.map { if (it is Entry.Row) it.spec.key else (it as Entry.Heading).key }
       caption.text = title
       caption.visibility = if (title.isEmpty()) View.GONE else View.VISIBLE
-      ViewCompat.setAccessibilityPaneTitle(this, paneTitle ?: "Status details")
+      ViewCompat.setAccessibilityPaneTitle(this, paneTitle ?: Texts.s(R.string.dock_status_details))
       if (keys != currentKeys) {
         for (index in column.childCount - 1 downTo 1) column.removeViewAt(index)
         rows.clear()
@@ -649,7 +649,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       val out = ArrayList<RowSpec>()
       if (s.nextTurnAt != null || !s.turnActive) {
         val remaining = s.nextTurnAt?.minus(System.currentTimeMillis())
-        out.add(RowSpec("turn", "Next turn", turnValue(s, remaining), turnSpoken(s, remaining)))
+        out.add(RowSpec("turn", Texts.s(R.string.dock_next_turn), turnValue(s, remaining), turnSpoken(s, remaining)))
       }
       for ((key, metric) in listOf(
         "funds" to s.funds, "actions" to s.actions, "corp" to s.corpCash,
@@ -658,31 +658,31 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
         if (metric != null) out.add(RowSpec(key, metric.label, metricText(metric), metric.spoken, path = metric.path))
       }
       val inbox = ArrayList<Pair<String, Int>>()
-      if (s.notifications > 0) inbox.add("Notifications" to s.notifications)
-      if (s.mail > 0) inbox.add("Mail" to s.mail)
+      if (s.notifications > 0) inbox.add(Texts.s(R.string.dock_notifications) to s.notifications)
+      if (s.mail > 0) inbox.add(Texts.s(R.string.dock_mail) to s.mail)
       if (inbox.isEmpty()) {
-        out.add(RowSpec("inbox", "Inbox", "All read", "Inbox, all read", path = "/notifications"))
+        out.add(RowSpec("inbox", Texts.s(R.string.dock_inbox), Texts.s(R.string.dock_all_read), Texts.s(R.string.dock_inbox_all_read), path = "/notifications"))
       } else {
         for ((label, count) in inbox) {
-          out.add(RowSpec("inbox-$label", label, "$count unread", "$label, $count unread", path = "/notifications"))
+          out.add(RowSpec("inbox-$label", label, Texts.s(R.string.dock_unread_count, count), Texts.s(R.string.dock_tab_unread, label, count), path = "/notifications"))
         }
       }
       return out
     }
 
     private fun turnValue(s: DockStatus, remaining: Long?): CharSequence {
-      if (!s.turnActive) return "Paused"
+      if (!s.turnActive) return Texts.s(R.string.dock_paused)
       val at = s.nextTurnAt ?: return ""
-      if (remaining == null || remaining <= 0) return "Running"
+      if (remaining == null || remaining <= 0) return Texts.s(R.string.dock_running)
       val clock = android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(at))
-      return "$clock · in ${DockFormat.countdown(remaining)}"
+      return Texts.s(R.string.dock_clock_in, clock, DockFormat.countdown(remaining))
     }
 
     private fun turnSpoken(s: DockStatus, remaining: Long?): String {
-      if (!s.turnActive) return "Next turn, turns are paused"
-      if (remaining == null) return "Next turn"
-      if (remaining <= 0) return "Next turn, running now"
-      return "Next turn in ${DockFormat.spokenCountdown(remaining)}"
+      if (!s.turnActive) return Texts.s(R.string.dock_spoken_next_paused)
+      if (remaining == null) return Texts.s(R.string.dock_next_turn)
+      if (remaining <= 0) return Texts.s(R.string.dock_spoken_next_running)
+      return Texts.s(R.string.dock_spoken_next_in, DockFormat.spokenCountdown(remaining))
     }
   }
 
@@ -838,7 +838,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
           info.addAction(
             AccessibilityNodeInfoCompat.AccessibilityActionCompat(
               AccessibilityNodeInfo.ACTION_CLICK,
-              if (targetExpanded && menuId == null) "Hide status details" else "Show status details",
+              if (targetExpanded && menuId == null) Texts.s(R.string.dock_hide_status) else Texts.s(R.string.dock_show_status),
             ),
           )
         }
@@ -847,7 +847,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
 
     fun refreshState() {
-      ViewCompat.setStateDescription(this, if (targetExpanded && menuId == null) "Expanded" else "Collapsed")
+      ViewCompat.setStateDescription(this, if (targetExpanded && menuId == null) Texts.s(R.string.dock_expanded) else Texts.s(R.string.dock_collapsed))
     }
 
     /** The chevron points up when closed and turns over as the sheet opens. */
@@ -948,13 +948,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       }
       // Spoken text changes by the minute, not the second.
       val spokenTime = when {
-        !current.turnActive -> "Turns are paused"
+        !current.turnActive -> Texts.s(R.string.dock_spoken_paused)
         remaining == null -> ""
-        remaining <= 0 -> "Turn running"
-        else -> "Next turn in ${DockFormat.spokenCountdown(remaining)}"
+        remaining <= 0 -> Texts.s(R.string.dock_spoken_running)
+        else -> Texts.s(R.string.dock_spoken_next_in, DockFormat.spokenCountdown(remaining))
       }
       val parts = listOf(spokenTime, current.funds?.spoken.orEmpty(), current.actions?.spoken.orEmpty()).filter { it.isNotEmpty() }
-      val description = "Status. " + parts.joinToString(". ")
+      val description = Texts.s(R.string.dock_status_prefix, parts.joinToString(". "))
       if (contentDescription?.toString() != description) contentDescription = description
     }
   }
@@ -1174,13 +1174,13 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
           super.onInitializeAccessibilityNodeInfo(host, info)
-          info.roleDescription = "Tab"
+          info.roleDescription = Texts.s(R.string.dock_tab_role)
           info.isSelected = checked
           if (tab.sheet != null) {
             info.addAction(
               AccessibilityNodeInfoCompat.AccessibilityActionCompat(
                 AccessibilityNodeInfo.ACTION_CLICK,
-                if (checked && targetExpanded && menuId == tab.id) "Close ${tab.fullLabel} menu" else "Open ${tab.fullLabel} menu",
+                if (checked && targetExpanded && menuId == tab.id) Texts.s(R.string.dock_close_menu, tab.fullLabel) else Texts.s(R.string.dock_open_menu, tab.fullLabel),
               ),
             )
           }
@@ -1206,7 +1206,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
         icon.scaleX = if (value) 1.14f else 1f
         icon.scaleY = icon.scaleX
       }
-      ViewCompat.setStateDescription(this, if (value) "Selected" else null)
+      ViewCompat.setStateDescription(this, if (value) Texts.s(R.string.dock_selected) else null)
       isSelected = value
     }
 
@@ -1225,7 +1225,7 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     }
 
     private fun describe() {
-      contentDescription = if (count > 0) "${tab.fullLabel}, $count unread" else tab.fullLabel
+      contentDescription = if (count > 0) Texts.s(R.string.dock_tab_unread, tab.fullLabel, count) else tab.fullLabel
     }
   }
 }

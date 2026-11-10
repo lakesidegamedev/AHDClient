@@ -31,12 +31,10 @@ object NativePush {
   private const val NOTIFICATION_ID = 21002
   /** One channel per inbox category, so a player can silence one kind in Android Settings. */
   private val CATEGORY_CHANNELS = linkedMapOf(
-    "crisis" to "Crisis", "election" to "Elections", "legislation" to "Legislation",
-    "party" to "Party", "treasury" to "Treasury", "standing" to "Standing", "system" to "System",
+    "crisis" to R.string.push_ch_crisis, "election" to R.string.push_ch_election, "legislation" to R.string.push_ch_legislation,
+    "party" to R.string.push_ch_party, "treasury" to R.string.push_ch_treasury, "standing" to R.string.push_ch_standing, "system" to R.string.push_ch_system,
   )
-  private const val FALLBACK_BODY = "You have new activity. Open your inbox to catch up."
   private const val GROUP = "ahd-alerts"
-  private const val GROUP_NAME = "Inbox alerts"
   private const val INBOX_PATH = "/notifications"
   private const val HREF_EXTRA = "ahd.href"
   private val lock = Any()
@@ -49,7 +47,7 @@ object NativePush {
   private var busy = false
   private var tokenPending = false
   private var nextAttempt = 0L
-  private var statusMessage = "Turn on alerts for new inbox activity."
+  private var statusMessage = R.string.push_status_idle
 
   private fun file(context: Context) = File(context.noBackupFilesDir, "native-push.json")
   private fun read(context: Context): JSONObject = NativeSafety.get("push state read", JSONObject()) {
@@ -85,11 +83,12 @@ object NativePush {
    */
   fun createChannels(context: Context) {
     if (Build.VERSION.SDK_INT < 26) return
+    T.init(context); T.sync()
     NativeSafety.run("alert channels") {
       val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-      manager.createNotificationChannelGroup(NotificationChannelGroup(GROUP, GROUP_NAME))
-      ensureChannel(manager, CHANNEL, "Inbox activity", null)
-      CATEGORY_CHANNELS.forEach { (thread, name) -> ensureChannel(manager, "ahd-$thread", name, thread) }
+      manager.createNotificationChannelGroup(NotificationChannelGroup(GROUP, T.s(R.string.push_group)))
+      ensureChannel(manager, CHANNEL, T.s(R.string.push_ch_inbox), null)
+      CATEGORY_CHANNELS.forEach { (thread, name) -> ensureChannel(manager, "ahd-$thread", T.s(name), thread) }
     }
   }
 
@@ -97,7 +96,7 @@ object NativePush {
     if (Build.VERSION.SDK_INT < 26) return
     val importance = if (thread == "crisis") NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT
     manager.createNotificationChannel(NotificationChannel(id, name, importance).apply {
-      description = if (thread == null) "New activity in your A House Divided inbox." else "$name alerts from your A House Divided inbox."
+      description = if (thread == null) T.s(R.string.push_ch_inbox_desc) else T.s(R.string.push_ch_desc, name)
       group = GROUP
     })
   }
@@ -114,12 +113,13 @@ object NativePush {
   }
 
   fun status(context: Context): JSONObject = synchronized(lock) {
+    T.init(context); T.sync()
     val state = read(context)
     val header = session()
     JSONObject().put("enabled", state.optBoolean("enabled")).put("permissionGranted", permitted(context))
       .put("available", available(context)).put("registered", header.isNotEmpty() && permitted(context) &&
         state.optBoolean("enabled") && state.optString("registeredSession") == digest(header))
-      .put("message", statusMessage)
+      .put("message", T.s(statusMessage))
   }
   fun setEnabled(context: Context, enabled: Boolean) = synchronized(lock) {
     val state = read(context)
@@ -150,6 +150,7 @@ object NativePush {
   }
   fun sync(context: Context, force: Boolean = false) {
     val app = context.applicationContext
+    T.init(app); T.sync()
     synchronized(lock) {
       val state = read(app)
       val header = session()
@@ -161,10 +162,10 @@ object NativePush {
       }
       val enabled = state.optBoolean("enabled") && permitted(app)
       if (!enabled || header.isEmpty()) {
-        statusMessage = if (!state.optBoolean("enabled")) "Push alerts are off." else if (!permitted(app))
-          "Allow notifications in Android Settings, then return here." else "Sign in to multiplayer to receive alerts."
+        statusMessage = if (!state.optBoolean("enabled")) R.string.push_status_off else if (!permitted(app))
+          R.string.push_status_permission else R.string.push_status_signin
         NotificationManagerCompat.from(app).cancelAll()
-      } else if (!available(app)) { statusMessage = "Push is unavailable in this build."; return }
+      } else if (!available(app)) { statusMessage = R.string.push_status_build; return }
       if (enabled && header.isNotEmpty() && state.optString("token").isEmpty() && !tokenPending) {
         tokenPending = true
         FirebaseMessaging.getInstance().isAutoInitEnabled = true
@@ -172,7 +173,7 @@ object NativePush {
           NativeSafety.run("FCM token completion") {
             synchronized(lock) { tokenPending = false }
             if (task.isSuccessful) tokenChanged(app, task.result)
-            else synchronized(lock) { statusMessage = "Could not contact Google Play services. Try again when online." }
+            else synchronized(lock) { statusMessage = R.string.push_status_play }
           }
         }
         return
@@ -187,7 +188,7 @@ object NativePush {
       save(app, state)
       busy = true
       nextAttempt = System.currentTimeMillis() + 60_000
-      if (register) statusMessage = "Connecting push alerts..."
+      if (register) statusMessage = R.string.push_status_connecting
       val permittedAtSend = permitted(app)
       val submitted = NativeSafety.run("push sync scheduling") {
         worker.execute {
@@ -204,7 +205,7 @@ object NativePush {
                   if (register) {
                     latest.put("registeredSession", fingerprint)
                     nextAttempt = System.currentTimeMillis() + 12 * 60 * 60_000
-                    statusMessage = "Push alerts are on. Tap one to open what it is about."
+                    statusMessage = R.string.push_status_on
                   } else {
                     latest.remove("registeredSession"); latest.put("mayBeRegistered", false); latest.put("needsRevoke", false)
                     nextAttempt = 0
@@ -213,9 +214,9 @@ object NativePush {
                 } else if (register) {
                   latest.remove("registeredSession"); save(app, latest)
                   statusMessage = when (code) {
-                    401, 403 -> "Sign in to multiplayer to receive alerts."
-                    503 -> "Push delivery is not available yet. We will retry automatically."
-                    else -> "Could not connect. We will retry when online."
+                    401, 403 -> R.string.push_status_signin
+                    503 -> R.string.push_status_503
+                    else -> R.string.push_status_error
                   }
                 }
               }
@@ -228,7 +229,7 @@ object NativePush {
       if (!submitted) {
         busy = false
         nextAttempt = 0
-        statusMessage = "Push is unavailable right now."
+        statusMessage = R.string.push_status_now
       }
     }
   }
@@ -282,6 +283,7 @@ object NativePush {
   }
 
   fun show(context: Context, message: RemoteMessage) {
+    T.init(context); T.sync()
     NativeSafety.run("push notification") {
       synchronized(lock) {
         val state = read(context)
@@ -298,7 +300,7 @@ object NativePush {
         if (NativeSafety.get("alert hold back", false) { holdBack?.invoke(href) == true }) return@run
         createChannels(context)
         val title = text(data["title"], 120) ?: "A House Divided"
-        val body = text(data["body"], 400) ?: FALLBACK_BODY
+        val body = text(data["body"], 400) ?: T.s(R.string.push_fallback_body)
         val subtitle = text(data["subtitle"], 120)
         // Each alert gets its own entry; a retried delivery of the same alert replaces itself.
         val id = data["id"]?.takeIf { Regex("[0-9a-f]{24}").matches(it) }?.hashCode() ?: NOTIFICATION_ID
@@ -309,7 +311,7 @@ object NativePush {
         val icon = context.resources.getIdentifier("ic_stat_ahd", "drawable", context.packageName)
         // A locked phone set to hide sensitive content shows only this.
         val hidden = NotificationCompat.Builder(context, channel).setSmallIcon(icon).setContentTitle("A House Divided")
-          .setContentText(subtitle?.substringBefore(" \u00b7 ")?.let { "New $it alert" } ?: "New inbox activity").build()
+          .setContentText(subtitle?.substringBefore(" \u00b7 ")?.let { T.s(R.string.push_hidden_alert, it) } ?: T.s(R.string.push_new_activity)).build()
         val group = "ahd-${thread ?: "inbox"}"
         // "Open inbox" goes to the inbox whatever page the alert itself is about.
         val inboxIntent = Intent(intent).setData(Uri.parse("ahdclient://page$INBOX_PATH"))
@@ -317,12 +319,12 @@ object NativePush {
         val notification = NotificationCompat.Builder(context, channel).setSmallIcon(icon)
           .setContentTitle(title).setContentText(body).setSubText(subtitle)
           .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-          .setGroup(group).addAction(0, "Open inbox", inbox).addExtras(Bundle().apply { putString(HREF_EXTRA, href) })
+          .setGroup(group).addAction(0, T.s(R.string.push_open_inbox), inbox).addExtras(Bundle().apply { putString(HREF_EXTRA, href) })
           .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true).setShowWhen(true)
           .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(hidden).build()
         // One summary per group, so several alerts fold into a single entry that opens the inbox.
         val summary = NotificationCompat.Builder(context, channel).setSmallIcon(icon)
-          .setContentTitle("A House Divided").setContentText("New inbox activity")
+          .setContentTitle("A House Divided").setContentText(T.s(R.string.push_new_activity))
           .setGroup(group).setGroupSummary(true).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
           .setContentIntent(inbox).setAutoCancel(true)
           .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(hidden).build()

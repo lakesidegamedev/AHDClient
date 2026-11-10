@@ -4,8 +4,6 @@
     <color name="briefing_cream">#FFF7F0DB</color>
     <color name="briefing_gold">#FFE8B852</color>
     <color name="briefing_rule">#1AFFFFFF</color>
-    <string name="widget_chart">Recent trend</string>
-    <string name="widget_change_legend">Green and red: change per turn</string>
     <style name="BriefingLabel">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>

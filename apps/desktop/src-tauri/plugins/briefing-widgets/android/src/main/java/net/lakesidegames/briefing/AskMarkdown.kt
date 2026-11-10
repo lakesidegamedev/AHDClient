@@ -232,13 +232,13 @@ internal class AskMarkdownRenderer(
 
   private fun code(block: AskBlock.Code, streamingTail: Boolean): View {
     if (block.language == "ahd-map") {
-      if (!block.closed) return placeholder("Drawing the map")
+      if (!block.closed) return placeholder(T.s(R.string.ask_drawing_map))
       val frame = FrameLayout(ui.context)
       mapHost(block.code, frame)
       return frame
     }
     if (block.language == "mermaid" || block.language == "mmd") {
-      if (!block.closed && streamingTail) return placeholder("Drawing the chart")
+      if (!block.closed && streamingTail) return placeholder(T.s(R.string.ask_drawing_chart))
       AskChartParser.parse(block.code)?.let { return AskChartCard.build(ui, it) }
     }
     val scroller = HorizontalScrollView(ui.context).apply {
