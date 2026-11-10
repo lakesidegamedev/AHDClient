@@ -1,0 +1,6 @@
+# Check out text with LF everywhere. Source-text tests compare multi-line
+# snippets and fail on a Windows CRLF checkout.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
