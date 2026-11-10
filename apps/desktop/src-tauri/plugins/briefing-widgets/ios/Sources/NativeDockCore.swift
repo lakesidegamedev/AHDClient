@@ -7,7 +7,7 @@ import Foundation
 
 /// Somewhere the app itself can take the player.
 enum DockApp: String {
-  case game, briefing, inbox, ask, launcher
+  case game, briefing, inbox, ask, alerts, launcher
 }
 
 struct DockTab: Identifiable, Equatable {
@@ -37,6 +37,10 @@ enum DockAppIcons {
   static let briefing = DockIcon(name: "briefing", grid: [
     "00000000000", "01111111110", "01000000010", "01011111010", "01000000010", "01011011010",
     "01000000010", "01011111010", "01000000010", "01111111110", "00000000000",
+  ])
+  static let alerts = DockIcon(name: "bell", grid: [
+    "00001110000", "00011111000", "00111111100", "00111111100", "00111111100", "01111111110",
+    "01111111110", "00000000000", "11111111111", "00001110000", "00000000000",
   ])
   static let inbox = DockIcon(name: "mail", grid: [
     "00000000000", "00000000000", "11111111111", "11000000011", "10100000101", "10010001001",

@@ -291,6 +291,7 @@ struct DockSheetContent: View {
     if !hasTab("briefing") { rows.append(AppRow(id: "briefing", icon: DockAppIcons.briefing, label: "Briefing", count: 0, app: .briefing)) }
     rows.append(AppRow(id: "inbox", icon: DockAppIcons.inbox, label: "Inbox", count: model.badge, app: .inbox))
     if !hasTab("ask") { rows.append(AppRow(id: "ask", icon: DockAppIcons.ask, label: "Ask", count: 0, app: .ask)) }
+    rows.append(AppRow(id: "alerts", icon: DockAppIcons.alerts, label: "Alerts", count: 0, app: .alerts))
     rows.append(AppRow(id: "launcher", icon: DockAppIcons.launcher, label: "Back to launcher", count: 0, app: .launcher))
     return rows
   }

@@ -77,6 +77,14 @@ final class NativePush: NSObject, UNUserNotificationCenterDelegate, URLSessionTa
     webview = view
     UNUserNotificationCenter.current().delegate = self
     installCallbacks()
+    NativeAlerts.shared.registerCategories()
+    NativeAlerts.shared.isEnabled = { [weak self] in self?.state.enabled ?? false }
+    NativeAlerts.shared.setEnabled = { [weak self] on, done in
+      self?.configure(on) { _ in
+        NativeAlerts.shared.updateBadge(unread: BriefingStore.read()?.data.inbox?.unread ?? 0)
+        done()
+      }
+    }
     refreshPermission()
     openPendingPage()
   }
@@ -251,7 +259,7 @@ final class NativePush: NSObject, UNUserNotificationCenterDelegate, URLSessionTa
     DispatchQueue.main.async {
       let session = (BriefingStore.session() ?? "")
       let allowed = self.state.enabled && self.permission && !session.isEmpty && self.state.registeredSession == self.fingerprint(session)
-      completionHandler(allowed ? [.banner, .sound] : [])
+      completionHandler(allowed ? [.banner, .sound, .badge] : [])
     }
   }
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
@@ -262,7 +270,9 @@ final class NativePush: NSObject, UNUserNotificationCenterDelegate, URLSessionTa
       // Older pushes carry only the inbox `path`.
       let page = (info["href"] as? String).flatMap(BriefingStore.gamePath)
         ?? (info["path"] as? String == "/notifications" ? "/notifications" : nil)
-      if let page = page {
+      // The "Open inbox" action always goes to the inbox, whatever the alert was about.
+      let target = response.actionIdentifier == NativeAlerts.openInboxAction ? "/notifications" : page
+      if let page = target {
         self.pendingPath = page; self.navigationAttempts = 0; self.openPendingPage()
       }
       completionHandler()

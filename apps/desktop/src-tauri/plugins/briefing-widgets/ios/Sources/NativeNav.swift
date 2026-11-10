@@ -215,6 +215,9 @@ final class NativeNavController: NSObject {
     })
     observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
       self?.refreshStatus()
+      if let url = self?.webView?.url, NativeLoadView.isGamePage(url) {
+        NativeAlerts.shared.clearDelivered(viewing: DockTabs.path(url))
+      }
       self?.refreshLocale()
       self?.refreshLayout(maxAge: 30)
     })
@@ -355,6 +358,9 @@ final class NativeNavController: NSObject {
     case .ask:
       NativeAskController.shared.present()
       return
+    case .alerts:
+      NativeAlerts.shared.showManager(from: topController())
+      return
     case .launcher:
       if let url = URL(string: Self.launcher) { webView.load(URLRequest(url: url)) }
     }
@@ -402,6 +408,7 @@ final class NativeNavController: NSObject {
     let place = (url.host ?? "") + path
     if place != lastPlace {
       lastPlace = place
+      if isGame { NativeAlerts.shared.clearDelivered(viewing: path) }
       model.close()
       pageMoved(url, path: path, isGame: isGame)
     }
@@ -484,12 +491,16 @@ final class NativeNavController: NSObject {
       let safari = SFSafariViewController(url: url)
       safari.preferredBarTintColor = Self.background
       safari.preferredControlTintColor = .white
-      var top = host.flatMap { Self.owningController(of: $0) }
-      while let next = top?.presentedViewController { top = next }
-      top?.present(safari, animated: true)
+      topController()?.present(safari, animated: true)
     } else {
       UIApplication.shared.open(url)
     }
+  }
+
+  private func topController() -> UIViewController? {
+    var top = host.flatMap { Self.owningController(of: $0) }
+    while let next = top?.presentedViewController { top = next }
+    return top
   }
 
   /// Game pages carry the web status footer, except the bare ones.
@@ -518,6 +529,21 @@ final class NativeNavController: NSObject {
     syncAccount()
     refreshBadge(saved)
     scheduleTurnRefresh()
+    if let saved { NativeAlerts.shared.updateBadge(unread: saved.data.inbox?.unread ?? 0) }
+    offerAlerts(saved)
+  }
+
+  /// The one-time alerts question, a moment after the first signed-in status
+  /// load, never over a panel or another sheet, and only on a game page.
+  private func offerAlerts(_ saved: SavedBriefing?) {
+    guard saved != nil, layoutAccount != nil, !NativeAlerts.shared.asked else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+      guard let self, UIApplication.shared.applicationState == .active, !self.model.expanded,
+        self.topController()?.presentedViewController == nil else { return }
+      let onGame = self.webView?.url.map { NativeLoadView.isGamePage($0) && !self.onInboxPage } ?? false
+      NativeAlerts.shared.askOnce(from: self.topController(), signedIn: self.layoutAccount != nil,
+        statusLoaded: true, onGamePage: onGame)
+    }
   }
 
   /// A look just after the turn clock runs out, so the new countdown shows
@@ -662,6 +688,11 @@ final class NativeNavController: NSObject {
     model.onStripPage = !signedOut
     model.status = signedOut ? nil : DockStatus.sample()
     model.badge = signedOut ? 0 : 3
+    if state == "alerts" {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        NativeAlerts.shared.present(.ask, from: self?.topController(), preview: true)
+      }
+    }
     let panel: DockPanel? = state == "expanded" ? .status : state == "sheet" ? .sheet("state") : state == "more" ? .sheet("more") : nil
     if let panel {
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.model.open(panel, animated: false) }
