@@ -19,7 +19,7 @@ describe("Android mobile dock (2.10.0)", () => {
   it("replaces the stock Material tab bar with the custom dock", () => {
     expect(nav).not.toContain("BottomNavigationView");
     expect(dock).not.toContain("BottomNavigationView");
-    expect(nav).toContain("val dock = NativeDock(activity, this)");
+    expect(nav).toContain("var dock = NativeDock(activity, this)");
   });
 
   it("marks only the mobile WebView with the native status user agent, once the dock is on screen, then reloads the page once", () => {
