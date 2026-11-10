@@ -42,6 +42,7 @@ import { SavesDialog } from "./SavesDialog.js";
 import { GameVersionLine } from "./GameVersionBar.js";
 import { DiagnosticPrompt } from "./DiagnosticPrompt.js";
 import { DiagnosticPanel } from "./DiagnosticPanel.js";
+import { ShortcutsDialog } from "./ShortcutsDialog.js";
 import { diagnosticRuntime, recordDiagnostic, submitAutomaticDiagnostics, submitDiagnostics, type DiagnosticReason } from "./diagnostics.js";
 import { mobile, platform } from "./platform.js";
 import { reportIssueRoute } from "./help.js";
@@ -149,6 +150,7 @@ export function App(): JSX.Element {
   // Check for updates on every screen for as long as the app stays open.
   useEffect(() => (mobile ? undefined : startUpdateSchedule()), []);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   /** Slot whose saves dialog is open, if any. */
   const [savesFor, setSavesFor] = useState<string | null>(null);
   /** Set while a save is being loaded, so the next boot can report how it went. */
@@ -161,7 +163,7 @@ export function App(): JSX.Element {
    * closes. Derived from the union, so the settings to diagnostics handoff
    * never flashes the game back. Mobile has no embedded views to hide.
    */
-  const dialogOpen = settingsOpen || diagnosticsOpen || savesFor != null;
+  const dialogOpen = settingsOpen || diagnosticsOpen || shortcutsOpen || savesFor != null;
   useEffect(() => {
     if (mobile || !embedded) return;
     void game.setEmbeddedVisible(!dialogOpen).catch(() => {});
@@ -186,17 +188,6 @@ export function App(): JSX.Element {
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
   }, []);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      if (screen === "briefing") { setScreen("launcher"); return; }
-      if (savesFor) { setSavesFor(null); return; }
-      setSettingsOpen((open) => !open);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [screen, savesFor]);
   // The autosave interval is a client setting but lives with each world, so
   // it is handed to whichever world is running whenever it starts or changes.
   useEffect(() => {
@@ -324,7 +315,13 @@ export function App(): JSX.Element {
       listen("game:window-closed", () => {
         void recordProgress();
       }),
-      listen("client:settings", () => setSettingsOpen((open) => !open)),
+      // Open, never toggle: the menu accelerator and the in-game fallback
+      // can both deliver the same keypress.
+      listen("client:settings", () => setSettingsOpen(true)),
+      listen("client:shortcuts", () => setShortcutsOpen(true)),
+      listen("client:end-turn", () =>
+        window.dispatchEvent(new CustomEvent("ahdclient:end-turn")),
+      ),
     ];
     return () => {
       for (const subscription of subscriptions)
@@ -827,6 +824,7 @@ export function App(): JSX.Element {
       <UpdateNotice enabled={!mobile} />
       {savesDialog}
       {settingsMenu}
+      {shortcutsOpen ? <ShortcutsDialog onClose={() => setShortcutsOpen(false)} /> : null}
       {diagnosticPanel}
       {diagnosticPrompt}
     </>

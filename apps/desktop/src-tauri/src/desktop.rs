@@ -23,7 +23,9 @@ use crate::{help_destination, is_frame_resource, is_online_navigation_allowed, l
 
 const SETTINGS_SHORTCUT_SCRIPT: &str = r#"
 document.addEventListener('keydown', function (event) {
-  if (event.key === 'Escape' && !event.repeat) {
+  // Escape belongs to the game (it closes the game's own dialogs). Settings
+  // is Ctrl or Cmd plus comma; the native menu carries the same accelerator.
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === ',' && !event.repeat) {
     event.preventDefault();
     window.location.href = 'ahdclient://settings';
   }
@@ -841,6 +843,160 @@ pub(crate) fn refresh_game_view(app: AppHandle, game: State<'_, Game>) -> Result
   Err("no local game view is open".into())
 }
 
+// ---------------------------------------------------------------------------
+// Browser basics: reload, back, forward, zoom, and the native menu
+// ---------------------------------------------------------------------------
+
+/// Game views in the order a menu action should reach them. Embedded views
+/// come first because they sit inside the main window.
+const GAME_VIEW_LABELS: [&str; 4] = ["game-embedded", "online-embedded", "game", "online"];
+
+const ZOOM_MIN: f64 = 0.5;
+const ZOOM_MAX: f64 = 3.0;
+const ZOOM_STEP: f64 = 0.1;
+
+fn active_game_view(app: &AppHandle) -> Option<tauri::Webview> {
+  GAME_VIEW_LABELS.iter().find_map(|label| app.get_webview(label))
+}
+
+/// The zoom after one step, kept to one decimal so repeated steps never drift.
+fn next_zoom(current: f64, direction: &str) -> Result<f64, String> {
+  let next = match direction {
+    "in" => current + ZOOM_STEP,
+    "out" => current - ZOOM_STEP,
+    "reset" => 1.0,
+    other => return Err(format!("unknown zoom direction {other:?}")),
+  };
+  Ok(((next.clamp(ZOOM_MIN, ZOOM_MAX)) * 10.0).round() / 10.0)
+}
+
+fn zoom_file(app: &AppHandle) -> Option<PathBuf> {
+  app.path().app_config_dir().ok().map(|dir| dir.join("game-zoom.json"))
+}
+
+fn saved_zoom(app: &AppHandle) -> f64 {
+  zoom_file(app)
+    .and_then(|path| fs::read_to_string(path).ok())
+    .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+    .and_then(|json| json.get("zoom").and_then(|z| z.as_f64()))
+    .map(|zoom| zoom.clamp(ZOOM_MIN, ZOOM_MAX))
+    .unwrap_or(1.0)
+}
+
+fn save_zoom(app: &AppHandle, zoom: f64) {
+  let Some(path) = zoom_file(app) else { return };
+  if let Some(dir) = path.parent() { let _ = fs::create_dir_all(dir); }
+  let _ = fs::write(path, serde_json::json!({ "zoom": zoom }).to_string());
+}
+
+/// Give every open game view the remembered zoom. Called after a view opens.
+fn apply_saved_zoom(app: &AppHandle) {
+  let zoom = saved_zoom(app);
+  if (zoom - 1.0).abs() < f64::EPSILON { return; }
+  for label in GAME_VIEW_LABELS {
+    if let Some(view) = app.get_webview(label) { let _ = view.set_zoom(zoom); }
+  }
+}
+
+/// Reload whichever game view is open, on its current page.
+#[tauri::command]
+pub(crate) fn game_reload(app: AppHandle) -> Result<(), String> {
+  let view = active_game_view(&app).ok_or("no game view is open")?;
+  view.eval("window.location.reload()").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn game_back(app: AppHandle) -> Result<(), String> {
+  let view = active_game_view(&app).ok_or("no game view is open")?;
+  view.eval("window.history.back()").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn game_forward(app: AppHandle) -> Result<(), String> {
+  let view = active_game_view(&app).ok_or("no game view is open")?;
+  view.eval("window.history.forward()").map_err(|e| e.to_string())
+}
+
+/// Zoom every open game view and remember the level for the next one.
+/// `direction` is "in", "out" or "reset". Returns the new zoom factor.
+#[tauri::command]
+pub(crate) fn game_zoom(app: AppHandle, direction: String) -> Result<f64, String> {
+  if active_game_view(&app).is_none() { return Err("no game view is open".into()); }
+  let zoom = next_zoom(saved_zoom(&app), &direction)?;
+  save_zoom(&app, zoom);
+  for label in GAME_VIEW_LABELS {
+    if let Some(view) = app.get_webview(label) { let _ = view.set_zoom(zoom); }
+  }
+  Ok(zoom)
+}
+
+fn toggle_game_fullscreen(app: &AppHandle) {
+  let window = active_game_view(app)
+    .map(|view| view.window())
+    .or_else(|| app.get_window("main"));
+  if let Some(window) = window {
+    let on = window.is_fullscreen().unwrap_or(false);
+    let _ = window.set_fullscreen(!on);
+  }
+}
+
+/// Tauri's default menu (macOS needs its Edit entries or paste stops working)
+/// plus a Game menu with the browser basics and the client's own actions.
+fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+  use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+  let menu = Menu::default(app)?;
+  let item = |id: &str, text: &str, accel: &str| MenuItem::with_id(app, id, text, true, Some(accel));
+  let game = Submenu::with_items(
+    app,
+    "Game",
+    true,
+    &[
+      &item("game_reload", "Reload", "CmdOrCtrl+R")?,
+      &item("game_back", "Back", if cfg!(target_os = "macos") { "Cmd+[" } else { "Alt+Left" })?,
+      &item("game_forward", "Forward", if cfg!(target_os = "macos") { "Cmd+]" } else { "Alt+Right" })?,
+      &PredefinedMenuItem::separator(app)?,
+      &item("game_zoom_in", "Zoom in", "CmdOrCtrl+=")?,
+      &item("game_zoom_out", "Zoom out", "CmdOrCtrl+-")?,
+      &item("game_zoom_reset", "Actual size", "CmdOrCtrl+0")?,
+      &item("game_fullscreen", "Full screen", if cfg!(target_os = "macos") { "Ctrl+Cmd+F" } else { "F11" })?,
+      &PredefinedMenuItem::separator(app)?,
+      &item("client_ask", "Ask about the game", "CmdOrCtrl+K")?,
+      &item("client_end_turn", "End turn", "CmdOrCtrl+E")?,
+      &item("client_settings", "Settings", "CmdOrCtrl+,")?,
+      &item("client_shortcuts", "Keyboard shortcuts", "CmdOrCtrl+/")?,
+    ],
+  )?;
+  menu.append(&game)?;
+  Ok(menu)
+}
+
+fn bring_launcher_forward(app: &AppHandle) {
+  if let Some(main) = app.get_webview_window("main") {
+    let _ = main.show();
+    let _ = main.set_focus();
+  }
+}
+
+fn handle_menu_event(app: &AppHandle, id: &str) {
+  match id {
+    "game_reload" => { let _ = game_reload(app.clone()); }
+    "game_back" => { let _ = game_back(app.clone()); }
+    "game_forward" => { let _ = game_forward(app.clone()); }
+    "game_zoom_in" => { let _ = game_zoom(app.clone(), "in".into()); }
+    "game_zoom_out" => { let _ = game_zoom(app.clone(), "out".into()); }
+    "game_zoom_reset" => { let _ = game_zoom(app.clone(), "reset".into()); }
+    "game_fullscreen" => toggle_game_fullscreen(app),
+    "client_ask" => {
+      let ask_app = app.clone();
+      tauri::async_runtime::spawn(async move { let _ = crate::ask::open_ask_window(ask_app).await; });
+    }
+    "client_end_turn" => { let _ = app.emit("client:end-turn", ()); }
+    "client_settings" => { bring_launcher_forward(app); let _ = app.emit("client:settings", ()); }
+    "client_shortcuts" => { bring_launcher_forward(app); let _ = app.emit("client:shortcuts", ()); }
+    _ => {}
+  }
+}
+
 fn open_embedded(app: &AppHandle, url: Url, local_port: Option<u16>) -> Result<(), String> {
   close_embedded(app);
   let window = app.get_window("main").ok_or("launcher window is missing")?;
@@ -873,6 +1029,7 @@ fn open_embedded(app: &AppHandle, url: Url, local_port: Option<u16>) -> Result<(
   window.add_child(builder, LogicalPosition::new(0.0, EMBEDDED_TOP),
     LogicalSize::new(size.width, (size.height - EMBEDDED_TOP).max(1.0)))
     .map_err(|e| e.to_string())?;
+  apply_saved_zoom(app);
   Ok(())
 }
 
@@ -931,6 +1088,7 @@ pub(crate) async fn open_game_window(app: AppHandle, game: State<'_, Game>, path
     })
     .build()
     .map_err(|e| e.to_string())?;
+  apply_saved_zoom(&app);
   window.on_window_event(move |event| {
     if matches!(event, WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed) {
       let _ = close_app.emit("game:window-closed", ());
@@ -1005,6 +1163,7 @@ async fn open_online_url(app: AppHandle, url: Url) -> Result<(), String> {
     })
     .build()
     .map_err(|e| e.to_string())?;
+  apply_saved_zoom(&app);
   window.on_window_event(move |event| {
     if matches!(event, WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed) {
       if let Some(main) = close_app.get_webview_window("main") {
@@ -1116,8 +1275,10 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .manage(crate::desktop_alerts::AlertState::default())
     .setup(|app| {
       crate::desktop_alerts::start(app.handle());
+      app.set_menu(build_menu(app.handle())?)?;
       Ok(())
     })
+    .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()))
     .manage(Game(Mutex::new(GameInner::default()), tokio::sync::Mutex::new(())))
     .manage(StatisticsConsent(AtomicBool::new(false)))
     .manage(crate::ask::AskStreamState::default())
@@ -1139,6 +1300,10 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       close_embedded_game,
       set_embedded_visible,
       refresh_game_view,
+      game_reload,
+      game_back,
+      game_forward,
+      game_zoom,
       open_online_window,
       open_help_destination,
       crate::ask::open_ask_window,
@@ -1194,6 +1359,18 @@ pub(crate) fn on_exit(app: &AppHandle) {
 mod tests {
   use super::{stamped, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
+
+  #[test]
+  fn zoom_steps_stay_in_range_and_never_drift() {
+    assert_eq!(super::next_zoom(1.0, "in"), Ok(1.1));
+    let mut zoom = 1.0;
+    for _ in 0..30 { zoom = super::next_zoom(zoom, "in").unwrap(); }
+    assert_eq!(zoom, 3.0);
+    for _ in 0..40 { zoom = super::next_zoom(zoom, "out").unwrap(); }
+    assert_eq!(zoom, 0.5);
+    assert_eq!(super::next_zoom(2.3, "reset"), Ok(1.0));
+    assert!(super::next_zoom(1.0, "sideways").is_err());
+  }
 
   #[test]
   fn only_non_appimage_linux_is_a_package_install() {

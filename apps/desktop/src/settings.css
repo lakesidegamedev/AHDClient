@@ -226,3 +226,9 @@ html[data-animations="off"] .client-toolbar-spinner { animation: none; }
   .client-game-toolbar > .client-toolbar-ask { display: none; }
   .client-toolbar-overflow .client-toolbar-ask-menu { display: block; }
 }
+
+.client-shortcuts { margin: 0; padding: 8px 26px 24px; }
+.client-shortcuts > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line, #ffffff14); }
+.client-shortcuts dt { margin: 0; }
+.client-shortcuts dd { margin: 0; }
+.client-shortcuts kbd { padding: 3px 8px; border: 1px solid #ffffff2e; border-radius: 6px; background: #ffffff0d; font: inherit; font-size: 13px; white-space: nowrap; }

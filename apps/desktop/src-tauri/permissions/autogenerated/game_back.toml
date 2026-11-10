@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-game-back"
+description = "Enables the game_back command without any pre-configured scope."
+commands.allow = ["game_back"]
+
+[[permission]]
+identifier = "deny-game-back"
+description = "Denies the game_back command without any pre-configured scope."
+commands.deny = ["game_back"]
