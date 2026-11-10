@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, fs, io::{self, Read}, path::{Path, PathBuf}, time::Duration};
 use tauri::{AppHandle, Manager};
 
-const RELEASES_URL: &str = "https://api.github.com/repos/Egg3901/AHDGame/releases?per_page=50";
+const RELEASES_URL: &str = "https://api.github.com/repos/lakesidegamedev/AHDGame/releases?per_page=50";
 const MIN_VERSION: (u64, u64, u64) = (1, 6, 0);
 
 #[derive(Clone, Debug, Serialize)]
