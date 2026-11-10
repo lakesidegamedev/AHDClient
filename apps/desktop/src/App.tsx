@@ -96,9 +96,13 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (mobile) return;
     let live = true;
-    void gameRuntime.capabilities().then((next) => {
-      if (live) setCapabilities(next);
-    });
+    // The launcher and setup screen fall back to the older table on their own.
+    void gameRuntime
+      .capabilities()
+      .then((next) => {
+        if (live) setCapabilities(next);
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
     };
