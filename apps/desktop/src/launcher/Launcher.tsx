@@ -3,7 +3,9 @@ import type { CSSProperties, ReactNode } from "react";
 import desktopPackage from "../../package.json";
 import ahdLogo from "../assets/ahd-logo.png";
 import { ERAS, eraForPreset } from "../worlds.js";
-import type { WorldMeta } from "../worlds.js";
+import type { Era, WorldMeta } from "../worlds.js";
+import { legacyCapabilities } from "../capabilities.js";
+import type { Capabilities, CapabilityPreset } from "../capabilities.js";
 import { CommandGlobe, themeForEra } from "./CommandGlobe.js";
 import { ERA_PHOTOS } from "./eraPhotos.js";
 import "./launcher.css";
@@ -22,6 +24,38 @@ const MOBILE_MODES_WITHOUT_SANDBOX: readonly Mode[] = ["mp"];
 
 export type OnlineTarget = "live" | "sandbox";
 
+/** Era text and photos stay client-side, keyed by era id. */
+function eraForCapabilityPreset(preset: CapabilityPreset): Era {
+  return (
+    ERAS.find((era) => era.id === preset.era) ?? {
+      id: preset.era,
+      preset: preset.preset,
+      label: preset.era,
+      subtitle: "",
+      startDate: "",
+    }
+  );
+}
+
+const joinNames = (names: readonly string[]): string =>
+  names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
+/**
+ * What the era card says about who you can play. A runtime that reports its
+ * countries gets a plain sentence; the older table keeps the nation list.
+ */
+export function playableSummary(era: Era | undefined, preset: CapabilityPreset | undefined, source: Capabilities["source"]): string | null {
+  if (source === "manifest" && preset && preset.playerCountries.length > 0) {
+    const player = joinNames(preset.playerCountries.map((country) => country.name));
+    const computer = preset.computerCountries.map((country) => country.name);
+    const verb = preset.playerCountries.length > 1 ? "You can play" : "You play in";
+    return computer.length > 0
+      ? `${verb} the ${player}. The ${joinNames(computer)} ${computer.length > 1 ? "are" : "is"} run by the computer.`
+      : `${verb} the ${player}.`;
+  }
+  return era?.playableNations?.join(" · ") || null;
+}
+
 interface Props {
   language?: ClientLanguage;
   /** Android or iOS: hides every local-game mode and control. */
@@ -32,6 +66,14 @@ interface Props {
   /** Multiplayer briefing. Phones show it beside Ask under the main action. */
   briefingControl?: ReactNode;
   gameVersionControl?: ReactNode;
+  /** What the game runtime supports. Absent means the older client-side era table. */
+  capabilities?: Capabilities | undefined;
+  /**
+   * Set once a Classic runtime can be installed. Eras the bundled game cannot
+   * seed then sit under a "Classic eras" heading instead of staying hidden.
+   */
+  classicAvailable?: boolean;
+  onClassicEras?: () => void;
   onPhotoSource?: (eraId: string) => void;
   onNewWorld: (eraId: string, worldsim?: boolean) => void;
   onContinue: (slot: string) => void;
@@ -78,6 +120,9 @@ export function Launcher({
   askControl,
   briefingControl,
   gameVersionControl,
+  capabilities,
+  classicAvailable = false,
+  onClassicEras,
   onPhotoSource,
   onNewWorld,
   onContinue,
@@ -98,7 +143,19 @@ export function Launcher({
   errorOffersLink = false,
 }: Props): JSX.Element {
   const de = language === "de";
-  const eras = useMemo(() => ERAS, []);
+  const caps = useMemo(() => capabilities ?? legacyCapabilities(), [capabilities]);
+  // Only eras this runtime can seed are offered. An era with nothing to tap is
+  // never shown; the rest are Classic eras, listed only once Classic exists.
+  const eras = useMemo(
+    () => caps.presets.filter((preset) => preset.seedable).map(eraForCapabilityPreset),
+    [caps],
+  );
+  const classicEras = useMemo(
+    () => caps.presets.filter((preset) => !preset.seedable).map(eraForCapabilityPreset),
+    [caps],
+  );
+  const defaultEraId =
+    eras.find((era) => era.preset === caps.defaultPreset)?.id ?? eras[eras.length - 1]?.id ?? eras[0]?.id ?? "";
   const modes = mobile
     ? sandboxAvailable ? MOBILE_MODES : MOBILE_MODES_WITHOUT_SANDBOX
     : DESKTOP_MODES;
@@ -111,15 +168,15 @@ export function Launcher({
     const saved = readPreference(ERA_STORAGE_KEY);
     return saved && eras.some(({ id }) => id === saved)
       ? saved
-      : (eras[0]?.id ?? "1953");
+      : defaultEraId;
   });
   const [choosingEra, setChoosingEra] = useState(false);
 
   useEffect(() => {
     if (eras.length > 0 && !eras.some((era) => era.id === eraId)) {
-      setEraId(eras[0]!.id);
+      setEraId(defaultEraId);
     }
-  }, [eras, eraId]);
+  }, [eras, eraId, defaultEraId]);
 
   // Losing a mode (a supporter account signed out) falls back to the first.
   useEffect(() => {
@@ -290,6 +347,15 @@ export function Launcher({
               <div className="launcher-era-timeline" role="list" aria-label={de ? "Zeitleiste der Startzeitalter" : "Starting era timeline"}>
                 {eras.map((era) => <div role="listitem" key={era.id}><button type="button" aria-current={era.id === eraId ? "true" : undefined} className={era.id === eraId ? "active" : ""} onClick={() => setEraId(era.id)}><span className="launcher-era-node" style={{ borderColor: themeForEra(era.id).phosphor }} /><strong>{era.label}</strong><small>{era.subtitle}</small></button></div>)}
               </div>
+              {classicAvailable && classicEras.length > 0 && onClassicEras && (
+                <div className="launcher-classic-eras">
+                  <strong>Classic eras</strong>
+                  <small>{classicEras.map((era) => era.label).join(", ")}</small>
+                  <button type="button" className="launcher-btn launcher-btn-secondary" onClick={onClassicEras}>
+                    Get Classic eras
+                  </button>
+                </div>
+              )}
               <div className="launcher-era-carousel">
                 <div className="launcher-era-card" aria-live="polite">
                   {selectedPhoto && (
@@ -308,8 +374,11 @@ export function Launcher({
                   <p className="launcher-playable">
                     <strong>Playable nations</strong>
                     <br />
-                    {selectedEra?.playableNations?.join(" · ") ||
-                      "Availability is checked during setup"}
+                    {playableSummary(
+                      selectedEra,
+                      caps.presets.find((preset) => preset.preset === selectedEra?.preset),
+                      caps.source,
+                    ) ?? "Availability is checked during setup"}
                   </p>
                   {selectedPhoto && (
                     <div className="launcher-era-attribution">

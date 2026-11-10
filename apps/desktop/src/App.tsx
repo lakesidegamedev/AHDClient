@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Launcher } from "./launcher/Launcher.js";
+import { gameRuntime } from "./capabilities.js";
+import type { Capabilities } from "./capabilities.js";
 import { NewWorldScreen } from "./screens/NewWorldScreen.js";
 import { WorldsScreen } from "./screens/WorldsScreen.js";
 import { BootScreen } from "./screens/BootScreen.js";
@@ -90,6 +92,21 @@ export function App(): JSX.Element {
   }, [screen]);
   const [allWorlds, setAllWorlds] = useState<WorldMeta[]>([]);
   const [info, setInfo] = useState<GameInfo>(IDLE);
+  const [capabilities, setCapabilities] = useState<Capabilities | undefined>(undefined);
+  useEffect(() => {
+    if (mobile) return;
+    let live = true;
+    // The launcher and setup screen fall back to the older table on their own.
+    void gameRuntime
+      .capabilities()
+      .then((next) => {
+        if (live) setCapabilities(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const [pendingWorldsim, setPendingWorldsim] = useState(false);
   const [runningWorldsim, setRunningWorldsim] = useState(false);
   const [pendingEra, setPendingEra] = useState<string | null>(null);
@@ -890,6 +907,7 @@ export function App(): JSX.Element {
         <NewWorldScreen
           language={settings.language}
           era={era}
+          capabilities={capabilities}
           initialWorldsim={pendingWorldsim}
           shareStatistics={settings.shareStatistics}
           onStatisticsChange={(shareStatistics) =>
@@ -999,6 +1017,7 @@ export function App(): JSX.Element {
         accountControl={accountControl}
         askControl={askControl}
         briefingControl={briefingControl}
+        capabilities={capabilities}
         gameVersionControl={mobile ? undefined : <GameVersionLine />}
         onPhotoSource={(eraId) => {
           void online.help(`help.era-photo-${eraId}`).catch(fail);

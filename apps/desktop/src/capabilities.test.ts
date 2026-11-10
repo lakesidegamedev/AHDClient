@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { legacyCapabilities, resolveCapabilities } from "./capabilities.js";
 import { ERAS } from "./worlds.js";
 import { FEATURE_OPTIONS } from "./screens/featureOptions.js";
+import real120 from "./fixtures/singleplayer-capabilities-1.20.json";
 
-// PROVISIONAL: this fixture is built from the G2 schema frozen in the 2.11 plan
-// (section 4), not from a real game build. Replace it with the manifest the
-// 1.20 game emits once G2 lands, and keep the shape assertions below.
+// Hand-built manifest for edge cases. The real file the 1.20 game writes is
+// fixtures/singleplayer-capabilities-1.20.json, tested at the bottom.
 const manifest120 = {
   schemaVersion: 1,
   gameVersion: "1.20.0",
@@ -69,5 +69,17 @@ describe("resolveCapabilities", () => {
     expect(resolveCapabilities({ ...manifest120, presets: "nope" }).diagnostic).toContain("malformed");
     expect(resolveCapabilities({ ...manifest120, modes: [1] }).source).toBe("legacy");
     expect(resolveCapabilities("text").diagnostic).toContain("not an object");
+  });
+});
+
+describe("the manifest a real 1.20 game build writes", () => {
+  it("offers only the 2027 world, played as the United States", () => {
+    const caps = resolveCapabilities(real120);
+    expect(caps.source).not.toBe("legacy");
+    expect(caps.defaultPreset).toBe("2027-default");
+    const seedable = caps.presets.filter((p) => p.seedable);
+    expect(seedable.map((p) => p.preset)).toEqual(["2027-default"]);
+    expect(seedable[0]!.playerCountries.map((c) => c.id)).toEqual(["US"]);
+    expect(caps.featureFlags).toHaveLength(10);
   });
 });

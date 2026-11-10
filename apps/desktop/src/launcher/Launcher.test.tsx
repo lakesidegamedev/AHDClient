@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Launcher } from "./Launcher.js";
 import type { WorldMeta } from "../worlds.js";
+import { resolveCapabilities } from "../capabilities.js";
 
 vi.mock("./CommandGlobe.js", () => ({
   CommandGlobe: () => null,
@@ -94,6 +95,7 @@ describe("Launcher", () => {
     renderLauncher({ onPhotoSource });
     expect(screen.queryByAltText(/Eisenhower's 1953/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "New Game" }));
+    await userEvent.click(screen.getByRole("button", { name: /1953/ }));
     expect(screen.getByAltText(/Eisenhower's 1953/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Photo source" }));
     expect(onPhotoSource).toHaveBeenCalledWith("1953");
@@ -210,5 +212,53 @@ describe("Launcher", () => {
     expect(screen.queryByText(/Supporter/)).toBeNull();
     expect(screen.getByRole("button", { name: /Enter multiplayer/ })).toBeTruthy();
     expect(localStorage.getItem("ahdclient.launcher.mode")).toBe("mp");
+  });
+});
+
+describe("Launcher with a runtime manifest", () => {
+  const manifest = resolveCapabilities({
+    schemaVersion: 1,
+    gameVersion: "1.20.0",
+    rulesVersion: "1.0.0",
+    defaultPreset: "2027-default",
+    presets: [
+      { preset: "1979-default", era: "1979", seedable: false, playerCountries: [], computerCountries: [], backgroundCountries: [] },
+      {
+        preset: "2027-default",
+        era: "2027",
+        seedable: true,
+        playerCountries: [{ id: "US", name: "United States" }],
+        computerCountries: [
+          { id: "UK", name: "United Kingdom" },
+          { id: "DE", name: "Germany" },
+          { id: "JP", name: "Japan" },
+          { id: "CN", name: "China" },
+        ],
+        backgroundCountries: [],
+      },
+    ],
+    modes: ["normal"],
+    difficulties: ["normal"],
+    autonomyLevels: ["v6"],
+    defaultAutonomyLevel: "v6",
+    featureFlags: [],
+  });
+
+  beforeEach(() => localStorage.clear());
+  afterEach(() => cleanup());
+
+  it("offers only seedable eras, defaulting to the manifest preset", async () => {
+    renderLauncher({ capabilities: manifest });
+    await userEvent.click(screen.getByRole("button", { name: /New Game/ }));
+    const timeline = screen.getByRole("list", { name: /timeline/i });
+    expect(timeline.textContent).toContain("2027");
+    expect(timeline.textContent).not.toContain("1979");
+    expect(screen.getByText(/You play in the United States\. The United Kingdom, Germany, Japan and China are run by the computer\./)).toBeTruthy();
+  });
+
+  it("lists unseedable eras under Classic eras only when Classic is available", async () => {
+    renderLauncher({ capabilities: manifest, classicAvailable: true, onClassicEras: vi.fn() });
+    await userEvent.click(screen.getByRole("button", { name: /New Game/ }));
+    expect(screen.getByText("Classic eras")).toBeTruthy();
   });
 });
