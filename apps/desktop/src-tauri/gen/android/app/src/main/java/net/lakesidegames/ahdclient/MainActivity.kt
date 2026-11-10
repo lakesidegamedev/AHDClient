@@ -2,6 +2,7 @@ package net.lakesidegames.ahdclient
 
 import android.os.Bundle
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
@@ -25,6 +26,22 @@ class MainActivity : TauriActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     CompanionSafety.run("widget deep link") { openWidgetPage() }
+  }
+
+  // The values the dock was built for. The activity's own configuration is already the new one
+  // when the callback runs, so the previous values are kept here.
+  private var shownScale = 0f
+  private var shownDensity = 0
+  private var shownDirection = -1
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val changed = shownScale != newConfig.fontScale || shownDensity != newConfig.densityDpi ||
+      shownDirection != newConfig.layoutDirection
+    shownScale = newConfig.fontScale
+    shownDensity = newConfig.densityDpi
+    shownDirection = newConfig.layoutDirection
+    if (changed) CompanionSafety.run("dock rebuild") { nav?.rebuildDock() }
   }
 
   override fun onResume() {
@@ -190,6 +207,7 @@ class MainActivity : TauriActivity() {
       )
     }
     super.onCreate(savedInstanceState)
+    resources.configuration.let { shownScale = it.fontScale; shownDensity = it.densityDpi; shownDirection = it.layoutDirection }
   }
 
   override fun onWebViewCreate(webView: WebView) {
