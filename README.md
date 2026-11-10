@@ -58,7 +58,7 @@ requests run. All cards show their update time, and saved stats expire after
 
 ## Download
 
-Builds are published on [GitHub Releases](https://github.com/lakesidegamedev/AHDClient/releases/latest): a Windows x64 installer, macOS disk images for Apple silicon and Intel, and Linux AppImage and Debian packages. Release binaries are unsigned, so Windows SmartScreen and macOS Gatekeeper may ask for explicit approval. Android ships as an APK for sideloading and a Play bundle; iOS builds are prepared for the App Store and TestFlight.
+Builds are published on [GitHub Releases](https://github.com/lakesidegamedev/AHDClient/releases/latest): a Windows x64 installer, macOS disk images for Apple silicon and Intel, and Linux AppImage and Debian packages. Windows installers are unsigned, so SmartScreen may ask for explicit approval. macOS builds are signed and notarized when the release has a Developer ID certificate; otherwise Gatekeeper asks you to right-click and choose Open. Android ships as an APK for sideloading and a Play bundle; iOS builds are prepared for the App Store and TestFlight.
 
 The first world you create downloads the MongoDB server (about 30 MB on Windows, 90 to 100 MB elsewhere). Everything after that is offline, including art the game has shown you once.
 

@@ -62,7 +62,8 @@
       }
     },
     "macOS": {
-      "hardenedRuntime": false
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist"
     },
     "windows": {
       "nsis": {

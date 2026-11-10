@@ -421,7 +421,8 @@ describe("desktop platform configuration", () => {
     expect(tauriConfig.bundle.externalBin).toEqual(["binaries/ahd-node"]);
     expect(tauriConfig.bundle.resources).toEqual({ "resources/game": "game" });
     expect(tauriConfig.app.windows[0]?.backgroundColor).toBe("#14141c");
-    expect(tauriConfig.bundle.macOS.hardenedRuntime).toBe(false);
+    expect(tauriConfig.bundle.macOS.hardenedRuntime).toBe(true);
+    expect(tauriConfig.bundle.macOS.entitlements).toBe("Entitlements.plist");
   });
 
   it("stages the game before every native bundle", () => {
@@ -442,7 +443,9 @@ describe("desktop platform configuration", () => {
       expect(workflow).toContain(needle);
     }
     expect(workflow).not.toContain("uploadWorkflowArtifacts");
-    expect(workflow).toContain("APPLE_SIGNING_IDENTITY: ${{ startsWith(matrix.platform, 'macos') && '-' || '' }}");
+    expect(workflow).toContain("APPLE_CERTIFICATE");
+    expect(workflow).toContain('echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"');
+    expect(read("../src-tauri/Entitlements.plist")).toContain("com.apple.security.cs.allow-jit");
     expect(workflow).toContain("console.log('ahd-node-jit-ok')");
     expect(workflow).toContain("-name '*.app.tar.gz'");
     expect(workflow).toContain("tar -xzf \"$archive\"");
