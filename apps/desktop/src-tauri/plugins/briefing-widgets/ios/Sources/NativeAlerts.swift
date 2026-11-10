@@ -146,6 +146,9 @@ final class NativeAlerts {
 
 /// The bottom sheet. Plain words, one clear button, an easy way out.
 final class AlertsSheetController: UIViewController {
+  // Same colours as the dock; kept here so this file compiles on its own.
+  static let background = UIColor(red: 0x14 / 255, green: 0x14 / 255, blue: 0x1c / 255, alpha: 1)
+  static let accent = UIColor(red: 0xdc / 255, green: 0x26 / 255, blue: 0x26 / 255, alpha: 1)
   private let mode: AlertsPolicy.Mode
   private let preview: Bool
   private let onEnd: () -> Void
@@ -181,7 +184,7 @@ final class AlertsSheetController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = NativeNavController.background
+    view.backgroundColor = AlertsSheetController.background
     let text = copy
 
     let title = UILabel()
@@ -208,7 +211,7 @@ final class AlertsSheetController: UIViewController {
       button.titleLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
       button.titleLabel?.adjustsFontForContentSizeCategory = true
       button.setTitleColor(.white, for: .normal)
-      button.backgroundColor = mode == .on ? UIColor(white: 1, alpha: 0.14) : NativeNavController.accent
+      button.backgroundColor = mode == .on ? UIColor(white: 1, alpha: 0.14) : AlertsSheetController.accent
       button.layer.cornerRadius = 12
       button.contentEdgeInsets = UIEdgeInsets(top: 14, left: 28, bottom: 14, right: 28)
       button.accessibilityIdentifier = "alerts-primary"
