@@ -20,6 +20,30 @@ data class DockKey(val identity: String, val locale: String?, val country: Strin
 }
 
 object DockRouting {
+  /** How long a top level load may take to show before Back history stops waiting for it. */
+  const val TOP_LEVEL_WAIT_MS = 15_000L
+
+  /**
+   * True once the page on screen is the top level page a dock tap asked for, so
+   * the history before it can go. Compares path and query only (a trailing slash
+   * or the fragment does not matter) and never matches a null address.
+   */
+  fun reachedTopLevel(target: String?, current: String?): Boolean {
+    val a = pathAndQuery(target) ?: return false
+    return a == pathAndQuery(current)
+  }
+
+  private fun pathAndQuery(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val noFragment = url.substringBefore('#')
+    val rest = noFragment.substringAfter("://", "")
+    if (rest.isEmpty()) return null
+    val path = "/" + rest.substringAfter('/', "")
+    val p = path.substringBefore('?').trimEnd('/').ifEmpty { "/" }
+    val q = if (path.contains('?')) "?" + path.substringAfter('?') else ""
+    return p + q
+  }
+
   /** Pages that mean the player is signing in or out. */
   private val AUTH_PATHS = setOf("/login", "/register", "/logout")
   private val COUNTRY = Regex("^/country/([A-Za-z]{2,4})(/|$)")

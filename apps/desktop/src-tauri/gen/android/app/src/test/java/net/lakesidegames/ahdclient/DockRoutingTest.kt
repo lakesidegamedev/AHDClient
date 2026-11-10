@@ -59,4 +59,15 @@ class DockRoutingTest {
     assertFalse(DockRouting.stripAllowed(onGamePage = true, signedIn = true, authPage = true, sandbox = false))
     assertFalse(DockRouting.stripAllowed(onGamePage = true, signedIn = true, authPage = false, sandbox = true))
   }
+
+  @Test fun topLevelPageIsReachedOnlyWhenItsAddressShows() {
+    val t = "https://ahousedividedgame.com/actions"
+    assertTrue(DockRouting.reachedTopLevel(t, "https://ahousedividedgame.com/actions"))
+    assertTrue(DockRouting.reachedTopLevel(t, "https://ahousedividedgame.com/actions/#top"))
+    assertTrue(DockRouting.reachedTopLevel("https://ahousedividedgame.com/", "https://ahousedividedgame.com"))
+    assertFalse(DockRouting.reachedTopLevel(t, "https://ahousedividedgame.com/company"))
+    assertFalse(DockRouting.reachedTopLevel(t, "https://ahousedividedgame.com/actions?tab=2"))
+    assertFalse(DockRouting.reachedTopLevel(t, null))
+    assertFalse(DockRouting.reachedTopLevel(null, null))
+  }
 }

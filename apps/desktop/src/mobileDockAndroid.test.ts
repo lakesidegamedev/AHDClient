@@ -116,6 +116,16 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(activity).toContain("fun onDockExpanded(expanded: Boolean)");
   });
 
+  it("keeps dock tabs top level: history clears once the awaited page shows, and predictive back is on", () => {
+    expect(nav).toContain("loadTopLevel(");
+    expect(nav).toContain("clearHistoryWhenReached(url)");
+    expect(nav).toContain("webView.clearHistory()");
+    expect(nav).toContain("DockRouting.reachedTopLevel(target, url)");
+    expect(read("../src-tauri/gen/android/app/src/main/AndroidManifest.xml")).toContain(
+      'android:enableOnBackInvokedCallback="true"',
+    );
+  });
+
   it("offers a canned preview link for screenshots, in debug and CI builds only", () => {
     expect(activity).toContain('uri.host == "dock"');
     expect(activity).toContain('setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "off")');
@@ -185,7 +195,7 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(nav).toContain("Intent.ACTION_SENDTO");
     expect(nav).toContain("Intent.ACTION_VIEW");
     // The WebView loads game paths only.
-    expect(nav).toContain("else -> DockModel.safePath(link.href)?.let { webView.loadUrl(site + it) }");
+    expect(nav).toContain("else -> DockModel.safePath(link.href)?.let { loadTopLevel(site + it) }");
     for (const host of ["wiki.ahousedividedgame.com", "discord.gg", "www.patreon.com", "lakesidegames.net", "docs.lakesidegames.net"]) {
       expect(model).toContain(`"${host}"`);
     }
