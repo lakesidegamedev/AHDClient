@@ -111,6 +111,12 @@ export function SettingsMenu({ mobile = false, open, settings, onChange, onClose
           {!mobile && (
             <Section id="client-settings-updates" title="Updates">
               <UpdateControl />
+              <Toggle
+                title={de ? "Updates automatisch installieren" : "Install updates automatically"}
+                detail={de ? "Lädt neue Versionen ohne Rückfrage herunter. Neu gestartet wird erst, wenn du es bestätigst." : "Download new versions without asking. The app only restarts when you confirm."}
+                checked={settings.autoInstallUpdates}
+                onChange={(autoInstallUpdates) => set({ autoInstallUpdates })}
+              />
             </Section>
           )}
           <Section id="client-settings-support" title={de ? "Hilfe" : "Support"}>

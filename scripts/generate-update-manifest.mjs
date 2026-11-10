@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +11,15 @@ const PLATFORM_NAMES = new Set([
   "darwin-x86_64",
   "darwin-aarch64",
 ]);
+
+function artifactSize(signatureFile) {
+  if (!signatureFile.endsWith(".sig")) return null;
+  try {
+    return statSync(signatureFile.slice(0, -4)).size;
+  } catch {
+    return null;
+  }
+}
 
 export function buildManifest(entries, publishedAt = new Date()) {
   const version = JSON.parse(
@@ -37,7 +46,10 @@ export function buildManifest(entries, publishedAt = new Date()) {
     const signature = readFileSync(signatureFile, "utf8").trim();
     if (!signature)
       throw new Error(`empty updater signature: ${signatureFile}`);
-    platforms[platform] = { url, signature };
+    // The app shows the download size before it fetches anything. The artifact
+    // sits next to its signature file; leave size out if it is not there.
+    const size = artifactSize(signatureFile);
+    platforms[platform] = size == null ? { url, signature } : { url, signature, size };
   }
   if (Object.keys(platforms).length === 0)
     throw new Error("at least one updater platform is required");

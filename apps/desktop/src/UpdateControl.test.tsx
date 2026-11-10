@@ -17,6 +17,9 @@ const relaunch = vi.fn();
 vi.mock("@tauri-apps/plugin-updater", () => ({
   check: (...args: unknown[]) => check(...args),
 }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => "self-updating"),
+}));
 vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: (...args: unknown[]) => relaunch(...args),
 }));
@@ -44,6 +47,7 @@ describe("desktop updates", () => {
     render(<UpdateControl />);
 
     fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download update" }));
     const restart = await screen.findByRole("button", {
       name: "Restart to update",
     });
@@ -51,7 +55,7 @@ describe("desktop updates", () => {
     fireEvent.click(restart);
 
     await waitFor(() =>
-      expect(screen.getByText("signature rejected")).toBeTruthy(),
+      expect(screen.getByText(/could not be verified/)).toBeTruthy(),
     );
     expect(
       screen.getByRole("button", { name: "Check for updates" }),

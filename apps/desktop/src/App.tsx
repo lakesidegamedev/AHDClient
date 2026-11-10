@@ -30,6 +30,7 @@ import {
   hasCachedSingleplayerEntitlement,
 } from "./entitlement.js";
 import { UpdateNotice } from "./UpdateNotice.js";
+import { startUpdateSchedule } from "./updater.js";
 import { AccountControl } from "./AccountControl.js";
 import { clearCachedAskSession } from "./ask/session.js";
 import { GameToolbar } from "./GameToolbar.js";
@@ -112,6 +113,8 @@ export function App(): JSX.Element {
   const [accountChecked, setAccountChecked] = useState(false);
   const [embedded, setEmbedded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Check for updates on every screen for as long as the app stays open.
+  useEffect(() => (mobile ? undefined : startUpdateSchedule()), []);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   /** Slot whose saves dialog is open, if any. */
   const [savesFor, setSavesFor] = useState<string | null>(null);
@@ -776,6 +779,7 @@ export function App(): JSX.Element {
   const withSettings = (content: JSX.Element) => (
     <>
       {content}
+      <UpdateNotice enabled={!mobile} />
       {savesDialog}
       {settingsMenu}
       {diagnosticPanel}
@@ -806,6 +810,7 @@ export function App(): JSX.Element {
               onSaveAndStop={() => void handleStop().catch(fail)}
               onOpenSaves={() => setSavesFor(info.slot)}
               onOpenAsk={() => void ask.open().catch(fail)}
+              onOpenUpdates={mobile ? undefined : () => setSettingsOpen(true)}
               onViewStats={
                 runningWorldsim
                   ? () => {

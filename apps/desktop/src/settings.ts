@@ -8,6 +8,8 @@ export interface ClientSettings {
   showBootLogs: boolean;
   /** Autosave a singleplayer world after every Nth turn; 0 is off. */
   autosaveEvery: number;
+  /** Download and offer to install updates without asking first. */
+  autoInstallUpdates: boolean;
 }
 
 /** What Settings offers; the game accepts any whole number up to 100. */
@@ -19,6 +21,7 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   shareStatistics: true,
   showBootLogs: false,
   autosaveEvery: 1,
+  autoInstallUpdates: false,
 };
 const KEY = "ahdclient.settings.v1";
 export function readSettings(): ClientSettings {

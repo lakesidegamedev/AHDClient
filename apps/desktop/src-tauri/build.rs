@@ -51,6 +51,7 @@ fn main() {
       "list_game_versions",
       "install_game_version",
       "select_game_version",
+      "update_install_kind",
     ])),
   )
   .expect("failed to run tauri-build");

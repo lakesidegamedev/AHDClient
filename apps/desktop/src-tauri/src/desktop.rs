@@ -988,6 +988,18 @@ pub(crate) async fn open_help_destination(app: AppHandle, route_id: String) -> R
   }
 }
 
+/// How this copy was installed, so the webview knows whether the in-app
+/// updater can replace it. Only an AppImage can update itself on Linux;
+/// package installs (deb, rpm) are owned by the system package manager.
+#[tauri::command]
+pub(crate) fn update_install_kind() -> &'static str {
+  install_kind(cfg!(target_os = "linux"), std::env::var_os("APPIMAGE").is_some_and(|v| !v.is_empty()))
+}
+
+fn install_kind(linux: bool, appimage: bool) -> &'static str {
+  if linux && !appimage { "package" } else { "self-updating" }
+}
+
 #[tauri::command]
 pub(crate) async fn list_game_versions(app: AppHandle) -> Result<Vec<game_versions::GameVersion>, String> {
   tauri::async_runtime::spawn_blocking(move || game_versions::list(&app)).await.map_err(|_| "Game version check failed.".to_string())?
@@ -1067,6 +1079,7 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       list_game_versions,
       install_game_version,
       select_game_version,
+      update_install_kind,
     ])
     .on_window_event(|window, event| {
       if window.label() == "main" && matches!(event, WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }) {
@@ -1096,6 +1109,13 @@ pub(crate) fn on_exit(app: &AppHandle) {
 mod tests {
   use super::{acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
+
+  #[test]
+  fn only_non_appimage_linux_is_a_package_install() {
+    assert_eq!(super::install_kind(true, false), "package");
+    assert_eq!(super::install_kind(true, true), "self-updating");
+    assert_eq!(super::install_kind(false, false), "self-updating");
+  }
 
   #[test]
   fn game_window_navigation_is_pinned_to_its_own_loopback_port() {
