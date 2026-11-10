@@ -45,12 +45,13 @@ jobs:
         include:
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            args: --bundles appimage,deb
+            args: --bundles appimage,deb,rpm
             artifact: ahdclient-linux-x86_64
             paths: |
               apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
               apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.sig
               apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+              apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: --bundles nsis

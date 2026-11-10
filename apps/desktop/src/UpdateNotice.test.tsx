@@ -16,9 +16,12 @@ vi.mock("@tauri-apps/plugin-updater", () => ({
 vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: (...args: unknown[]) => relaunch(...args),
 }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => "self-updating"),
+}));
 
 import { UpdateNotice } from "./UpdateNotice.js";
-import { resetUpdaterForTests } from "./updater.js";
+import { resetUpdaterForTests, startBackgroundUpdateCheck } from "./updater.js";
 
 describe("UpdateNotice", () => {
   afterEach(() => {
@@ -28,15 +31,46 @@ describe("UpdateNotice", () => {
     vi.useRealTimers();
   });
 
-  it("does not invoke the desktop updater when updates are disabled", async () => {
-    vi.useFakeTimers();
+  it("draws nothing when updates are disabled", async () => {
+    check.mockResolvedValue({ version: "2.3.1", body: "- A", download, install, downloadAndInstall });
     render(<UpdateNotice enabled={false} />);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(check).not.toHaveBeenCalled();
+    await act(async () => {
+      await startBackgroundUpdateCheck();
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows notes and size and waits for Download update", async () => {
+    check.mockResolvedValue({
+      version: "2.3.1",
+      body: "- First improvement",
+      rawJson: { platforms: { "linux-x86_64": { size: 30 * 1024 * 1024 } } },
+      download,
+      install,
+      downloadAndInstall,
+    });
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (X11; Linux x86_64)",
+    });
+    render(<UpdateNotice />);
+    await act(async () => {
+      await startBackgroundUpdateCheck();
+    });
+    const notice = screen.getByRole("status");
+    expect(notice.textContent).toContain("AHDClient 2.3.1 is available");
+    expect(notice.textContent).toContain("30 MB download");
+    expect(notice.textContent).toContain("First improvement");
+    expect(download).not.toHaveBeenCalled();
+    download.mockResolvedValue(undefined);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Download update" }));
+      await Promise.resolve();
+    });
+    expect(download).toHaveBeenCalledTimes(1);
   });
 
   it("shows a dismissable download bar then Restart to update after download", async () => {
-    vi.useFakeTimers();
     let finishDownload: () => void = () => {};
     download.mockImplementation(
       async (
@@ -64,7 +98,10 @@ describe("UpdateNotice", () => {
 
     render(<UpdateNotice />);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(400);
+      await startBackgroundUpdateCheck();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Download update" }));
       await Promise.resolve();
     });
 

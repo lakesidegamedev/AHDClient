@@ -163,3 +163,22 @@
     animation: none;
   }
 }
+
+.client-update-chip {
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid #a87832;
+  border-radius: 999px;
+  background: #302818;
+  color: #f4ead8;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.client-update-chip:hover,
+.client-update-chip:focus-visible {
+  background: #3d3320;
+  outline: 2px solid #e0b565;
+  outline-offset: 2px;
+}

@@ -53,6 +53,7 @@ fn main() {
       "bundled_game_info",
       "install_game_version",
       "select_game_version",
+      "update_install_kind",
     ])),
   )
   .expect("failed to run tauri-build");

@@ -298,6 +298,7 @@ describe("desktop security configuration", () => {
       "list-world-saves",
       "delete-world-save",
       "request-world-save-load",
+      "update-install-kind",
     ]) {
       expect(identifiers).toContain(`allow-${command}`);
       expect(

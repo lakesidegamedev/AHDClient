@@ -96,6 +96,7 @@ fn help_destination(route_id: &str) -> Option<HelpDestination> {
     "help.era-photo-2019" => Some(HelpDestination::External("https://commons.wikimedia.org/wiki/File:President_Trump_Meets_with_the_Prime_Minister_of_Pakistan_(48350243921).jpg")),
     "help.era-photo-2023" => Some(HelpDestination::External("https://commons.wikimedia.org/wiki/File:P20230106AS-0338_(52644827761).jpg")),
     "help.wiki" => Some(HelpDestination::External("https://wiki.ahousedividedgame.com")),
+    "help.download-client" => Some(HelpDestination::External("https://github.com/lakesidegamedev/AHDClient/releases/latest")),
     "help.about" => Some(HelpDestination::Online("/about")),
     "help.profile" => Some(HelpDestination::Online("/profile")),
     "help.account" => Some(HelpDestination::Online("/settings")),

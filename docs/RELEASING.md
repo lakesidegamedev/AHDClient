@@ -31,9 +31,10 @@ Artifacts land under `apps/desktop/src-tauri/target/release/bundle/`:
 
 - `appimage/AHDClient_<version>_amd64.AppImage`
 - `deb/AHDClient_<version>_amd64.deb`
+- `rpm/AHDClient-<version>-1.x86_64.rpm`
 
 `tauri.conf.json` uses the platform-native `"all"` target set. The release
-workflow narrows Linux to AppImage and deb. `.deb` dependencies
+workflow narrows Linux to AppImage, deb and rpm. Only the AppImage updates in place; deb and rpm installs show a link to the download page instead. `.deb` dependencies
 (`libwebkit2gtk-4.1-0`, `libgtk-3-0`) are auto-detected by the bundler from
 the linked libraries; no manual `depends` list is needed.
 

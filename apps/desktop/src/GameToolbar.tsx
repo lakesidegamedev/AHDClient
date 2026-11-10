@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { game } from "./worlds.js";
+import { UpdateChip } from "./UpdateChip.js";
 import type { BatchDigest, SingleplayerStatus, TurnBatch } from "./worlds.js";
 
 /** Turn counts the End turn control offers in a normal world. */
@@ -15,6 +16,8 @@ interface Props {
   onOpenSaves: () => void;
   /** Open the player Q&A panel beside the game. */
   onOpenAsk: () => void;
+  /** Open Settings from the update chip. Omit to hide the chip. */
+  onOpenUpdates?: (() => void) | undefined;
   /** Worldsim only: return to the world statistics screen. */
   onViewStats?: (() => void) | undefined;
   onTurnAdvanced?: (turn: number) => void;
@@ -139,6 +142,7 @@ export function GameToolbar({
   onSaveAndStop,
   onOpenSaves,
   onOpenAsk,
+  onOpenUpdates,
   onViewStats,
   onTurnAdvanced,
 }: Props): JSX.Element {
@@ -378,6 +382,7 @@ export function GameToolbar({
         Ask
       </button>
       <strong title={worldName}>{worldName}</strong>
+      {onOpenUpdates && <UpdateChip onClick={onOpenUpdates} />}
       {endingTurn && (
         <span className="client-toolbar-progress" role="status" aria-label="Running turn">
           <span className="client-toolbar-spinner" aria-hidden="true" />

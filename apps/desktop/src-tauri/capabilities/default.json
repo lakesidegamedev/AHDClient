@@ -36,6 +36,7 @@
     "allow-bundled-game-info",
     "allow-install-game-version",
     "allow-select-game-version",
+    "allow-update-install-kind",
     "process:allow-restart",
     "updater:default",
     "allow-close-embedded-game",
