@@ -17,7 +17,7 @@ PY
 trap 'rm -f "$APPLE_API_KEY_PATH"' EXIT
 python3 scripts/apple.py
 auth=(-allowProvisioningUpdates -authenticationKeyPath "$APPLE_API_KEY_PATH" -authenticationKeyID "$APPLE_API_KEY" -authenticationKeyIssuerID "$APPLE_API_ISSUER")
-# Lakeside Ops moved to Egg3901/lakeside-ops with its own release workflow.
+# Lakeside Ops moved to lakesidegamedev/lakeside-ops with its own release workflow.
 schemes=(LakesideAsk)
 for scheme in "${schemes[@]}"; do
   xcodebuild archive -project Lakeside.xcodeproj -scheme "$scheme" -configuration Release \
