@@ -188,7 +188,7 @@ class LoadWatchingClient(private val inner: WebViewClient, private val chrome: L
   override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
     inner.onPageStarted(view, url, favicon)
     CompanionSafety.run("load bar start") {
-      chrome.onGamePage = NativeNav.pageOf(url) == NativeNav.Page.SITE
+      chrome.onGamePage = NativeNav.pageOf(url) == NativeNav.Companion.Page.SITE
       chrome.startLoading()
     }
   }
