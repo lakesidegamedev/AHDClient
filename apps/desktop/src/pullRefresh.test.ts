@@ -112,9 +112,52 @@ describe("mobile pull to refresh", () => {
 });
 
 describe("pull to refresh wiring", () => {
-  it("is injected on iOS and Android", () => {
-    const both = String.raw`#\[cfg\(any\(target_os = "ios", target_os = "android"\)\)\]`;
-    expect(mobile).toMatch(new RegExp(both + String.raw`\s*const PULL_REFRESH_SCRIPT`));
-    expect(mobile).toMatch(new RegExp(both + String.raw`\s*\{\s*builder = builder\.initialization_script\(PULL_REFRESH_SCRIPT\)`));
+  it("is injected on Android only; iOS uses a native refresh control", () => {
+    const android = String.raw`#\[cfg\(target_os = "android"\)\]`;
+    expect(mobile).toMatch(new RegExp(android + String.raw`\s*const PULL_REFRESH_SCRIPT`));
+    expect(mobile).toMatch(new RegExp(android + String.raw`\s*\{\s*builder = builder\.initialization_script\(PULL_REFRESH_SCRIPT\)`));
+    expect(mobile).not.toMatch(/target_os = "ios", target_os = "android"\)\)\]\s*const PULL_REFRESH_SCRIPT/);
+  });
+});
+
+describe("iOS feel (native refresh, haptics, link sheet, no polling)", () => {
+  const sources = join(here, "../src-tauri/plugins/briefing-widgets/ios/Sources");
+  const nav = readFileSync(join(sources, "NativeNav.swift"), "utf8");
+  const plugin = readFileSync(join(sources, "BriefingWidgetsPlugin.swift"), "utf8");
+  const dockView = readFileSync(join(sources, "NativeDockView.swift"), "utf8");
+
+  it("pulls to refresh with a UIRefreshControl on game pages only", () => {
+    expect(nav).toContain("scrollView.refreshControl = refreshControl");
+    expect(nav).toContain("scrollView.refreshControl = nil");
+    expect(nav).toContain("webView.reload()");
+    expect(nav).toContain("webView.observe(\\.isLoading");
+    expect(nav).toContain("syncRefreshControl(for: url)");
+  });
+
+  it("gives haptics on open, close, new turn and a finished refresh", () => {
+    expect(nav).toContain("UIImpactFeedbackGenerator(style: .light)");
+    expect(nav).toContain("UIImpactFeedbackGenerator(style: .soft)");
+    expect(nav).toContain("turnHaptic.notificationOccurred(.success)");
+    expect(nav).toContain("model.onDragBegan");
+  });
+
+  it("opens outside links in a Safari sheet through the plugin", () => {
+    expect(plugin).toContain("func showExternal");
+    expect(plugin).toContain("NativeNavController.shared.openExternalPage(url)");
+    expect(nav).toContain("func openExternalPage");
+    expect(mobile).toContain("show_external(&url)");
+    expect(mobile).toContain("fn is_sheet_link");
+  });
+
+  it("has no one second polling timer and no UIScreen.main in the dock", () => {
+    expect(nav).not.toContain("withTimeInterval: 1,");
+    expect(nav).toContain("launcher-moved");
+    expect(nav).not.toContain("UIScreen.main");
+    expect(dockView).not.toContain("UIScreen.main");
+    expect(dockView).toContain("@Environment(\\.displayScale)");
+  });
+
+  it("stops the fallback AHD button polling once the dock is attached", () => {
+    expect(mobile).toContain("clearInterval(timer)");
   });
 });

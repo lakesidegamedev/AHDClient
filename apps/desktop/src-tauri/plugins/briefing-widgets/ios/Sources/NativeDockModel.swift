@@ -191,7 +191,11 @@ final class DockModel: ObservableObject {
   }
 
   /// A drag began on a closed dock: it can only be pulling the status up.
+  /// Called as a drag begins so haptics can be warmed up.
+  var onDragBegan: (() -> Void)?
+
   func beginDrag() -> Bool {
+    onDragBegan?()
     if expanded || progress > 0.001 { return true }
     guard showsStrip else { return false }
     panel = .status
