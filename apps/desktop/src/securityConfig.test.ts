@@ -299,6 +299,10 @@ describe("desktop security configuration", () => {
       "delete-world-save",
       "request-world-save-load",
       "update-install-kind",
+      "game-reload",
+      "game-back",
+      "game-forward",
+      "game-zoom",
     ]) {
       expect(identifiers).toContain(`allow-${command}`);
       expect(
@@ -307,6 +311,20 @@ describe("desktop security configuration", () => {
     }
     for (const command of ["list_world_saves", "delete_world_save", "request_world_save_load"]) {
       expect(read("../src-tauri/build.rs")).toContain(`"${command}"`);
+    }
+  });
+
+  it("keeps Escape for the game and registers the browser commands", () => {
+    const rust = read("../src-tauri/src/desktop.rs");
+    expect(rust).not.toMatch(/event\.key === 'Escape'/);
+    for (const command of ["game_reload", "game_back", "game_forward", "game_zoom"]) {
+      expect(rust).toMatch(new RegExp(`\\n      ${command},\\n`));
+    }
+    for (const id of ["game-reload", "game-back", "game-forward", "game-zoom"]) {
+      for (const cap of ["game", "online", "ask-auth", "ask", "briefing"]) {
+        const text = read(`../src-tauri/capabilities/${cap}.json`);
+        expect(text).not.toContain(`allow-${id}`);
+      }
     }
   });
 

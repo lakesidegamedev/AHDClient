@@ -328,6 +328,17 @@ export function GameToolbar({
   // while paused, and an unknown state must not offer a turn that fails.
   const canEndTurn =
     !endingTurn && availability === "open" && turnState != null && (worldsim || turnState.hasCharacter);
+  // The Game menu's End turn (Ctrl or Cmd+E) arrives as a window event. It
+  // does exactly what the button does, including doing nothing when the
+  // button is disabled.
+  const pressEndTurn = useRef<() => void>(() => {});
+  pressEndTurn.current = () => { if (canEndTurn) void endTurn(); };
+  useEffect(() => {
+    const onKey = () => pressEndTurn.current();
+    window.addEventListener("ahdclient:end-turn", onKey);
+    return () => window.removeEventListener("ahdclient:end-turn", onKey);
+  }, []);
+
   const endTurnTitle = endingTurn
     ? "The turn is running"
     : paused

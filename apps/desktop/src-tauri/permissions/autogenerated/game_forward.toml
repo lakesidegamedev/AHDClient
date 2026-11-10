@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-game-forward"
+description = "Enables the game_forward command without any pre-configured scope."
+commands.allow = ["game_forward"]
+
+[[permission]]
+identifier = "deny-game-forward"
+description = "Denies the game_forward command without any pre-configured scope."
+commands.deny = ["game_forward"]

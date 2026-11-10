@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
@@ -366,8 +366,10 @@ describe("App singleplayer integration", () => {
     // starts from a clean slate.
     mocks.game.setEmbeddedVisible.mockClear();
     // The toolbar no longer duplicates the game's settings entry: Settings
-    // opens through the Escape shortcut instead.
-    fireEvent.keyDown(window, { key: "Escape" });
+    // opens from the Game menu (Ctrl or Cmd+comma), which emits this event.
+    const settingsCall = mocks.listen.mock.calls.find(([name]) => name === "client:settings");
+    expect(settingsCall).toBeTruthy();
+    await act(async () => { (settingsCall![1] as () => void)(); });
     await waitFor(() =>
       expect(mocks.game.setEmbeddedVisible).toHaveBeenCalledWith(false),
     );
