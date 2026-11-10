@@ -292,13 +292,14 @@ describe("GameToolbar", () => {
     // the game below owns settings, and both dialogs stay reachable through
     // the launcher and the Escape shortcut.
     expect(overflow.map((button) => button.textContent)).toEqual([
+      "Ask about the game",
       "Pause world",
       "Saves",
       "Save and stop",
     ]);
-    fireEvent.click(overflow[1]!);
-    expect(handlers.onOpenSaves).toHaveBeenCalledTimes(1);
     fireEvent.click(overflow[2]!);
+    expect(handlers.onOpenSaves).toHaveBeenCalledTimes(1);
+    fireEvent.click(overflow[3]!);
     expect(handlers.onSaveAndStop).toHaveBeenCalledTimes(1);
   });
 

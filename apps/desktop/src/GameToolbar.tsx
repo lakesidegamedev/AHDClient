@@ -373,7 +373,7 @@ export function GameToolbar({
       )}
       <button
         type="button"
-        className="client-toolbar-quiet"
+        className="client-toolbar-quiet client-toolbar-ask"
         onClick={onOpenAsk}
         title="Ask questions about the game. Opens beside play and signs you in with your game account."
         aria-label="Ask about the game"
@@ -428,6 +428,9 @@ export function GameToolbar({
       <details className="client-toolbar-overflow" onToggle={(event) => setMenuOpen(event.currentTarget.open)}>
         <summary aria-label={menuOpen ? "Close actions" : "More actions"}>{menuOpen ? "×" : "···"}</summary>
         <div role="menu">
+          <button role="menuitem" type="button" className="client-toolbar-ask-menu" onClick={onOpenAsk}>
+            Ask about the game
+          </button>
           <button
             role="menuitem"
             type="button"

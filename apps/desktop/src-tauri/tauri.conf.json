@@ -17,6 +17,8 @@
         "title": "A House Divided",
         "width": 1280,
         "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
         "backgroundColor": "#14141c",
         "resizable": true,
         "center": true

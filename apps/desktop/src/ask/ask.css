@@ -1,34 +1,28 @@
-/* Native Ask panel. Mirrors the Ask service's own look (paper/ink/brass)
-   in the client's sans-serif family. */
+/* Native Ask panel, on the client's shared tokens (tokens.css). */
 
 .askview {
-  --av-ink: #14141c;
-  --av-ink-soft: #3f3c37;
-  --av-mute: #6f6a66;
-  --av-faint: #a39b92;
-  --av-rule: #191921;
-  --av-paper: #efe6d4;
-  --av-paper-hi: #f7f0df;
-  --av-line: #e4d7bf;
-  --av-brand: #1e1c1a;
-  --av-accent: #8a6d1f;
-  --av-accent-ink: #fff8e7;
-  --av-good: #18794e;
-  --av-bad: #b3261e;
-  --av-card: #f6efe0;
-  --av-shade: #e6d9c1;
-  --av-code-bg: #1a1a22;
-  --av-code-fg: #f2ecdd;
+  --av-ink: var(--text);
+  --av-ink-soft: var(--text-soft);
+  --av-mute: var(--muted);
+  --av-faint: #7c7c8c;
+  --av-paper: var(--bg);
+  --av-paper-hi: var(--panel);
+  --av-line: var(--border);
+  --av-brand: var(--accent-dark);
+  --av-accent: var(--gold-soft);
+  --av-accent-ink: #fff;
+  --av-bad: #f3a3a8;
+  --av-shade: var(--panel-elevated);
+  --av-code-bg: var(--panel-muted);
+  --av-code-fg: var(--text);
   --av-radius: 14px;
-  --av-focus: #2b6cb0;
+  --av-focus: var(--focus);
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(110% 46% at 50% -8%, #fbf4e2 0%, rgba(251, 244, 226, 0) 62%),
-    var(--av-paper);
+  background: var(--av-paper);
   color: var(--av-ink);
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   overflow: hidden;
 }
 
@@ -89,7 +83,7 @@
   justify-content: space-between;
   padding: 10px 12px;
   border-bottom: 1px solid var(--av-line);
-  background: linear-gradient(#f3ead6, #eee2c9);
+  background: var(--panel);
 }
 
 .av-head .av-brand { font-size: 1.3rem; }
@@ -124,7 +118,7 @@
   gap: 10px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--av-line);
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--panel-muted);
 }
 
 .av-meter { flex: 1; min-width: 0; }
@@ -224,7 +218,7 @@
 .av-answer blockquote { margin: 0 0 0.7em; padding-left: 10px; border-left: 2px solid var(--av-shade); color: var(--av-ink-soft); }
 .av-answer hr { border: none; border-top: 1px solid var(--av-line); margin: 1em 0; }
 .av-answer code {
-  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.82em;
   background: var(--av-shade);
   padding: 1px 5px;
@@ -269,11 +263,11 @@
   cursor: pointer;
 }
 
-.av-map-wrap { border: 1px solid var(--av-line); border-radius: 10px; overflow: hidden; background: #fff; }
+.av-map-wrap { border: 1px solid var(--av-line); border-radius: 10px; overflow: hidden; background: var(--panel-muted); }
 .av-map-wrap img { display: block; width: 100%; height: auto; }
 .av-map-err { font-size: 0.8rem; color: var(--av-mute); }
 
-.av-composer { border-top: 1px solid var(--av-line); padding: 8px 12px 10px; background: rgba(255, 255, 255, 0.4); }
+.av-composer { border-top: 1px solid var(--av-line); padding: 8px 12px 10px; background: var(--panel-muted); }
 
 .av-live { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--av-mute); margin-bottom: 6px; }
 
@@ -284,7 +278,7 @@
   resize: none;
   border: 1px solid var(--av-line);
   border-radius: 10px;
-  background: #fffdf6;
+  background: var(--panel-muted);
   color: var(--av-ink);
   font: inherit;
   font-size: 0.86rem;

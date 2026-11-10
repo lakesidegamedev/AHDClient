@@ -1,5 +1,5 @@
 .client-account-control,
-.client-settings-trigger { min-width: 104px; padding: 10px 14px; border: 1px solid #50505b; border-radius: 7px; background: #1d1d29cc; color: #f5f5fa; cursor: pointer; backdrop-filter: blur(12px); }
+.client-settings-trigger { min-width: 104px; padding: 10px 14px; border: 1px solid var(--control-border); border-radius: 7px; background: #1d1d29cc; color: #f5f5fa; cursor: pointer; backdrop-filter: blur(12px); }
 .client-account-control:disabled { opacity: .6; cursor: default; }
 .client-account-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #3a3a4a; font-size: 11px; font-weight: 700; }
 img.client-account-avatar { display: block; }
@@ -11,7 +11,7 @@ img.client-account-avatar { display: block; }
 .client-diagnostic-dialog small { display: block; color: #adb0c0; line-height: 1.5; }
 .client-diagnostic-dialog > div { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .client-diagnostic-dialog button { padding: 10px 14px; border: 1px solid #ef3540; border-radius: 7px; background: #d91d27; color: white; cursor: pointer; }
-.client-diagnostic-dialog button.secondary { border-color: #50505b; background: transparent; }
+.client-diagnostic-dialog button.secondary { border-color: var(--control-border); background: transparent; }
 .client-settings-dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 24px 26px 18px; border-bottom: 1px solid #ffffff14; }
 .client-settings-dialog h2 { margin: 3px 0 0; font: 700 28px/1.1 var(--font-ui); }
 .client-settings-kicker { color: #f02b35; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
@@ -54,10 +54,10 @@ img.client-account-avatar { display: block; }
 .client-diagnostics-status { margin: 10px 26px 0; color: #d8dbe7; font-size: 12px; }
 .client-settings-dialog > footer.client-diagnostics-actions { gap: 10px; }
 .client-diagnostics-actions > span { flex: 1; }
-.client-diagnostics-actions button.secondary { border-color: #50505b; background: transparent; }
-.client-game-toolbar { min-height: 48px; max-width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #14141c; color: #e8e8ef; overflow: hidden; }
+.client-diagnostics-actions button.secondary { border-color: var(--control-border); background: transparent; }
+.client-game-toolbar { min-height: 48px; max-width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg); color: #e8e8ef; overflow: hidden; }
 .client-game-toolbar > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
-.client-game-toolbar > button { background: #272735; border: 1px solid #50505b; color: inherit; border-radius: 5px; padding: 7px 11px; cursor: pointer; white-space: nowrap; flex: none; }
+.client-game-toolbar > button { background: var(--control); border: 1px solid var(--control-border); color: inherit; border-radius: 5px; padding: 7px 11px; cursor: pointer; white-space: nowrap; flex: none; }
 .client-game-toolbar > button:disabled { opacity: .55; cursor: not-allowed; }
 .client-toolbar-quiet { background: transparent; border-color: transparent; color: #c9ccd8; padding: 8px 10px; }
 .client-toolbar-quiet:hover { background: #ffffff0d; color: #f5f5fa; }
@@ -72,9 +72,9 @@ html[data-animations="off"] .client-toolbar-end-turn { transition: none; }
 }
 .client-toolbar-error { color: #f3a3a8; font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .client-toolbar-overflow { position: relative; }
-.client-toolbar-overflow > summary { list-style: none; cursor: pointer; border: 1px solid #50505b; border-radius: 5px; background: #272735; padding: 9px 12px; letter-spacing: .1em; }
+.client-toolbar-overflow > summary { list-style: none; cursor: pointer; border: 1px solid var(--control-border); border-radius: 5px; background: var(--control); padding: 9px 12px; letter-spacing: .1em; }
 .client-toolbar-overflow > summary::-webkit-details-marker { display: none; }
-.client-toolbar-overflow > div { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 240px; padding: 8px; border: 1px solid #50505b; border-radius: 10px; background: #1d1d2a; box-shadow: 0 18px 50px #0009; }
+.client-toolbar-overflow > div { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 240px; padding: 8px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--panel); box-shadow: 0 18px 50px #0009; }
 .client-toolbar-overflow button { display: block; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: #f5f5fa; text-align: left; cursor: pointer; }
 .client-toolbar-overflow button:hover { background: #ffffff0d; }
 html[data-animations="off"] .launcher-nebula { animation: none; }
@@ -85,7 +85,7 @@ html[data-animations="off"] .launcher-nebula { animation: none; }
 .client-account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 .client-account-menu > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; list-style: none; }
 .client-account-menu > summary::-webkit-details-marker { display: none; }
-.client-account-menu > div { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 220px; padding: 8px; border: 1px solid #50505b; border-radius: 10px; background: #1d1d2a; box-shadow: 0 18px 50px #0009; }
+.client-account-menu > div { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 220px; padding: 8px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--panel); box-shadow: 0 18px 50px #0009; }
 .client-account-menu p { display: grid; gap: 3px; margin: 0 0 6px; padding: 10px; border-bottom: 1px solid #ffffff12; }
 .client-account-menu small { color: #adb0c0; }
 .client-account-menu button { width: 100%; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: #f5f5fa; text-align: left; cursor: pointer; }
@@ -208,14 +208,21 @@ html[data-animations="off"] .client-toolbar-spinner { animation: none; }
 .client-settings-options select:focus-visible,
 .client-settings-advanced > summary:focus-visible,
 .client-account-menu > summary:focus-visible,
-.client-toolbar-overflow > summary:focus-visible { outline: 2px solid #f87171; outline-offset: 2px; }
-.client-toolbar-count { padding: 8px 6px; border: 1px solid #50505b; border-radius: 5px; background: #272735; color: #f5f5fa; font: inherit; }
+.client-toolbar-overflow > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.client-toolbar-count { padding: 8px 6px; border: 1px solid var(--control-border); border-radius: 5px; background: var(--control); color: #f5f5fa; font: inherit; }
 .client-toolbar-count:disabled { opacity: .6; }
 .client-toolbar-digest { position: relative; }
-.client-toolbar-digest > summary { list-style: none; cursor: pointer; padding: 8px 10px; border: 1px solid #50505b; border-radius: 5px; background: #272735; }
+.client-toolbar-digest > summary { list-style: none; cursor: pointer; padding: 8px 10px; border: 1px solid var(--control-border); border-radius: 5px; background: var(--control); }
 .client-toolbar-digest > summary::-webkit-details-marker { display: none; }
-.client-toolbar-digest > div { position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: 360px; max-height: 70vh; overflow: auto; padding: 12px; border: 1px solid #50505b; border-radius: 10px; background: #1d1d2a; box-shadow: 0 18px 50px #0009; font-size: 13px; line-height: 1.4; }
+.client-toolbar-digest > div { position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: 360px; max-height: 70vh; overflow: auto; padding: 12px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--panel); box-shadow: 0 18px 50px #0009; font-size: 13px; line-height: 1.4; }
 .client-toolbar-digest p { margin: 0 0 8px; }
 .client-toolbar-digest ul { margin: 0 0 8px; padding-left: 18px; }
-.client-toolbar-digest button { padding: 6px 10px; border: 1px solid #50505b; border-radius: 5px; background: #272735; color: #f5f5fa; cursor: pointer; }
-.client-toolbar-digest > summary:focus-visible, .client-toolbar-count:focus-visible { outline: 2px solid #f87171; outline-offset: 2px; }
+.client-toolbar-digest button { padding: 6px 10px; border: 1px solid var(--control-border); border-radius: 5px; background: var(--control); color: #f5f5fa; cursor: pointer; }
+.client-toolbar-digest > summary:focus-visible, .client-toolbar-count:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Narrow windows: Ask moves into the More menu so End turn never gets clipped. */
+.client-toolbar-overflow .client-toolbar-ask-menu { display: none; }
+@media (max-width: 1100px) {
+  .client-game-toolbar > .client-toolbar-ask { display: none; }
+  .client-toolbar-overflow .client-toolbar-ask-menu { display: block; }
+}
