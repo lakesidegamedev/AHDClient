@@ -275,9 +275,10 @@ final class DockContainerView: UIView {
 /// canned figures and a canned game layout over whatever the app opened on,
 /// with no account and no network. States: collapsed (default), expanded,
 /// sheet (the State sheet), more (the More sheet), signedout (app tabs only),
-/// briefing (signed out fallback on the Briefing tab).
+/// briefing (signed out fallback on the Briefing tab), offline (the
+/// "cannot reach the game" screen).
 enum NativeDockPreview {
-  static let states: Set<String> = ["collapsed", "expanded", "sheet", "more", "signedout", "briefing"]
+  static let states: Set<String> = ["collapsed", "expanded", "sheet", "more", "signedout", "briefing", "offline"]
 
   static func requestedState(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> String? {
     guard let index = arguments.firstIndex(of: "-AHDDockPreview") else { return nil }

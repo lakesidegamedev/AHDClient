@@ -59,6 +59,7 @@ final class NativeNavController: NSObject {
   private var lastURL: URL?
   private var lastPlace = ""
   private weak var container: DockContainerView?
+  private let loadView = NativeLoadView()
   private var inboxVisitedAt = Date.distantPast
   private var urlObservation: NSKeyValueObservation?
   private var turnRefresh: DispatchWorkItem?
@@ -144,6 +145,9 @@ final class NativeNavController: NSObject {
     self.host = host
     host.layoutIfNeeded()
     homeInsetChanged()
+    loadView.install(in: host, webView: webView, above: slot.topAnchor) { [weak self] in
+      self?.perform(.launcher)
+    }
 
     model.onTab = { [weak self] tab in self?.handle(tab) }
     model.onOpenPath = { [weak self] path in self?.openGamePath(path) }
@@ -640,6 +644,13 @@ final class NativeNavController: NSObject {
   }
 
   private func applyPreview(_ state: String) {
+    if state == "offline" {
+      loadView.showPreview()
+      model.setLayout(DockFixture.layout)
+      select("game")
+      model.onStripPage = false
+      return
+    }
     let signedOut = state == "signedout" || state == "briefing"
     model.setLayout(signedOut ? nil : DockFixture.layout)
     // The strip lives on game pages, so the strip states show a stand-in game
