@@ -195,7 +195,7 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(nav).toContain("Intent.ACTION_SENDTO");
     expect(nav).toContain("Intent.ACTION_VIEW");
     // The WebView loads game paths only.
-    expect(nav).toContain("else -> DockModel.safePath(link.href)?.let { webView.loadUrl(site + it) }");
+    expect(nav).toContain("else -> DockModel.safePath(link.href)?.let { loadTopLevel(site + it) }");
     for (const host of ["wiki.ahousedividedgame.com", "discord.gg", "www.patreon.com", "lakesidegames.net", "docs.lakesidegames.net"]) {
       expect(model).toContain(`"${host}"`);
     }
