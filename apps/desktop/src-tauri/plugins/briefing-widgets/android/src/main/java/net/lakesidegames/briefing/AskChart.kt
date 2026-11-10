@@ -105,12 +105,12 @@ internal object AskChartCard {
 
   private fun describe(spec: AskChartSpec): String {
     val kind = when (spec.kind) {
-      AskChartSpec.Kind.PIE -> "Pie chart"
-      AskChartSpec.Kind.LINE -> "Line chart"
-      AskChartSpec.Kind.BAR -> "Bar chart"
+      AskChartSpec.Kind.PIE -> T.s(R.string.ask_chart_pie)
+      AskChartSpec.Kind.LINE -> T.s(R.string.ask_chart_line)
+      AskChartSpec.Kind.BAR -> T.s(R.string.ask_chart_bar)
     }
     val values = spec.labels.mapIndexed { index, label ->
-      "$label ${spec.series.joinToString(" and ") { AskChartView.format(it[index]) }}"
+      "$label ${spec.series.joinToString(T.s(R.string.ask_chart_and)) { AskChartView.format(it[index]) }}"
     }
     return "$kind${if (spec.title.isNotBlank()) ", ${spec.title}" else ""}: ${values.joinToString(", ")}"
   }
@@ -285,7 +285,7 @@ internal class AskChartView(private val ui: AskUi, private val spec: AskChartSpe
       fill.color = palette[index % palette.size]
       rect.set(x, top + ui.dpf(8f), x + ui.dpf(12f), top + ui.dpf(20f))
       canvas.drawRoundRect(rect, ui.dpf(3f), ui.dpf(3f), fill)
-      val name = "Series ${index + 1}"
+      val name = T.s(R.string.ask_chart_series, index + 1)
       canvas.drawText(name, x + ui.dpf(16f), top + ui.dpf(19f), label)
       x += ui.dpf(28f) + label.measureText(name)
     }

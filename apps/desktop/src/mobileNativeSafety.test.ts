@@ -47,8 +47,12 @@ describe("mobile native companion safety", () => {
     const nav = read(`${androidDir}NativeNav.kt`) + read(`${androidDir}DockModel.kt`);
     const iosDir = "../src-tauri/plugins/briefing-widgets/ios/Sources/";
     const ios = ["NativeNav.swift", "NativeDockCore.swift", "NativeDockModel.swift", "NativeDockView.swift"].map((file) => read(iosDir + file)).join("\n");
+    // Android words are resources (English here, German beside them); iOS words are in source.
+    const strings = read("../src-tauri/gen/android/app/src/main/res/values/strings.xml");
+    const keys: Record<string, string> = { Game: "dock_game", Briefing: "dock_briefing", Inbox: "dock_inbox", Ask: "dock_ask", More: "dock_more" };
     for (const tab of ["Game", "Briefing", "Inbox", "Ask", "More"]) {
-      expect(nav).toContain(`"${tab}"`);
+      expect(nav).toContain(`R.string.${keys[tab]}`);
+      expect(strings).toContain(`<string name="${keys[tab]}">${tab}</string>`);
       expect(ios).toContain(`label: "${tab}"`);
     }
     // Game home, Inbox, Briefing, Ask and Launcher were the menu's five items.

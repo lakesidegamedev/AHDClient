@@ -8,6 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AlertsPolicyTest {
+  init { TestTexts.install() }
+
   @Test fun permissionFollowsTheTwoDenialRule() {
     assertEquals(Permission.GRANTED, AlertsPolicy.permission(34, true, 0))
     assertEquals(Permission.ASKABLE, AlertsPolicy.permission(34, false, 0))
@@ -48,13 +50,13 @@ class AlertsPolicyTest {
 
   @Test fun askCopyMatchesTheIphone() {
     val ask = AlertsPolicy.copy(Mode.ASK)
-    assertEquals("Get alerts for votes, offers and attacks?", ask.title)
-    assertEquals("We will tell you the moment something needs you, even when the app is closed. You can change this any time under More, Alerts.", ask.body)
-    assertEquals("Turn on alerts", ask.primary)
-    assertEquals("Not now", ask.secondary)
+    assertEquals("Get alerts for votes, offers and attacks?", Texts.s(ask.title))
+    assertEquals("We will tell you the moment something needs you, even when the app is closed. You can change this any time under More, Alerts.", Texts.s(ask.body))
+    assertEquals("Turn on alerts", Texts.s(ask.primary))
+    assertEquals("Not now", Texts.s(ask.secondary))
     for (mode in Mode.values()) {
       val copy = AlertsPolicy.copy(mode)
-      assertFalse(listOf(copy.title, copy.body, copy.primary, copy.secondary).any { it.contains('\u2014') || it.contains('\u2013') })
+      assertFalse(listOf(copy.title, copy.body, copy.primary, copy.secondary).map { Texts.s(it) }.any { it.contains('\u2014') || it.contains('\u2013') })
     }
   }
 

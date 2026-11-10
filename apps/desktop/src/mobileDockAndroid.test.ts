@@ -8,6 +8,28 @@ const read = (relative: string) => readFileSync(join(here, relative), "utf8").re
 const android = (file: string) =>
   read(`../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/${file}`);
 
+const resources = "../src-tauri/gen/android/app/src/main/res";
+/** An English string from values/strings.xml, by name. */
+const string = (name: string) => {
+  const match = new RegExp(`<string name="${name}">([^<]*)</string>`).exec(read(`${resources}/values/strings.xml`));
+  if (!match) throw new Error(`missing string ${name}`);
+  return (match[1] ?? "").replace(/\\'/g, "'");
+};
+
+describe("Android language (2.11, A8)", () => {
+  it("ships German and offers both languages in Android's per-app language setting", () => {
+    expect(read(`${resources}/values-de/strings.xml`)).toContain('name="alerts_ask_title"');
+    expect(read(`${resources}/xml/locales_config.xml`)).toMatch(/<locale android:name="en" \/>[\s\S]*<locale android:name="de" \/>/);
+    expect(read("../src-tauri/gen/android/app/src/main/AndroidManifest.xml")).toContain('android:localeConfig="@xml/locales_config"');
+    expect(read("../src-tauri/plugins/briefing-widgets/android/src/main/res/values-de/ask_strings.xml")).toContain('name="ask_consent_title"');
+  });
+
+  it("follows the game's language cookie, not only the phone's", () => {
+    expect(android("Texts.kt")).toContain("fun syncFromCookie()");
+    expect(android("NativeNav.kt")).toContain("Texts.use(cookieLocale)");
+  });
+});
+
 describe("Android mobile dock (2.10.0)", () => {
   const activity = android("MainActivity.kt");
   const nav = android("NativeNav.kt");
@@ -43,13 +65,17 @@ describe("Android mobile dock (2.10.0)", () => {
   it("draws the game's own tabs from /api/mobile-dock and falls back to Game, Briefing, Ask, More", () => {
     expect(store).toContain("/api/mobile-dock");
     expect(model).toContain("if (raw == null || raw.optInt(\"version\", -1) != 1) return null");
-    expect(model).toContain('DockTab("app-game", "Game"');
-    expect(model).toContain('DockTab("app-briefing", "Briefing"');
-    expect(model).toContain('DockTab("app-ask", "Ask"');
-    expect(model).toContain('DockTab("app-more", "More"');
+    expect(model).toContain('DockTab("app-game", Texts.s(R.string.dock_game)');
+    expect(model).toContain('DockTab("app-briefing", Texts.s(R.string.dock_briefing)');
+    expect(model).toContain('DockTab("app-ask", Texts.s(R.string.dock_ask)');
+    expect(model).toContain('DockTab("app-more", Texts.s(R.string.dock_more)');
+    expect(string("dock_game")).toBe("Game");
+    expect(string("dock_more")).toBe("More");
     // The app section comes first in More: Briefing, Inbox, Alerts, Ask, Back to launcher.
     const section = model.indexOf("fun appSection");
-    const order = ['"Briefing"', '"Inbox"', '"Alerts"', '"Ask"', '"Back to launcher"'].map((entry) => model.indexOf(entry, section));
+    const order = ["dock_briefing", "dock_inbox", "dock_alerts", "dock_ask", "dock_launcher"].map((name) => `R.string.${name}`).map((entry) => model.indexOf(entry, section));
+    expect(["Briefing", "Inbox", "Alerts", "Ask", "Back to launcher"]).toEqual(
+      ["dock_briefing", "dock_inbox", "dock_alerts", "dock_ask", "dock_launcher"].map(string));
     expect(order.every((index) => index > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(model).toContain("val sections = listOf(appSection(signedIn)) + game");
@@ -104,10 +130,11 @@ describe("Android mobile dock (2.10.0)", () => {
   });
 
   it("gives screen readers labels for tabs, the badge count and the status values", () => {
-    expect(dock).toContain('"${tab.fullLabel}, $count unread"');
-    expect(dock).toContain('info.roleDescription = "Tab"');
-    expect(dock).toContain('val description = "Status. "');
-    expect(dock).toContain('"Show status details"');
+    expect(dock).toContain('R.string.dock_tab_unread');
+    expect(dock).toContain("info.roleDescription = Texts.s(R.string.dock_tab_role)");
+    expect(dock).toContain("Texts.s(R.string.dock_status_prefix");
+    expect(dock).toContain("R.string.dock_show_status");
+    expect(string("dock_show_status")).toBe("Show status details");
   });
 
   it("closes the sheet on Android back before anything else", () => {
@@ -129,8 +156,9 @@ describe("Android mobile dock (2.10.0)", () => {
   it("asks about alerts once, after the first signed-in status load, with the iPhone copy", () => {
     const policy = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/AlertsPolicy.kt");
     const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
-    expect(policy).toContain("Get alerts for votes, offers and attacks?");
-    expect(policy).toContain("You can change this any time under More, Alerts.");
+    expect(policy).toContain("R.string.alerts_ask_title");
+    expect(string("alerts_ask_title")).toBe("Get alerts for votes, offers and attacks?");
+    expect(string("alerts_ask_body")).toContain("You can change this any time under More, Alerts.");
     expect(nav).toContain("NativeAlerts.askOnce(activity, signedIn = true, statusLoaded = true, onGamePage = true)");
     expect(nav).toContain("AppAction.ALERTS -> NativeAlerts.showManager(activity)");
   });
@@ -251,10 +279,11 @@ describe("Android loading bar and cannot-reach screen", () => {
   });
 
   it("uses the same words as the iPhone screen", () => {
-    expect(rules).toContain('TITLE = "Cannot reach the game"');
-    expect(rules).toContain('DETAIL = "Check your connection and try again."');
-    expect(rules).toContain('RETRY = "Retry"');
-    expect(rules).toContain('BACK = "Back to launcher"');
+    expect(rules).toContain("TITLE = R.string.load_title");
+    expect(string("load_title")).toBe("Cannot reach the game");
+    expect(string("load_detail")).toBe("Check your connection and try again.");
+    expect(string("load_retry")).toBe("Retry");
+    expect(string("load_back")).toBe("Back to launcher");
   });
 
   it("draws a 2 dp bar just above the dock and sits under it", () => {

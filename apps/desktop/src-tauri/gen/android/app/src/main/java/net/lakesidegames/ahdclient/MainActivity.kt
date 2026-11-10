@@ -208,6 +208,7 @@ class MainActivity : TauriActivity() {
     super.onDestroy()
   }
   override fun onCreate(savedInstanceState: Bundle?) {
+    Texts.init(this)
     // Edge-to-edge is cosmetic. Some old vendor builds throw while applying
     // it, and that must not turn a launcher startup into an app crash.
     // The app is always dark, so both bars use the dark style whatever the

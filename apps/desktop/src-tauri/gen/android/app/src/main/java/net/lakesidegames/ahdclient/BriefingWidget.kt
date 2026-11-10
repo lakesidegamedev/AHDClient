@@ -88,7 +88,7 @@ object BriefingWidgets {
   const val ORIGIN = "https://ahousedividedgame.com"
   // Overview is last so saved card positions from older versions still match.
   val sections = listOf("profile", "election", "corporation", "stocks", "overview")
-  private val labels = listOf("Profile", "Election", "Corporation", "Stocks", "Overview")
+  private val labels get() = listOf(Texts.s(R.string.widget_profile), Texts.s(R.string.widget_election), Texts.s(R.string.widget_corporation), Texts.s(R.string.widget_stocks), Texts.s(R.string.widget_overview))
   private val providers = listOf(ProfileWidget::class.java, ElectionWidget::class.java, CorporationWidget::class.java,
     StocksWidget::class.java, OverviewWidget::class.java)
   private val lock = Any()
@@ -393,16 +393,16 @@ object BriefingWidgets {
 
   private fun nextTurn(context: Context, data: JSONObject?): String? {
     val turn = data?.optJSONObject("turn") ?: return null
-    if (!turn.optBoolean("active", true)) return "turns paused"
+    if (!turn.optBoolean("active", true)) return Texts.s(R.string.widget_turns_paused)
     val at = nextTurnAt(data) ?: return null
-    return if (at <= System.currentTimeMillis()) "next turn running"
-    else "next turn at ${android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(at))}"
+    return if (at <= System.currentTimeMillis()) Texts.s(R.string.widget_next_running)
+    else Texts.s(R.string.widget_next_at, android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(at)))
   }
 
   private fun inboxText(data: JSONObject?): String? {
     val inbox = data?.optJSONObject("inbox") ?: return null
     val unread = double(inbox, "unread") ?: 0.0
-    return if (unread > 0) "${number(unread)} unread" else "All read"
+    return if (unread > 0) Texts.s(R.string.widget_unread, number(unread)) else Texts.s(R.string.dock_all_read)
   }
 
   // The card model. Each section builds the same figures as its iOS widget.
@@ -428,7 +428,7 @@ object BriefingWidgets {
     val chartPercent: Boolean = false,
     val figures: List<Figure> = emptyList(),
     val rows: List<Row> = emptyList(),
-    val rowsTitle: String = "Latest turn"
+    val rowsTitle: String = Texts.s(R.string.widget_latest_turn)
   )
 
   private const val CREAM = 0xFFF7F0DB.toInt()
@@ -452,7 +452,7 @@ object BriefingWidgets {
   private fun turnSubtitle(data: JSONObject): String? {
     val turn = data.optJSONObject("turn") ?: return null
     val current = double(turn, "current") ?: return null
-    return listOfNotNull("Turn ${current.toLong()}", text(turn, "date")).joinToString(" · ")
+    return listOfNotNull(Texts.s(R.string.widget_turn_subtitle, current.toInt()), text(turn, "date")).joinToString(" · ")
   }
 
   /** Funds, influence and favorability, each with its per-turn change. */
@@ -461,13 +461,13 @@ object BriefingWidgets {
     val money = currency(text(data, "homeCurrency"))
     val perTurn = data.optJSONObject("perTurn")
     val result = mutableListOf(
-      figure("Campaign funds", "Funds", number(double(data, "funds"), money), double(perTurn, "funds")),
-      figure("State influence", "State", number(double(data, "politicalInfluence"), "%"), double(perTurn, "politicalInfluence"))
+      figure(Texts.s(R.string.widget_label_funds), Texts.s(R.string.widget_short_funds), number(double(data, "funds"), money), double(perTurn, "funds")),
+      figure(Texts.s(R.string.widget_label_state), Texts.s(R.string.widget_short_state), number(double(data, "politicalInfluence"), "%"), double(perTurn, "politicalInfluence"))
     )
     double(data, "nationalInfluence")?.let {
-      result.add(figure("National influence", "National", number(it), double(perTurn, "nationalInfluence")))
+      result.add(figure(Texts.s(R.string.widget_label_national), Texts.s(R.string.widget_short_national), number(it), double(perTurn, "nationalInfluence")))
     }
-    result.add(figure("Favorability", "Favor", number(double(data, "favorability"), "%"), double(perTurn, "favorability")))
+    result.add(figure(Texts.s(R.string.widget_label_favor), Texts.s(R.string.widget_short_favor), number(double(data, "favorability"), "%"), double(perTurn, "favorability")))
     return result
   }
 
@@ -494,9 +494,9 @@ object BriefingWidgets {
 
   private fun card(section: String, data: JSONObject, compact: Boolean): Card? {
     val money = currency(text(data, "homeCurrency"))
-    val cash = figure("Personal cash", "Cash", number(double(data, "personalHomeLiquid"), money))
+    val cash = figure(Texts.s(R.string.widget_label_cash), Texts.s(R.string.widget_short_cash), number(double(data, "personalHomeLiquid"), money))
     val imperial = data.optBoolean("isImperial")
-    val name = text(data, "name")?.take(100) ?: "Your character"
+    val name = text(data, "name")?.take(100) ?: Texts.s(R.string.widget_your_character)
     val inbox = inboxText(data)
     return when (section) {
       "overview" -> {
@@ -504,29 +504,29 @@ object BriefingWidgets {
         val next = nextTurnAt(data)
         val now = System.currentTimeMillis()
         val (value, countdown) = when {
-          turn != null && !turn.optBoolean("active", true) -> "Paused" to null
+          turn != null && !turn.optBoolean("active", true) -> Texts.s(R.string.dock_paused) to null
           next != null && next > now -> "" to next
-          next != null -> "Running" to null
-          else -> "n/a" to null
+          next != null -> Texts.s(R.string.dock_running) to null
+          else -> Texts.s(R.string.dock_na) to null
         }
         val figures = mutableListOf<Figure>()
-        inbox?.let { figures.add(figure("Inbox", "Inbox", it)) }
+        inbox?.let { figures.add(figure(Texts.s(R.string.widget_label_inbox), Texts.s(R.string.widget_short_inbox), it)) }
         figures.addAll(standing(data))
         double(data.optJSONObject("inbox"), "mail")?.let {
-          figures.add(figure("Mail", "Mail", if (it > 0) "${number(it)} unread" else "All read"))
+          figures.add(figure(Texts.s(R.string.widget_label_mail), Texts.s(R.string.widget_short_mail), if (it > 0) Texts.s(R.string.widget_unread, number(it)) else Texts.s(R.string.dock_all_read)))
         }
         figures.add(cash)
-        Card(name, turnSubtitle(data) ?: "Overview", "Next turn", value, null, true, countdownTo = countdown,
-          heroNote = if (imperial) "Personal cash ${cash.value}" else "Actions ${actionsText(data)}",
+        Card(name, turnSubtitle(data) ?: labels[4], Texts.s(R.string.widget_next_turn_hero), value, null, true, countdownTo = countdown,
+          heroNote = if (imperial) Texts.s(R.string.widget_personal_cash_note, cash.value) else Texts.s(R.string.widget_actions_note, actionsText(data)),
           figures = figures, rows = changeRows(data))
       }
       "profile" -> {
         val figures = standing(data).toMutableList()
         if (imperial) figures.add(cash) else figures.add(minOf(1, figures.size), cash)
-        inbox?.let { figures.add(figure("Inbox", "Inbox", it)) }
-        if (imperial) Card(name, turnSubtitle(data) ?: "Profile", "Personal cash", cash.value, null, true,
+        inbox?.let { figures.add(figure(Texts.s(R.string.widget_label_inbox), Texts.s(R.string.widget_short_inbox), it)) }
+        if (imperial) Card(name, turnSubtitle(data) ?: labels[0], Texts.s(R.string.widget_label_cash), cash.value, null, true,
           figures = figures, rows = changeRows(data))
-        else Card(name, turnSubtitle(data) ?: "Profile", "Actions", actionsText(data), null, true,
+        else Card(name, turnSubtitle(data) ?: labels[0], Texts.s(R.string.dock_actions), actionsText(data), null, true,
           figures = figures, rows = changeRows(data))
       }
       "election" -> {
@@ -535,26 +535,26 @@ object BriefingWidgets {
         val vote = double(data.optJSONObject("perTurn"), "voteShare") ?: latestChange(shares)
         val figures = mutableListOf<Figure>()
         val margin = double(election, "marginPct")
-        figures.add(Figure("Margin", "Margin", margin?.let { signed(it, " pp") } ?: "n/a", null, (margin ?: 0.0) >= 0))
+        figures.add(Figure(Texts.s(R.string.widget_label_margin), Texts.s(R.string.widget_label_margin), margin?.let { signed(it, " pp") } ?: Texts.s(R.string.dock_na), null, (margin ?: 0.0) >= 0))
         if (election.optBoolean("isMultiSeat")) {
           val seats = number(double(election, "seatsProjected")) +
             (double(election, "totalSeats")?.let { " / " + number(it) } ?: "")
-          figures.add(figure("Projected seats", "Seats", seats, latestChange(values(election, "trendSeats"))))
+          figures.add(figure(Texts.s(R.string.widget_label_seats), Texts.s(R.string.widget_short_seats), seats, latestChange(values(election, "trendSeats"))))
         }
         double(election, "endTurn")?.let { end ->
           val now = double(data.optJSONObject("turn"), "current")
           val left = if (now != null && end > now) (end - now).toLong() else null
-          figures.add(figure("Polls close", "Polls",
-            if (left == null) "Turn ${end.toLong()}" else if (left == 1L) "Next turn" else "In $left turns"))
+          figures.add(figure(Texts.s(R.string.widget_label_polls), Texts.s(R.string.widget_short_polls),
+            if (left == null) Texts.s(R.string.widget_turn_subtitle, end.toInt()) else if (left == 1L) Texts.s(R.string.widget_polls_next) else Texts.s(R.string.widget_polls_in, left.toInt())))
         }
         if (shares.size >= 3) {
-          figures.add(figure("Over ${shares.size} turns", "${shares.size} turns", signed(shares.last() - shares.first(), " pp")))
+          figures.add(figure(Texts.s(R.string.widget_over_turns, shares.size), Texts.s(R.string.widget_short_turns, shares.size), signed(shares.last() - shares.first(), " pp")))
         }
         val subtitle = listOfNotNull(text(election, "electionType"), text(election, "state") ?: text(election, "countryId"))
-          .joinToString(" · ").ifEmpty { "Election" }
-        Card("Your election", subtitle, "Vote share", number(double(election, "myVotePct"), "%"),
+          .joinToString(" · ").ifEmpty { labels[1] }
+        Card(Texts.s(R.string.widget_your_election), subtitle, Texts.s(R.string.widget_vote_share), number(double(election, "myVotePct"), "%"),
           change(vote, " pp"), (vote ?: 0.0) >= 0, chart = shares, chartColor = BLUE,
-          chartLabel = "Vote share, last ${minOf(shares.size, 12)} turns", chartPercent = true, figures = figures)
+          chartLabel = Texts.s(R.string.widget_chart_vote, minOf(shares.size, 12)), chartPercent = true, figures = figures)
       }
       "corporation" -> {
         val corp = data.optJSONObject("corpNav") ?: return null
@@ -581,22 +581,22 @@ object BriefingWidgets {
         }
         val figures = mutableListOf<Figure>()
         double(corp, "marketCap")?.let {
-          figures.add(figure("Market cap", "Mkt cap", number(it, ccy),
+          figures.add(figure(Texts.s(R.string.widget_label_mcap), Texts.s(R.string.widget_short_mcap), number(it, ccy),
             double(perTurn, "marketCap") ?: latestChange(values(corp, "trendMarketCap"))))
         }
-        figures.add(figure("Liquid capital", "Capital", number(double(corp, "liquidCapital"), ccy),
+        figures.add(figure(Texts.s(R.string.widget_label_capital), Texts.s(R.string.widget_short_capital), number(double(corp, "liquidCapital"), ccy),
           double(perTurn, "liquidCapital") ?: latestChange(values(corp, "trendCapital"))))
-        figures.add(figure("Marketing", "Marketing", number(double(corp, "marketingStrength")),
+        figures.add(figure(Texts.s(R.string.widget_label_marketing), Texts.s(R.string.widget_label_marketing), number(double(corp, "marketingStrength")),
           latestChange(values(corp, "trendMarketing"))))
-        hour?.let { figures.add(Figure("Last hour", "Last hour", signed(it, "%"), null, it >= 0)) }
+        hour?.let { figures.add(Figure(Texts.s(R.string.widget_label_hour), Texts.s(R.string.widget_label_hour), signed(it, "%"), null, it >= 0)) }
         if (prices.size >= 3 && prices.first() > 0) {
           val trend = (prices.last() - prices.first()) / prices.first() * 100
-          figures.add(Figure("Over ${prices.size} turns", "${prices.size} turns", signed(trend, "%"), null, trend >= 0))
+          figures.add(Figure(Texts.s(R.string.widget_over_turns, prices.size), Texts.s(R.string.widget_short_turns, prices.size), signed(trend, "%"), null, trend >= 0))
         }
         val color = if (prices.size >= 2 && prices.last() < prices.first()) LOSS else GAIN
-        Card(text(corp, "name")?.take(100) ?: "Corporation", text(corp, "tickerSymbol")?.let { "\$${it.uppercase()}" } ?: "Corporation",
-          "Share price", number(price, ccy), heroChange, heroPositive, chart = prices, chartColor = color,
-          chartLabel = "Share price, last ${minOf(prices.size, 12)} turns", figures = figures)
+        Card(text(corp, "name")?.take(100) ?: labels[2], text(corp, "tickerSymbol")?.let { "\$${it.uppercase()}" } ?: labels[2],
+          Texts.s(R.string.widget_share_price), number(price, ccy), heroChange, heroPositive, chart = prices, chartColor = color,
+          chartLabel = Texts.s(R.string.widget_chart_price, minOf(prices.size, 12)), figures = figures)
       }
       else -> {
         val holdings = data.optJSONArray("marketWatch")?.takeIf { it.length() > 0 } ?: return null
@@ -613,11 +613,11 @@ object BriefingWidgets {
         val ccy = currency(text(first, "liquidCurrencyCode"))
         val quote = double(first, "sharePrice")
         val owned = double(first, "ownedShares") ?: 0.0
-        val figures = mutableListOf(figure("Shares owned", "Shares", number(owned)))
-        quote?.let { figures.add(figure("Holding value", "Value", number(it * owned, ccy))) }
+        val figures = mutableListOf(figure(Texts.s(R.string.widget_label_shares), Texts.s(R.string.widget_short_shares), number(owned)))
+        quote?.let { figures.add(figure(Texts.s(R.string.widget_label_holding), Texts.s(R.string.widget_short_holding), number(it * owned, ccy))) }
         val many = items.size > 1
-        Card(if (many) "Your holdings" else ticker(first), if (many) "${items.size} companies" else first.optString("name").take(60),
-          "Quote", number(quote, ccy), null, true, figures = figures, rows = rows, rowsTitle = "Holdings")
+        Card(if (many) Texts.s(R.string.widget_your_holdings) else ticker(first), if (many) Texts.n(R.plurals.widget_companies, items.size, items.size) else first.optString("name").take(60),
+          Texts.s(R.string.widget_quote), number(quote, ccy), null, true, figures = figures, rows = rows, rowsTitle = Texts.s(R.string.widget_holdings))
       }
     }
   }
@@ -724,6 +724,8 @@ object BriefingWidgets {
   }
 
   private fun renderUnsafe(context: Context) {
+    Texts.init(context)
+    Texts.syncFromCookie()
     val manager = AppWidgetManager.getInstance(context)
     val data = read(context)
     val age = System.currentTimeMillis() - (data?.optLong("updatedAt") ?: 0)
@@ -742,14 +744,14 @@ object BriefingWidgets {
       val rowLimit = if (heightDp >= 380) 4 else if (heightDp >= 320) 2 else 0
       val card = if (ready) CompanionSafety.get("widget card", null as Card?) { card(sectionKey, data!!, compact) } else null
       val message = when {
-        !ready && data?.optString("status") == "no-character" -> "Choose a character in the app."
-        !ready && data != null -> "Saved stats expired. Open the app to refresh."
-        !ready -> "Sign in to Multiplayer in AHDClient."
+        !ready && data?.optString("status") == "no-character" -> Texts.s(R.string.widget_msg_choose)
+        !ready && data != null -> Texts.s(R.string.widget_msg_expired)
+        !ready -> Texts.s(R.string.widget_msg_signin)
         card != null -> null
-        sectionKey == "election" -> "No election tally yet."
-        sectionKey == "stocks" -> "Buy shares to populate your private market watch."
-        sectionKey == "corporation" -> "Your character does not lead a corporation."
-        else -> "Stats are unavailable. Tap Refresh to try again."
+        sectionKey == "election" -> Texts.s(R.string.widget_msg_election)
+        sectionKey == "stocks" -> Texts.s(R.string.widget_msg_stocks)
+        sectionKey == "corporation" -> Texts.s(R.string.widget_msg_corp)
+        else -> Texts.s(R.string.widget_msg_unavailable)
       }
       val title = card?.title ?: if (ready && sectionKey in listOf("profile", "overview")) text(data, "name")?.take(100) ?: labels[selected] else labels[selected]
       views.setTextViewText(R.id.briefing_title, title)
@@ -826,10 +828,10 @@ object BriefingWidgets {
       views.setTextViewText(R.id.briefing_updated, if (ready) {
         val mins = (age / 60000).coerceAtLeast(0)
         listOfNotNull(if (sectionKey == "overview") null else nextTurn(context, data),
-          if (mins < 1) "updated just now" else "updated ${mins}m ago")
+          if (mins < 1) Texts.s(R.string.widget_updated_now) else Texts.s(R.string.widget_updated_ago, mins.toInt()))
           .joinToString(" · ").replaceFirstChar { it.uppercase() }
-      } else "Multiplayer")
-      views.setTextViewText(R.id.briefing_section, "${labels[selected]} · ${selected + 1} of ${sections.size}")
+      } else Texts.s(R.string.widget_multiplayer))
+      views.setTextViewText(R.id.briefing_section, Texts.s(R.string.widget_section_of, labels[selected], selected + 1, sections.size))
       // The overview opens the inbox, like the iOS overview widget.
       val target = if (sectionKey == "overview") "inbox" else sectionKey
       val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW)

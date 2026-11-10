@@ -118,6 +118,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private var identity: String? = null
   private var checkedAccount = false
   private var locale: String? = null
+  private var shownTextLocale: String? = null
 
   /** The country the page on screen is about (Nation follows it), or null for the home nation. */
   private var country: String? = null
@@ -541,9 +542,16 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
    */
   private fun checkAccount() {
     val nowId = BriefingWidgets.identity()
-    val nowLocale = if (nowId == null) null else DockModelStore.locale()
+    val cookieLocale = DockModelStore.locale()
+    val nowLocale = if (nowId == null) null else cookieLocale
     val accountChanged = !checkedAccount || nowId != identity
-    if (!accountChanged && nowLocale == locale) return
+    // The app's own words follow the game's language, signed in or not.
+    Texts.use(cookieLocale)
+    if (!accountChanged && nowLocale == locale) {
+      if (cookieLocale != shownTextLocale) { shownTextLocale = cookieLocale; applyModel(); showStatus() }
+      return
+    }
+    shownTextLocale = cookieLocale
     checkedAccount = true
     identity = nowId
     locale = nowLocale

@@ -14,7 +14,8 @@ object AlertsPolicy {
   private const val FIRST_ASKABLE_SDK = 33
   private const val INBOX = "/notifications"
 
-  class Copy(val title: String, val body: String, val primary: String, val secondary: String)
+  /** Resource ids for one sheet's words; resolve them with [Texts.s] when drawing. */
+  class Copy(val title: Int, val body: Int, val primary: Int, val secondary: Int)
 
   /**
    * [allowed] is the system's current answer (notifications enabled for the app); [denials] is how
@@ -44,13 +45,10 @@ object AlertsPolicy {
   }
 
   fun copy(mode: Mode): Copy = when (mode) {
-    Mode.ASK -> Copy("Get alerts for votes, offers and attacks?",
-      "We will tell you the moment something needs you, even when the app is closed. You can change this any time under More, Alerts.",
-      "Turn on alerts", "Not now")
-    Mode.OFF -> Copy("Alerts are off", "Turn them on to hear about votes, offers and attacks.", "Turn on alerts", "Close")
-    Mode.ON -> Copy("Alerts are on", "You will hear about votes, offers and attacks, even when the app is closed.", "Turn off alerts", "Done")
-    Mode.BLOCKED -> Copy("Alerts are blocked in Android",
-      "Allow notifications for this app in Android Settings to get alerts.", "Open Android Settings", "Close")
+    Mode.ASK -> Copy(R.string.alerts_ask_title, R.string.alerts_ask_body, R.string.alerts_turn_on, R.string.alerts_not_now)
+    Mode.OFF -> Copy(R.string.alerts_off_title, R.string.alerts_off_body, R.string.alerts_turn_on, R.string.alerts_close)
+    Mode.ON -> Copy(R.string.alerts_on_title, R.string.alerts_on_body, R.string.alerts_turn_off, R.string.alerts_done)
+    Mode.BLOCKED -> Copy(R.string.alerts_blocked_title, R.string.alerts_blocked_body, R.string.alerts_open_settings, R.string.alerts_close)
   }
 
   /** True when the player is on the page the alert is about, or on the inbox, which lists them all. [href] is a game path, query allowed. */

@@ -70,6 +70,7 @@ object NativeAlerts {
   }
 
   private fun content(activity: Activity, mode: AlertsPolicy.Mode, done: (() -> Unit) -> Unit): View {
+    Texts.syncFromCookie()
     val copy = AlertsPolicy.copy(mode)
     val density = activity.resources.displayMetrics.density
     fun dp(value: Int) = (value * density).toInt()
@@ -80,25 +81,25 @@ object NativeAlerts {
       setPadding(dp(24), dp(28), dp(24), dp(24))
     }
     column.addView(TextView(activity).apply {
-      text = copy.title; setTextColor(Color.WHITE); textSize = 22f; setTypeface(typeface, Typeface.BOLD)
+      text = Texts.s(copy.title); setTextColor(Color.WHITE); textSize = 22f; setTypeface(typeface, Typeface.BOLD)
       gravity = Gravity.CENTER
       androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
     })
     column.addView(TextView(activity).apply {
-      text = copy.body; setTextColor(Color.argb(179, 255, 255, 255)); textSize = 16f; gravity = Gravity.CENTER
+      text = Texts.s(copy.body); setTextColor(Color.argb(179, 255, 255, 255)); textSize = 16f; gravity = Gravity.CENTER
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
     column.addView(TextView(activity).apply {
-      text = copy.primary; setTextColor(Color.WHITE); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+      text = Texts.s(copy.primary); setTextColor(Color.WHITE); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
       gravity = Gravity.CENTER; minHeight = dp(48)
       background = GradientDrawable().apply {
         cornerRadius = dp(12).toFloat()
         setColor(if (mode == AlertsPolicy.Mode.ON) Color.argb(36, 255, 255, 255) else ACCENT)
       }
-      contentDescription = copy.primary
+      contentDescription = Texts.s(copy.primary)
       setOnClickListener { done { primaryTapped(activity, mode) } }
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(22) })
     column.addView(TextView(activity).apply {
-      text = copy.secondary; setTextColor(Color.argb(204, 255, 255, 255)); textSize = 16f
+      text = Texts.s(copy.secondary); setTextColor(Color.argb(204, 255, 255, 255)); textSize = 16f
       gravity = Gravity.CENTER; minHeight = dp(48)
       setOnClickListener { done { } }
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })

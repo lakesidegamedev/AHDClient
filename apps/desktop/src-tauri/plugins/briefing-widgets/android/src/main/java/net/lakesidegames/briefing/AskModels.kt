@@ -51,7 +51,7 @@ internal fun askCount(value: Double): String =
 /** "3h 20m" or "45m" until the allowance resets. */
 internal fun askResetIn(resetAt: Long, now: Long = System.currentTimeMillis()): String {
   val minutes = Math.max(0L, Math.round((resetAt - now) / 60000.0))
-  return if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
+  return if (minutes >= 60) T.s(R.string.ask_reset_hm, (minutes / 60).toInt(), (minutes % 60).toInt()) else T.s(R.string.ask_reset_m, minutes.toInt())
 }
 
 internal data class AskCitation(val label: String, val url: String?)
@@ -72,7 +72,7 @@ internal data class AskConversationSummary(
         if (id.isBlank()) continue
         out += AskConversationSummary(
           id = id,
-          title = item.optString("title").takeIf { it.isNotBlank() && it != "null" } ?: "Untitled chat",
+          title = item.optString("title").takeIf { it.isNotBlank() && it != "null" } ?: T.s(R.string.ask_untitled),
           updated = item.optLong("updated", item.optLong("created", 0L)),
           pinned = item.optInt("pinned", 0) == 1 || item.optBoolean("pinned", false)
         )
@@ -153,7 +153,7 @@ internal class AskMessage(val localId: Long, val question: String, val attachmen
         feedback = turn.optString("feedback_rating").takeIf { it == "up" || it == "down" }
         cached = turn.optInt("cached", 0) == 1
         state = if (answer.isBlank()) AskMessageState.FAILED else AskMessageState.DONE
-        if (answer.isBlank()) error = "This answer was not saved."
+        if (answer.isBlank()) error = T.s(R.string.ask_err_not_saved)
       }
     }
   }
@@ -204,7 +204,7 @@ internal fun askLiveSources(list: JSONArray?): List<String> {
 internal class AskHttpException(val status: Int, message: String, val usage: AskUsage?) : Exception(message)
 
 /** The answer stream ended before its final event. The partial text is kept. */
-internal class AskStreamDropped : Exception("The connection dropped before the answer finished.")
+internal class AskStreamDropped : Exception(T.s(R.string.ask_err_dropped))
 
 /**
  * Server copy is written for the web page; keep it but drop dashes the app's
@@ -220,26 +220,23 @@ internal fun askCleanCopy(text: String): String {
 /** Plain words for a failure. Never an HTTP code or an exception name. */
 internal fun askPlayerMessage(error: Throwable?): String {
   return when (error) {
-    null -> "Something went wrong. Try again."
+    null -> T.s(R.string.ask_err_generic)
     is AskHttpException -> when {
-      error.status == 429 -> askCleanCopy(error.message.orEmpty()).ifBlank { "You have used today's questions. They reset at midnight UTC." }
-      error.status >= 500 -> "Ask is having trouble right now. Try again in a minute."
-      error.status == 404 -> "That chat is no longer available."
-      else -> askCleanCopy(error.message.orEmpty()).ifBlank { "Something went wrong. Try again." }
+      error.status == 429 -> askCleanCopy(error.message.orEmpty()).ifBlank { T.s(R.string.ask_err_quota) }
+      error.status >= 500 -> T.s(R.string.ask_err_server)
+      error.status == 404 -> T.s(R.string.ask_err_chat_gone)
+      else -> askCleanCopy(error.message.orEmpty()).ifBlank { T.s(R.string.ask_err_generic) }
     }
     is AskStreamDropped -> error.message.orEmpty()
-    is UnknownHostException, is ConnectException -> "You're offline. Check your connection and try again."
-    is SocketTimeoutException -> "Ask took too long to respond. Try again."
-    is SSLException -> "A secure connection to Ask could not be made. Check your connection and try again."
-    is InterruptedIOException -> "Ask took too long to respond. Try again."
-    is FileNotFoundException -> "That chat is no longer available."
-    is java.io.IOException -> "The connection to Ask was interrupted. Try again."
-    else -> {
-      val message = error.message.orEmpty()
-      // Our own exceptions carry player copy; anything else gets the generic line.
-      if (message.startsWith("Ask ") || message.startsWith("You") || message.startsWith("This ") || message.startsWith("That "))
-        askCleanCopy(message) else "Something went wrong. Try again."
-    }
+    is UnknownHostException, is ConnectException -> T.s(R.string.ask_err_offline)
+    is SocketTimeoutException -> T.s(R.string.ask_err_slow)
+    is SSLException -> T.s(R.string.ask_err_ssl)
+    is InterruptedIOException -> T.s(R.string.ask_err_slow)
+    is FileNotFoundException -> T.s(R.string.ask_err_chat_gone)
+    is java.io.IOException -> T.s(R.string.ask_err_interrupted)
+    // Our own exceptions carry player copy in the player's language; anything else gets the generic line.
+    is AskCopyException -> askCleanCopy(error.message.orEmpty())
+    else -> T.s(R.string.ask_err_generic)
   }
 }
 

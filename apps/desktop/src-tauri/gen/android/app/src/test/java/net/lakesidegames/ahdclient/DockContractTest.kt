@@ -9,6 +9,8 @@ import org.junit.Test
 
 /** The dock against real /api/mobile-dock output (src/test/resources), not hand-made documents. */
 class DockContractTest {
+  init { TestTexts.install() }
+
   private fun load(name: String): JSONObject =
     JSONObject(checkNotNull(javaClass.classLoader!!.getResource(name)) { "missing fixture $name" }.readText())
 

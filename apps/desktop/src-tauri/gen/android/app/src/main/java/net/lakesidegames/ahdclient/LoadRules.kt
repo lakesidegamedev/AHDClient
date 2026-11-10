@@ -4,11 +4,11 @@ import android.webkit.WebViewClient
 
 /** The pure decisions behind the loading bar and the cannot-reach-the-game screen, kept apart so they can be tested. */
 object LoadRules {
-  /** Words on the screen. The same as the iPhone app. */
-  const val TITLE = "Cannot reach the game"
-  const val DETAIL = "Check your connection and try again."
-  const val RETRY = "Retry"
-  const val BACK = "Back to launcher"
+  /** Words on the screen (the same as the iPhone app), as resource ids. */
+  val TITLE = R.string.load_title
+  val DETAIL = R.string.load_detail
+  val RETRY = R.string.load_retry
+  val BACK = R.string.load_back
 
   /** The loading bar never shows less than this, so the first moment of a load is visible. */
   private const val MIN_FILL = 8

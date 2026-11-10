@@ -13,9 +13,10 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicReference
 
-internal class NativeAskAuthRequired : Exception(
-  "Ask could not find a linked game account. Link your game account in AHDClient first."
-)
+internal class NativeAskAuthRequired : Exception(T.s(R.string.ask_err_no_account))
+
+/** An error whose message is already player copy in the player's language. */
+internal class AskCopyException(message: String) : Exception(message)
 
 /** Callbacks from one answer stream. Called on the network thread. */
 internal interface AskStreamListener {
@@ -77,22 +78,22 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
     val result = try {
       postJson("/api/conversation/share", JSONObject().put("id", id))
     } catch (failure: AskHttpException) {
-      if (failure.status == 403) throw Exception("This chat is private, so it cannot be shared. Chats with photos stay private.")
+      if (failure.status == 403) throw AskCopyException(T.s(R.string.ask_err_share_private))
       throw failure
     }
     val url = result.optString("url")
-    if (!url.startsWith("https://")) throw Exception("This chat could not be shared yet. Try again after the answer finishes.")
+    if (!url.startsWith("https://")) throw AskCopyException(T.s(R.string.ask_err_share_later))
     return url
   }
 
   /** Map SVG for an `ahd-map` block. The service validates the spec and owns the geometry. */
   fun renderMap(spec: String): String {
-    val parsed = try { JSONObject(spec) } catch (_: Exception) { throw Exception("This map could not be drawn.") }
+    val parsed = try { JSONObject(spec) } catch (_: Exception) { throw AskCopyException(T.s(R.string.ask_err_map)) }
     val response = withRetry { request("POST", "/api/map/render", parsed.toString().toByteArray(StandardCharsets.UTF_8),
       "application/json", "image/svg+xml") }
-    if (response.code !in 200..299) throw Exception("This map could not be drawn.")
+    if (response.code !in 200..299) throw AskCopyException(T.s(R.string.ask_err_map))
     val text = String(response.body, StandardCharsets.UTF_8)
-    if (!text.trimStart().startsWith("<svg")) throw Exception("This map could not be drawn.")
+    if (!text.trimStart().startsWith("<svg")) throw AskCopyException(T.s(R.string.ask_err_map))
     return text
   }
 
@@ -104,7 +105,7 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
     }
     val json = parseJson(response)
     val url = json.optString("url")
-    if (!url.startsWith("/api/uploads/")) throw Exception("Ask could not attach that photo.")
+    if (!url.startsWith("/api/uploads/")) throw AskCopyException(T.s(R.string.ask_err_attach))
     return url
   }
 
@@ -174,9 +175,9 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
         if (!connection.contentType.orEmpty().contains("text/event-stream", ignoreCase = true)) {
           // Cached answers and privacy refusals come back as plain JSON.
           val payload = try { JSONObject(readBody(connection)) } catch (_: Exception) {
-            throw Exception("Ask sent an answer this app could not read.")
+            throw AskCopyException(T.s(R.string.ask_err_unreadable_answer))
           }
-          if (payload.optString("answer").isBlank()) throw Exception("Ask returned an empty answer.")
+          if (payload.optString("answer").isBlank()) throw AskCopyException(T.s(R.string.ask_err_empty))
           return payload
         }
         return readStream(connection, listener)
@@ -223,7 +224,7 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
             is String -> value
             else -> ""
           }
-          throw Exception(askCleanCopy(message).ifBlank { "Ask could not finish this answer. Try again." })
+          throw Exception(askCleanCopy(message).ifBlank { T.s(R.string.ask_err_finish) })
         }
       }
       eventData = StringBuilder()
@@ -251,7 +252,7 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
       if (done == null) throw if (receivedAny) AskStreamDropped() else failure
     }
     val result = done ?: throw AskStreamDropped()
-    if (result.optString("answer").isBlank()) throw Exception("Ask returned an empty answer.")
+    if (result.optString("answer").isBlank()) throw AskCopyException(T.s(R.string.ask_err_empty))
     return result
   }
 
@@ -310,7 +311,7 @@ internal class NativeAskApi(initialCookies: Map<String, String>) {
     val text = String(response.body, StandardCharsets.UTF_8)
     if (response.code == HttpURLConnection.HTTP_UNAUTHORIZED) throw NativeAskAuthRequired()
     if (response.code !in 200..299) throw httpFailure(response.code, text)
-    return try { JSONObject(text) } catch (_: Exception) { throw Exception("Ask sent a reply this app could not read.") }
+    return try { JSONObject(text) } catch (_: Exception) { throw AskCopyException(T.s(R.string.ask_err_unreadable_reply)) }
   }
 
   private fun httpFailure(code: Int, text: String): AskHttpException {
