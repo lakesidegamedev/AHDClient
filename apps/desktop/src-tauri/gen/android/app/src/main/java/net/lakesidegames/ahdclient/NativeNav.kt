@@ -80,7 +80,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     fun sectionOf(path: String?): String? = path?.trim('/')?.substringBefore('/')?.takeIf { it.isNotEmpty() }
   }
 
-  val dock = NativeDock(activity, this)
+  var dock = NativeDock(activity, this)
+    private set
   private val handler = Handler(Looper.getMainLooper())
   private var lastGameUrl: String? = null
 
@@ -221,6 +222,46 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     handler.removeCallbacks(follow)
     handler.removeCallbacks(fetch)
     dock.pause()
+    CompanionSafety.run("last page save") { saveLastPage() }
+  }
+
+  /**
+   * Remembers the live game page on screen for the next launch (the shared open-into-the-game
+   * code restores it). Only for a signed-in player on a page worth returning to; a sign-in or
+   * sign-out page, the sandbox or the launcher leave the saved page alone, and signing out
+   * forgets it. The file is written off the UI thread.
+   */
+  private fun saveLastPage() {
+    if (previewing) return
+    val context = activity.applicationContext
+    val account = BriefingWidgets.identity()
+    if (account == null) {
+      if (checkedAccount) Thread { LastGame.clear(context) }.start()
+      return
+    }
+    val path = LastGame.pathToSave(webView.url) ?: return
+    Thread { CompanionSafety.run("last page write") { LastGame.save(context, path, account) } }.start()
+  }
+
+  /**
+   * The text size, display size or layout direction changed. The dock reads those once when it
+   * is built, so build a new one with the same state; the page itself is left alone.
+   */
+  fun rebuildDock() {
+    val content = activity.findViewById<FrameLayout>(android.R.id.content) ?: return
+    val old = dock
+    if (old.parent == null) return
+    old.closeSheet(animate = false)
+    old.pause()
+    content.removeView(old)
+    dock = NativeDock(activity, this)
+    content.addView(dock, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+      ViewGroup.LayoutParams.MATCH_PARENT, Gravity.BOTTOM))
+    dock.resume()
+    applyModel()
+    showStatus()
+    if (!previewing) dock.showSelected(tabId, animate = false)
+    ViewCompat.requestApplyInsets(webView)
   }
 
   /** Called from the WebView's insets listener; returns the dock's collapsed height. */
