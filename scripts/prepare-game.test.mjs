@@ -127,6 +127,7 @@ describe("singleplayer build provenance", () => {
 
     expect(buildInfoFromProvenance(dist, "2.3.5")).toEqual({
       clientVersion: "2.3.5",
+      gameVersion: null,
       gameCommit: "a".repeat(40),
       gameCommitStatus: "clean",
     });
@@ -144,6 +145,7 @@ describe("singleplayer build provenance", () => {
     });
     expect(buildInfoFromProvenance(dist, "2.3.5")).toEqual({
       clientVersion: "2.3.5",
+      gameVersion: null,
       gameCommit: null,
       gameCommitStatus: "unknown",
     });
@@ -187,6 +189,7 @@ describe("singleplayer build provenance", () => {
     touch(game, "scripts/singleplayer/package.mjs");
     touch(dist, "server.js");
     touch(dist, "launch.mjs");
+    touch(dist, "package.json", JSON.stringify({ name: "game", version: "1.20.0" }));
     touch(dist, ".next/static/app.js");
     touch(dist, ".next/server/app.js");
     touch(dist, "public/logo.png");
@@ -202,6 +205,7 @@ describe("singleplayer build provenance", () => {
 
     expect(JSON.parse(readFileSync(path.join(staged, "AHD_BUILD.json"), "utf8"))).toEqual({
       clientVersion: JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version,
+      gameVersion: "1.20.0",
       gameCommit: "a".repeat(40),
       gameCommitStatus: "clean",
     });

@@ -993,6 +993,23 @@ pub(crate) async fn list_game_versions(app: AppHandle) -> Result<Vec<game_versio
   tauri::async_runtime::spawn_blocking(move || game_versions::list(&app)).await.map_err(|_| "Game version check failed.".to_string())?
 }
 
+/// What the game runtime that would start now supports, or null when it ships
+/// no (valid) manifest.
+#[tauri::command]
+pub(crate) async fn game_capabilities(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    let dir = game_versions::game_dir(&app)?;
+    Ok(game_versions::read_capabilities(&dir))
+  }).await.map_err(|_| "Game capabilities check failed.".to_string())?
+}
+
+/// Build facts of the game shipped inside this app (not a downloaded version).
+#[tauri::command]
+pub(crate) fn bundled_game_info(app: AppHandle) -> Result<game_versions::BundledGameInfo, String> {
+  let dir = app.path().resource_dir().map_err(|e| e.to_string())?.join("game");
+  Ok(game_versions::read_build_info(&dir))
+}
+
 #[tauri::command]
 pub(crate) async fn install_game_version(app: AppHandle, game: State<'_, Game>, version: String) -> Result<(), String> {
   if game.0.lock().map_err(|_| "game state poisoned")?.child.is_some() { return Err("Stop the local game before changing versions.".into()); }
@@ -1065,6 +1082,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       delete_world_save,
       request_world_save_load,
       list_game_versions,
+      game_capabilities,
+      bundled_game_info,
       install_game_version,
       select_game_version,
     ])

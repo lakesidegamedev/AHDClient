@@ -32,6 +32,8 @@
     "allow-request-world-save-load",
     "allow-touch-world",
     "allow-list-game-versions",
+    "allow-game-capabilities",
+    "allow-bundled-game-info",
     "allow-install-game-version",
     "allow-select-game-version",
     "process:allow-restart",

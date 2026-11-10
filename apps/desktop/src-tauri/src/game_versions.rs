@@ -65,6 +65,35 @@ pub fn game_dir(app: &AppHandle) -> Result<PathBuf, String> {
   Ok(app.path().resource_dir().map_err(|e| e.to_string())?.join("game"))
 }
 
+/// Reads `singleplayer-capabilities.json` from a staged game directory.
+/// Returns None when the file is absent, unreadable, or not a JSON object, so
+/// older runtimes that ship no manifest fall back to the client's own table.
+pub fn read_capabilities(dir: &Path) -> Option<serde_json::Value> {
+  let text = fs::read_to_string(dir.join("singleplayer-capabilities.json")).ok()?;
+  let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+  if value.is_object() { Some(value) } else { None }
+}
+
+/// What `AHD_BUILD.json` says about the game staged in `dir`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundledGameInfo {
+  pub game_version: Option<String>,
+  pub game_commit: Option<String>,
+  pub client_version: Option<String>,
+}
+
+pub fn read_build_info(dir: &Path) -> BundledGameInfo {
+  let Some(value) = fs::read_to_string(dir.join("AHD_BUILD.json")).ok()
+    .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok()) else { return BundledGameInfo::default(); };
+  let text = |key: &str| value.get(key).and_then(|v| v.as_str()).map(str::to_string);
+  BundledGameInfo {
+    game_version: text("gameVersion").filter(|v| parse_version(v).is_some()),
+    game_commit: text("gameCommit"),
+    client_version: text("clientVersion"),
+  }
+}
+
 fn fetch_releases() -> Result<Vec<Release>, String> {
   ureq::AgentBuilder::new().timeout(Duration::from_secs(20)).build()
     .get(RELEASES_URL).set("User-Agent", "AHDClient/2").call()
@@ -166,7 +195,44 @@ pub fn select(app: &AppHandle, version: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use super::{parse_version, target_name_for, valid_version};
+  use super::{parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
+  use std::fs;
+
+  fn temp_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("ahd-gv-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  #[test]
+  fn capabilities_reader_returns_none_for_missing_or_bad_files() {
+    let dir = temp_dir("caps");
+    assert!(read_capabilities(&dir).is_none());
+    fs::write(dir.join("singleplayer-capabilities.json"), "{ not json").unwrap();
+    assert!(read_capabilities(&dir).is_none());
+    fs::write(dir.join("singleplayer-capabilities.json"), "[1,2]").unwrap();
+    assert!(read_capabilities(&dir).is_none());
+    fs::write(dir.join("singleplayer-capabilities.json"), r#"{"schemaVersion":1}"#).unwrap();
+    assert_eq!(read_capabilities(&dir).unwrap()["schemaVersion"], 1);
+    let _ = fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn build_info_reader_tolerates_old_and_broken_files() {
+    let dir = temp_dir("build");
+    assert_eq!(read_build_info(&dir).game_version, None);
+    fs::write(dir.join("AHD_BUILD.json"), r#"{"clientVersion":"2.10.0","gameCommit":null}"#).unwrap();
+    let old = read_build_info(&dir);
+    assert_eq!(old.game_version, None);
+    assert_eq!(old.client_version.as_deref(), Some("2.10.0"));
+    fs::write(dir.join("AHD_BUILD.json"), r#"{"gameVersion":"1.20.0","gameCommit":"abc"}"#).unwrap();
+    assert_eq!(read_build_info(&dir).game_version.as_deref(), Some("1.20.0"));
+    fs::write(dir.join("AHD_BUILD.json"), "garbage").unwrap();
+    assert_eq!(read_build_info(&dir).game_version, None);
+    let _ = fs::remove_dir_all(&dir);
+  }
+
   #[test]
   fn accepts_only_complete_versions_at_or_after_1_6_0() {
     assert!(!valid_version("1.5.99"));

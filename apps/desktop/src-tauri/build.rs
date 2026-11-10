@@ -49,6 +49,8 @@ fn main() {
       "delete_world_save",
       "request_world_save_load",
       "list_game_versions",
+      "game_capabilities",
+      "bundled_game_info",
       "install_game_version",
       "select_game_version",
     ])),
