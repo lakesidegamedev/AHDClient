@@ -255,9 +255,12 @@ final class NativeNavController: NSObject {
 
   private func keyboardChanged(_ note: Notification) {
     guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
-    guard let screen = host?.window?.screen.bounds.height else { return }
-    // Docked and tall: not the iPad shortcut bar, not a floating keyboard.
-    let docked = frame.height > 100 && frame.maxY >= screen - 1 && frame.minY < screen - 100
+    guard let window = host?.window else { return }
+    // Judge the keyboard against the app's own window, in its coordinates:
+    // on iPad in Split View, Slide Over or a smaller window the app does not
+    // own the bottom of the screen.
+    let local = window.convert(frame, from: window.screen.coordinateSpace)
+    let docked = DockKeyboard.coversDock(keyboard: local, window: window.bounds)
     // A native sheet (Ask) has its own keyboard; the page behind it stays put.
     if docked, let host, Self.owningController(of: host)?.presentedViewController != nil { return }
     model.setKeyboardUp(docked)
@@ -301,7 +304,8 @@ final class NativeNavController: NSObject {
   private func announceNativeStatus(on webView: WKWebView) {
     func set(_ base: String) {
       guard !base.contains(Self.statusMarker) else { return }
-      webView.customUserAgent = base + " " + Self.statusMarker
+      let truthful = DockUserAgent.truthful(base, isPad: UIDevice.current.userInterfaceIdiom == .pad, systemVersion: UIDevice.current.systemVersion)
+      webView.customUserAgent = truthful + " " + Self.statusMarker
       if preview == nil, let host = webView.url?.host, Self.gameHosts.contains(host) { webView.reload() }
     }
     if let agent = webView.customUserAgent, !agent.isEmpty {

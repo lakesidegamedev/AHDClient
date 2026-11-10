@@ -22,6 +22,9 @@ struct DockView: View {
   @ObservedObject var model: DockModel
   @State private var dragStart: CGFloat?
   @Namespace private var pill
+  /// An iPhone on its side: little height, plenty of width.
+  @Environment(\.verticalSizeClass) private var verticalSizeClass
+  private var compact: Bool { verticalSizeClass == .compact }
 
   private var motion: Animation {
     model.reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.78)
@@ -38,7 +41,7 @@ struct DockView: View {
       ZStack(alignment: .bottom) {
         scrim(progress)
         surface(extent: extent, progress: progress, scrollable: (model.natural[model.panel.key] ?? 0) > cap + 0.5)
-          .frame(maxWidth: DockStyle.maxWidth)
+          .frame(maxWidth: compact ? DockStyle.compactMaxWidth : DockStyle.maxWidth)
           .padding(.horizontal, 10)
           .padding(.bottom, pad)
           // With the keyboard up the dock steps aside, like Android's.
@@ -66,9 +69,19 @@ struct DockView: View {
   private func surface(extent: CGFloat, progress: CGFloat, scrollable: Bool) -> some View {
     VStack(spacing: 0) {
       panelView(extent: extent, progress: progress, scrollable: scrollable)
-      VStack(spacing: 0) {
-        if model.showsStrip { strip(progress: progress) }
-        tabRow
+      Group {
+        if compact {
+          // One row: the status beside icon-only tabs.
+          HStack(spacing: 0) {
+            if model.showsStrip { strip(progress: progress).frame(maxWidth: .infinity) }
+            tabRow.frame(maxWidth: model.showsStrip ? 340 : .infinity)
+          }
+        } else {
+          VStack(spacing: 0) {
+            if model.showsStrip { strip(progress: progress) }
+            tabRow
+          }
+        }
       }
       .background(
         GeometryReader { proxy in Color.clear.preference(key: DockBaseHeightKey.self, value: proxy.size.height) }
@@ -209,16 +222,17 @@ struct DockView: View {
   // MARK: Strip
 
   private func strip(progress: CGFloat) -> some View {
-    VStack(spacing: 0) {
+    let rowHeight: CGFloat = compact ? 28 : 36
+    return VStack(spacing: 0) {
       Button { model.toggleStatus() } label: {
         VStack(spacing: 0) {
-          Capsule().fill(Color.white.opacity(0.22)).frame(width: 34, height: 4).padding(.top, 6)
+          if !compact { Capsule().fill(Color.white.opacity(0.22)).frame(width: 34, height: 4).padding(.top, 6) }
           TimelineView(.periodic(from: Date(), by: 1)) { context in
             DockStripContent(status: model.status ?? DockStatus(), now: context.date,
               progress: model.expanded && model.panel == .status ? progress : 0, reduce: model.reduceMotion)
           }
           .padding(.horizontal, 16)
-          .frame(minHeight: 36)
+          .frame(minHeight: rowHeight)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
         .contentShape(Rectangle())
@@ -229,8 +243,9 @@ struct DockView: View {
       .accessibilityValue(Text(model.expanded && model.panel == .status ? "Expanded" : "Collapsed"))
       .accessibilityHint(Text(model.expanded && model.panel == .status ? "Hides the full status" : "Shows the full status"))
       .accessibilityAddTraits(.updatesFrequently)
-      Rectangle().fill(DockStyle.hairline).frame(height: 1)
+      if !compact { Rectangle().fill(DockStyle.hairline).frame(height: 1) }
     }
+    .overlay(alignment: .trailing) { if compact { Rectangle().fill(DockStyle.hairline).frame(width: 1) } }
   }
 
   private func stripLabel() -> String {
@@ -252,12 +267,12 @@ struct DockView: View {
         DockTabButton(tab: tab, selected: model.displayedID == tab.id,
           open: model.expanded && model.displayedID == tab.id,
           badge: tab.id == "more" ? model.badge : 0,
-          reduce: model.reduceMotion, namespace: pill) { model.onTab(tab) }
+          reduce: model.reduceMotion, compact: compact, namespace: pill) { model.onTab(tab) }
       }
     }
     .padding(.horizontal, 4)
-    .padding(.top, 2)
-    .padding(.bottom, 4)
+    .padding(.top, compact ? 0 : 2)
+    .padding(.bottom, compact ? 0 : 4)
     // Like the system tab bar, the row stops growing past the largest
     // standard text size; the strip and the sheets keep scaling.
     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -401,6 +416,7 @@ struct DockSheetRow: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(DockPressStyle(scale: 0.99))
+    .hoverEffect(.highlight)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(Text(count > 0 ? "\(label), \(count) unread" : label))
     .accessibilityHint(Text(external ? "Opens outside the game" : "Opens the page"))
@@ -454,6 +470,7 @@ struct DockTabButton: View {
   let open: Bool
   let badge: Int
   let reduce: Bool
+  var compact = false
   let namespace: Namespace.ID
   let action: () -> Void
 
@@ -473,18 +490,19 @@ struct DockTabButton: View {
         }
         .frame(width: 58, height: 30)
         .overlay(badgeView, alignment: .topTrailing)
-        Text(tab.label)
+        if !compact { Text(tab.label)
           .font(.caption2.weight(.medium))
           .foregroundColor(selected ? DockStyle.text : DockStyle.muted)
           .lineLimit(1)
           .minimumScaleFactor(0.7)
           .truncationMode(.tail)
-          .padding(.horizontal, 3)
+          .padding(.horizontal, 3) }
       }
-      .frame(maxWidth: .infinity, minHeight: 54)
+      .frame(maxWidth: .infinity, minHeight: compact ? 44 : 54)
       .contentShape(Rectangle())
     }
     .buttonStyle(DockPressStyle(scale: 0.94))
+    .hoverEffect(.highlight)
     .accessibilityIdentifier("ahdclient-tab-\(tab.id)")
     .accessibilityLabel(Text(badge > 0 ? "\(tab.label), \(badge) unread" : tab.label))
     .accessibilityValue(Text(isSheet ? (open ? "Open" : "Closed") : ""))

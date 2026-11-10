@@ -297,5 +297,28 @@ do {
 check(DockFixture.layout.tabs.count == 5, "preview fixture decodes to 5 tabs")
 check(DockFixture.layout.sheets["more"]?.sections.contains { $0.links.contains { $0.external } } == true, "preview fixture has external rows")
 
+
+// MARK: Keyboard in window coordinates
+
+let padWindow = CGRect(x: 0, y: 0, width: 700, height: 900)
+check(DockKeyboard.coversDock(keyboard: CGRect(x: 0, y: 640, width: 700, height: 260), window: padWindow), "a docked keyboard covers the window bottom")
+check(!DockKeyboard.coversDock(keyboard: CGRect(x: 0, y: 860, width: 700, height: 40), window: padWindow), "the shortcut bar is not a keyboard")
+check(!DockKeyboard.coversDock(keyboard: CGRect(x: 200, y: 500, width: 300, height: 200), window: padWindow), "a floating keyboard is ignored")
+// Split View: the window is the left part of a 1024x768 landscape screen and the keyboard spans the screen.
+let splitWindow = CGRect(x: 0, y: 0, width: 400, height: 768)
+check(DockKeyboard.coversDock(keyboard: CGRect(x: 0, y: 500, width: 400, height: 268), window: splitWindow), "split view: keyboard seen in window coordinates")
+// Stage Manager: the window floats above the bottom of the screen; the keyboard is lower than the window.
+check(!DockKeyboard.coversDock(keyboard: CGRect(x: 0, y: 1000, width: 700, height: 300), window: padWindow), "a keyboard below the window does not cover it")
+check(!DockKeyboard.coversDock(keyboard: CGRect(x: 0, y: 640, width: 700, height: 260), window: .zero), "an empty window is never covered")
+
+// MARK: Truthful user agent
+
+let phoneAgent = "Mozilla/5.0 (\(DockUserAgent.fixedPhone)) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AHDClient-Mobile/2.11.0"
+check(DockUserAgent.truthful(phoneAgent, isPad: true, systemVersion: "18.2").contains("(iPad; CPU OS 18_2 like Mac OS X)"), "iPad says iPad with the real OS")
+check(DockUserAgent.truthful(phoneAgent, isPad: false, systemVersion: "18.2.1").contains("(iPhone; CPU iPhone OS 18_2_1 like Mac OS X)"), "iPhone says its real OS")
+check(DockUserAgent.truthful(phoneAgent, isPad: true, systemVersion: "18.2").hasSuffix("AHDClient-Mobile/2.11.0"), "the client marker survives")
+check(DockUserAgent.truthful("Other/1.0", isPad: true, systemVersion: "18.2") == "Other/1.0", "an unknown agent is untouched")
+check(DockUserAgent.truthful(phoneAgent, isPad: true, systemVersion: "") == phoneAgent, "a missing version leaves the agent alone")
+
 print("\(checks - failures)/\(checks) checks passed")
 exit(failures == 0 ? 0 : 1)

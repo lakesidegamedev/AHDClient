@@ -174,3 +174,37 @@ extension DockSheet {
     }
   }
 }
+
+// MARK: - Window geometry and device truth
+
+/// Whether the soft keyboard sits over the bottom of the app's own window. The
+/// keyboard frame arrives in screen coordinates; the caller converts it into
+/// the window's, so an iPad app in Split View, Slide Over or a smaller window
+/// is judged by the window it owns and not by the whole screen.
+enum DockKeyboard {
+  static func coversDock(keyboard: CGRect, window: CGRect) -> Bool {
+    guard window.width > 0, window.height > 0 else { return false }
+    let overlap = window.intersection(keyboard)
+    if overlap.isNull { return false }
+    // Tall enough to matter (not the iPad shortcut bar), reaching the bottom
+    // of the window, and wide enough not to be a floating keyboard.
+    return overlap.height > 100 && overlap.maxY >= window.maxY - 1 && overlap.width >= window.width * 0.5
+  }
+}
+
+/// The user agent the webview announces, built from the real device. The app
+/// starts from a fixed iPhone agent; an iPad says iPad and every device says
+/// its real OS version. Anything that is not the fixed iPhone shape is left
+/// exactly as it is.
+enum DockUserAgent {
+  static let fixedPhone = "iPhone; CPU iPhone OS 17_0 like Mac OS X"
+
+  static func truthful(_ base: String, isPad: Bool, systemVersion: String) -> String {
+    guard base.contains(fixedPhone) else { return base }
+    let digits = systemVersion.split(separator: ".").filter { !$0.isEmpty && $0.allSatisfy { $0.isNumber } }
+    guard !digits.isEmpty else { return base }
+    let version = digits.joined(separator: "_")
+    let device = isPad ? "iPad; CPU OS \(version) like Mac OS X" : "iPhone; CPU iPhone OS \(version) like Mac OS X"
+    return base.replacingOccurrences(of: fixedPhone, with: device)
+  }
+}

@@ -5,13 +5,21 @@ import WebKit
 // and screenshotted on a simulator in a few minutes, without the Tauri build.
 // It loads a stand-in game page into a WKWebView and attaches the dock the
 // same way the plugin does. Launch with -AHDDockPreview <state>.
+/// -AHDForceLandscape makes the harness landscape-only so the simulator
+/// opens it on its side (simctl cannot rotate a running device).
+final class HarnessController: UIViewController {
+  override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+    ProcessInfo.processInfo.arguments.contains("-AHDForceLandscape") ? .landscape : .all
+  }
+}
+
 @main
 final class HarnessDelegate: UIResponder, UIApplicationDelegate {
   var window: UIWindow?
 
   func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
     let window = UIWindow(frame: UIScreen.main.bounds)
-    let controller = UIViewController()
+    let controller = HarnessController()
     controller.view.backgroundColor = UIColor(red: 0x14 / 255, green: 0x14 / 255, blue: 0x1c / 255, alpha: 1)
     let web = WKWebView(frame: controller.view.bounds)
     web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
