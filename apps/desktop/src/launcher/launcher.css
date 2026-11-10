@@ -1024,9 +1024,7 @@
 .launcher-toggle button {
   padding: 0 8px;
 }
-.client-game-version-bar { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; gap: 9px; }
-.client-game-version-bar select { max-width: 170px; border: 1px solid var(--line-strong); border-radius: 5px; background: #11111a; color: var(--ink); padding: 4px 8px; }
-.client-game-version-bar small { max-width: 230px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.client-game-version-line { min-width: 0; flex: 1; text-align: right; color: var(--muted); font-size: 12px; }
 .launcher-stage {
   justify-content: flex-start;
   padding-top: 44px;

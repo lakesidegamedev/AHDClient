@@ -1,11 +1,13 @@
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, fs, io::{self, Read}, path::{Path, PathBuf}, time::Duration};
+use std::{collections::BTreeSet, fs, io::{self, Read}, path::{Path, PathBuf}, time::{Duration, SystemTime, UNIX_EPOCH}};
 use tauri::{AppHandle, Manager};
 
-const RELEASES_URL: &str = "https://api.github.com/repos/Egg3901/AHDGame/releases?per_page=50";
+const RELEASES_URL: &str = "https://api.github.com/repos/lakesidegamedev/AHDGame/releases?per_page=50";
 const MIN_VERSION: (u64, u64, u64) = (1, 6, 0);
+/// How long the published-release list is reused before asking GitHub again.
+const RELEASES_CACHE_SECS: u64 = 3600;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,13 +15,39 @@ pub struct GameVersion {
   pub version: String,
   pub installed: bool,
   pub selected: bool,
+  /// Download size for this computer, when the release lists it.
+  pub size_bytes: Option<u64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Release { tag_name: String, assets: Vec<Asset> }
 
-#[derive(Deserialize)]
-struct Asset { name: String, browser_download_url: String }
+#[derive(Clone, Deserialize, Serialize)]
+struct Asset {
+  name: String,
+  browser_download_url: String,
+  #[serde(default)]
+  size: Option<u64>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ReleasesCache { fetched_at: u64, releases: Vec<Release> }
+
+fn now_secs() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+
+fn cache_is_fresh(fetched_at: u64, now: u64) -> bool { now >= fetched_at && now - fetched_at < RELEASES_CACHE_SECS }
+
+/// The newest game version any world (other than Classic ones) has been opened
+/// with. Versions older than this are not offered: an older runtime could not
+/// read what a newer one wrote. Worlds flagged `"classic": true` are skipped so
+/// the Classic runtime stays installable beside a newer game.
+fn newest_opened_version(worlds_dir: &Path) -> Option<(u64, u64, u64)> {
+  fs::read_dir(worlds_dir).ok()?.flatten().filter_map(|entry| {
+    let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(entry.path().join("world.json")).ok()?).ok()?;
+    if value.get("classic").and_then(|v| v.as_bool()).unwrap_or(false) { return None; }
+    parse_version(value.get("gameVersion")?.as_str()?)
+  }).max()
+}
 
 fn parse_version(value: &str) -> Option<(u64, u64, u64)> {
   let value = value.trim().trim_start_matches("game-v").trim_start_matches('v');
@@ -94,11 +122,38 @@ pub fn read_build_info(dir: &Path) -> BundledGameInfo {
   }
 }
 
-fn fetch_releases() -> Result<Vec<Release>, String> {
+fn fetch_releases_live() -> Result<Vec<Release>, String> {
   ureq::AgentBuilder::new().timeout(Duration::from_secs(20)).build()
     .get(RELEASES_URL).set("User-Agent", "AHDClient/2").call()
     .map_err(|_| "Cannot check game versions. Connect to the internet and try again.".to_string())?
     .into_json().map_err(|_| "GitHub returned an invalid game release list.".to_string())
+}
+
+fn cache_path(app: &AppHandle) -> Result<PathBuf, String> { Ok(root(app)?.join("releases-cache.json")) }
+
+/// Published releases, reused from disk for an hour. A failed refresh falls
+/// back to an older cache so the picker still works offline.
+fn fetch_releases(app: &AppHandle, force: bool) -> Result<Vec<Release>, String> {
+  let cached = cache_path(app).ok()
+    .and_then(|path| fs::read_to_string(path).ok())
+    .and_then(|text| serde_json::from_str::<ReleasesCache>(&text).ok());
+  if !force {
+    if let Some(cache) = cached.as_ref().filter(|c| cache_is_fresh(c.fetched_at, now_secs())) {
+      return Ok(cache.releases.clone());
+    }
+  }
+  match fetch_releases_live() {
+    Ok(releases) => {
+      if let Ok(path) = cache_path(app) {
+        let _ = fs::create_dir_all(root(app)?);
+        if let Ok(bytes) = serde_json::to_vec(&ReleasesCache { fetched_at: now_secs(), releases: releases.clone() }) {
+          let _ = fs::write(path, bytes);
+        }
+      }
+      Ok(releases)
+    }
+    Err(error) => cached.map(|c| c.releases).ok_or(error),
+  }
 }
 
 pub fn list(app: &AppHandle) -> Result<Vec<GameVersion>, String> {
@@ -113,25 +168,43 @@ pub fn list(app: &AppHandle) -> Result<Vec<GameVersion>, String> {
       }
     }
   }
-  if let Ok(releases) = fetch_releases() {
-    available.extend(releases.into_iter().filter_map(|release| {
-      release.tag_name.strip_prefix("game-v").filter(|version| valid_version(version)).map(str::to_string)
-    }));
+  let mut sizes = std::collections::BTreeMap::new();
+  if let Ok(releases) = fetch_releases(app, false) {
+    let target = target_name().ok();
+    for release in releases {
+      let Some(version) = release.tag_name.strip_prefix("game-v").filter(|v| valid_version(v)).map(str::to_string) else { continue };
+      if let Some(target) = target {
+        let archive_name = format!("ahd-singleplayer-v{version}-{target}.tar.gz");
+        if let Some(size) = release.assets.iter().find(|a| a.name == archive_name).and_then(|a| a.size) {
+          sizes.insert(version.clone(), size);
+        }
+      }
+      available.insert(version);
+    }
   }
-  let mut versions = available.into_iter().map(|version| {
-    GameVersion {
+  let floor = app.path().app_data_dir().ok().and_then(|dir| newest_opened_version(&dir.join("worlds")));
+  let mut versions = available.into_iter()
+    .filter(|version| {
+      let keep = selected.as_deref() == Some(version.as_str());
+      keep || floor.is_none_or(|floor| parse_version(version).is_some_and(|v| v >= floor))
+    })
+    .map(|version| GameVersion {
       installed: versions_root.join(&version).join("game/launch.mjs").is_file(),
       selected: selected.as_deref() == Some(version.as_str()),
+      size_bytes: sizes.get(&version).copied(),
       version,
-    }
-  }).collect::<Vec<_>>();
+    }).collect::<Vec<_>>();
   versions.sort_by(|a, b| parse_version(&b.version).cmp(&parse_version(&a.version)));
   Ok(versions)
 }
 
-fn release_asset(version: &str) -> Result<(String, String), String> {
-  let release = fetch_releases()?.into_iter().find(|release| release.tag_name == format!("game-v{version}"))
-    .ok_or_else(|| format!("Game {version} is not published."))?;
+fn release_asset(app: &AppHandle, version: &str) -> Result<(String, String), String> {
+  let tag = format!("game-v{version}");
+  let release = match fetch_releases(app, false)?.into_iter().find(|release| release.tag_name == tag) {
+    Some(release) => release,
+    None => fetch_releases(app, true)?.into_iter().find(|release| release.tag_name == tag)
+      .ok_or_else(|| format!("Game {version} is not published."))?,
+  };
   let archive_name = format!("ahd-singleplayer-v{version}-{}.tar.gz", target_name()?);
   let archive = release.assets.iter().find(|asset| asset.name == archive_name)
     .ok_or_else(|| format!("Game {version} is not available for this computer."))?;
@@ -151,7 +224,7 @@ fn download(url: &str, destination: &Path) -> Result<(), String> {
 
 pub fn install(app: &AppHandle, version: &str) -> Result<(), String> {
   if !valid_version(version) { return Err("Only game versions 1.6.0 and newer are supported.".into()); }
-  let (archive_url, checksum_url) = release_asset(version)?;
+  let (archive_url, checksum_url) = release_asset(app, version)?;
   let version_root = root(app)?.join(version);
   let staging = root(app)?.join(format!(".{version}.staging"));
   fs::create_dir_all(root(app)?).map_err(|e| e.to_string())?;
@@ -195,7 +268,7 @@ pub fn select(app: &AppHandle, version: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use super::{parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
+  use super::{cache_is_fresh, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
   use std::fs;
 
   fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -230,6 +303,33 @@ mod tests {
     assert_eq!(read_build_info(&dir).game_version.as_deref(), Some("1.20.0"));
     fs::write(dir.join("AHD_BUILD.json"), "garbage").unwrap();
     assert_eq!(read_build_info(&dir).game_version, None);
+    let _ = fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn release_cache_lasts_one_hour() {
+    assert!(cache_is_fresh(1000, 1000));
+    assert!(cache_is_fresh(1000, 4599));
+    assert!(!cache_is_fresh(1000, 4600));
+    assert!(!cache_is_fresh(2000, 1000));
+  }
+
+  #[test]
+  fn floor_is_newest_opened_version_and_skips_classic_worlds() {
+    let dir = temp_dir("floor");
+    assert_eq!(newest_opened_version(&dir), None);
+    for (slot, body) in [
+      ("a", r#"{"gameVersion":"1.19.2"}"#),
+      ("b", r#"{"gameVersion":"1.20.0"}"#),
+      ("c", r#"{"gameVersion":"1.8.3","classic":true}"#),
+      ("d", r#"{"gameVersion":"1.30.0","classic":true}"#),
+      ("e", r#"{"name":"no version"}"#),
+      ("f", "garbage"),
+    ] {
+      fs::create_dir_all(dir.join(slot)).unwrap();
+      fs::write(dir.join(slot).join("world.json"), body).unwrap();
+    }
+    assert_eq!(newest_opened_version(&dir), Some((1, 20, 0)));
     let _ = fs::remove_dir_all(&dir);
   }
 

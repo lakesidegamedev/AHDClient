@@ -1,4 +1,5 @@
 import desktopPackage from "../package.json";
+import { GameVersionSetting } from "./GameVersionBar.js";
 import { PushControl } from "./PushControl.js";
 import { AUTOSAVE_CHOICES } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
@@ -100,6 +101,7 @@ export function SettingsMenu({ mobile = false, open, settings, onChange, onClose
                   ))}
                 </select>
               </label>
+              <GameVersionSetting language={settings.language} />
               <Toggle
                 title={de ? "Anonyme Simulationsstatistik" : "Anonymous simulation statistics"}
                 detail={de ? "Teilt Welteinstellungen und Gesamtergebnisse. Nie Kontodaten, Charakternamen oder Spielstände." : "Share world settings and overall outcomes. Never account details, character names or saves."}

@@ -34,7 +34,7 @@ import { AccountControl } from "./AccountControl.js";
 import { clearCachedAskSession } from "./ask/session.js";
 import { GameToolbar } from "./GameToolbar.js";
 import { SavesDialog } from "./SavesDialog.js";
-import { GameVersionBar } from "./GameVersionBar.js";
+import { GameVersionLine } from "./GameVersionBar.js";
 import { DiagnosticPrompt } from "./DiagnosticPrompt.js";
 import { DiagnosticPanel } from "./DiagnosticPanel.js";
 import { diagnosticRuntime, recordDiagnostic, submitAutomaticDiagnostics, submitDiagnostics, type DiagnosticReason } from "./diagnostics.js";
@@ -991,7 +991,7 @@ export function App(): JSX.Element {
         accountControl={accountControl}
         askControl={askControl}
         briefingControl={briefingControl}
-        gameVersionControl={mobile ? undefined : <GameVersionBar language={settings.language} />}
+        gameVersionControl={mobile ? undefined : <GameVersionLine />}
         onPhotoSource={(eraId) => {
           void online.help(`help.era-photo-${eraId}`).catch(fail);
         }}
