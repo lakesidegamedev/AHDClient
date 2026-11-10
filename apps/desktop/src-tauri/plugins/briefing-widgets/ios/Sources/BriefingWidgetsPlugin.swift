@@ -115,6 +115,17 @@ final class BriefingWidgetsPlugin: Plugin, WKHTTPCookieStoreObserver {
     invoke.resolve(["ok": true])
   }
 
+  @objc public func showExternal(_ invoke: Invoke) throws {
+    struct Options: Decodable { let url: String }
+    let options = try invoke.parseArgs(Options.self)
+    guard let url = URL(string: options.url) else {
+      invoke.reject("Not a link.")
+      return
+    }
+    NativeNavController.shared.openExternalPage(url)
+    invoke.resolve(["ok": true])
+  }
+
   deinit {
     gameView?.configuration.websiteDataStore.httpCookieStore.remove(self)
     observers.forEach { NotificationCenter.default.removeObserver($0) }

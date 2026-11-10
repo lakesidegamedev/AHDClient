@@ -83,6 +83,11 @@ impl<R: Runtime> NativeCompanion<R> {
       "path": cookie.path().unwrap_or("/"),
     })).map(|_| ()).map_err(|_| "Could not clear the app session".to_string())
   }
+  /// iOS only: show a page link in a Safari sheet over the game.
+  pub fn show_external(&self, url: &str) -> Result<(), String> {
+    self.0.run_mobile_plugin::<serde_json::Value>("showExternal", serde_json::json!({ "url": url }))
+      .map(|_| ()).map_err(|_| "Could not open the link".to_string())
+  }
   pub fn show_ask(&self) -> Result<serde_json::Value, String> {
     self.0.run_mobile_plugin("showAsk", ())
       .map_err(|_| "Could not open native Ask".to_string())

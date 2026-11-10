@@ -43,7 +43,7 @@ describe("iOS dock source contract", () => {
 
   it("accepts one fixed word from game pages on the turn-complete bridge", () => {
     expect(nav).toContain("window.addEventListener('ahd:turn-complete'");
-    expect(nav).toContain('(message.body as? String) == "turn-complete"');
+    expect(nav).toContain('body == "turn-complete", let host = url.host');
     expect(nav).toContain("message.frameInfo.isMainFrame");
     expect(nav).toContain("NativeNavController.gameHosts.contains(host)");
   });

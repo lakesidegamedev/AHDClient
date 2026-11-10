@@ -40,6 +40,11 @@ final class NativeNavController: NSObject {
   private weak var host: NativeNavHost?
   private let model = DockModel()
   private let haptics = UISelectionFeedbackGenerator()
+  private let openHaptic = UIImpactFeedbackGenerator(style: .light)
+  private let closeHaptic = UIImpactFeedbackGenerator(style: .soft)
+  private let turnHaptic = UINotificationFeedbackGenerator()
+  private let refreshControl = UIRefreshControl()
+  private var loadingObservation: NSKeyValueObservation?
   private let messages = DockMessageHandler()
   private var slotConstraint: NSLayoutConstraint?
   private var hosting: UIHostingController<DockView>?
@@ -150,6 +155,10 @@ final class NativeNavController: NSObject {
     }
 
     model.onTab = { [weak self] tab in self?.handle(tab) }
+    model.onDragBegan = { [weak self] in
+      self?.openHaptic.prepare()
+      self?.closeHaptic.prepare()
+    }
     model.onOpenPath = { [weak self] path in self?.openGamePath(path) }
     model.onOpenExternal = { [weak self] url in self?.openExternal(url) }
     model.onApp = { [weak self] app in self?.perform(app) }
@@ -166,8 +175,11 @@ final class NativeNavController: NSObject {
     })
     // An open panel is modal for VoiceOver: the page behind it is out of
     // reach, and the panel's title is announced as it opens.
-    model.$expanded.removeDuplicates().receive(on: DispatchQueue.main).sink { [weak self] open in
+    model.$expanded.removeDuplicates().dropFirst().receive(on: DispatchQueue.main).sink { [weak self] open in
       guard let self else { return }
+      if open { self.openHaptic.impactOccurred() } else { self.closeHaptic.impactOccurred() }
+      self.openHaptic.prepare()
+      self.closeHaptic.prepare()
       self.container?.accessibilityViewIsModal = open
       if open { UIAccessibility.post(notification: .screenChanged, argument: self.model.title(of: self.model.panel)) }
     }.store(in: &cancellables)
@@ -201,12 +213,10 @@ final class NativeNavController: NSObject {
     urlObservation = webView.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
       DispatchQueue.main.async { self?.follow(view.url) }
     }
-    // The launcher's own screen changes are history updates; check now and
-    // then as well.
-    timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-      guard let self else { return }
-      self.follow(self.webView?.url)
-    })
+    // The launcher's own screen changes are history updates the url
+    // observation never sees; the launcher reports them through the handler.
+    installLauncherReport(on: webView)
+    installPullToRefresh(on: webView)
     // The status poll. BriefingStore also refuses to ask the network more
     // than once a minute, so this and the other triggers cannot pile up.
     timers.append(Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -245,7 +255,7 @@ final class NativeNavController: NSObject {
 
   private func keyboardChanged(_ note: Notification) {
     guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
-    let screen = UIScreen.main.bounds.height
+    guard let screen = host?.window?.screen.bounds.height else { return }
     // Docked and tall: not the iPad shortcut bar, not a floating keyboard.
     let docked = frame.height > 100 && frame.maxY >= screen - 1 && frame.minY < screen - 100
     // A native sheet (Ask) has its own keyboard; the page behind it stays put.
@@ -303,9 +313,92 @@ final class NativeNavController: NSObject {
     }
   }
 
+  fileprivate func launcherMoved() {
+    follow(webView?.url)
+  }
+
+  /// The launcher is the app's own page and changes screens with history
+  /// updates, which the url observation does not see. It reports each one so
+  /// no timer has to ask.
+  private func installLauncherReport(on webView: WKWebView) {
+    let script = """
+      (function () {
+        if (location.protocol !== 'tauri:' || window.__ahdDockNav) return;
+        window.__ahdDockNav = true;
+        function report() {
+          try { window.webkit.messageHandlers.\(DockMessageHandler.name).postMessage('launcher-moved'); } catch (e) {}
+        }
+        ['pushState', 'replaceState'].forEach(function (name) {
+          var original = history[name];
+          history[name] = function () { var result = original.apply(this, arguments); report(); return result; };
+        });
+        window.addEventListener('popstate', report);
+        window.addEventListener('hashchange', report);
+      })();
+      """
+    webView.configuration.userContentController.addUserScript(
+      WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    webView.evaluateJavaScript(script, completionHandler: nil)
+  }
+
+  /// Pull down at the top of a game page to reload it, with the system
+  /// spinner. The launcher never gets one, and the control is only attached
+  /// while a game page is showing.
+  private func installPullToRefresh(on webView: WKWebView) {
+    refreshControl.tintColor = .white
+    refreshControl.addTarget(self, action: #selector(pulledToRefresh), for: .valueChanged)
+    loadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
+      guard !view.isLoading else { return }
+      DispatchQueue.main.async { self?.endRefreshing() }
+    }
+  }
+
+  @objc private func pulledToRefresh() {
+    guard let webView, Self.isGamePageURL(webView.url) else {
+      endRefreshing()
+      return
+    }
+    webView.reload()
+  }
+
+  private func endRefreshing() {
+    guard refreshControl.isRefreshing else { return }
+    refreshControl.endRefreshing()
+    turnHaptic.notificationOccurred(.success)
+  }
+
+  private static func isGamePageURL(_ url: URL?) -> Bool {
+    guard let url else { return false }
+    return url.scheme == "https" && gameHosts.contains(url.host ?? "")
+  }
+
+  /// A game page gets the control; the launcher gets none.
+  private func syncRefreshControl(for url: URL) {
+    guard let scrollView = webView?.scrollView else { return }
+    if Self.isGamePageURL(url) {
+      if scrollView.refreshControl == nil { scrollView.refreshControl = refreshControl }
+    } else if scrollView.refreshControl != nil {
+      refreshControl.endRefreshing()
+      scrollView.refreshControl = nil
+    }
+  }
+
+  /// A link to an outside site opens in a Safari sheet over the game. The
+  /// check is looser than the dock's own list: any plain https address.
+  func openExternalPage(_ url: URL) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self, url.scheme == "https", url.user == nil, url.password == nil, url.host != nil else { return }
+      let safari = SFSafariViewController(url: url)
+      safari.preferredBarTintColor = Self.background
+      safari.preferredControlTintColor = .white
+      self.topController()?.present(safari, animated: true)
+    }
+  }
+
   fileprivate func turnCompleted() {
     guard Date().timeIntervalSince(lastTurnSignal) > 4 else { return }
     lastTurnSignal = Date()
+    turnHaptic.notificationOccurred(.success)
     refreshStatus(maxAge: 3)
     // The clock can lag the turn by a moment; look once more.
     DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in self?.refreshStatus(maxAge: 3) }
@@ -403,6 +496,7 @@ final class NativeNavController: NSObject {
       rememberGamePage(url, path: path)
     }
     lastURL = url
+    syncRefreshControl(for: url)
     // Only a move to another page closes the open sheet; a query or hash
     // update on the same page (a tabbed page syncing its tab) leaves it be.
     let place = (url.host ?? "") + path
@@ -711,9 +805,13 @@ private final class DockMessageHandler: NSObject, WKScriptMessageHandler {
   weak var controller: NativeNavController?
 
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-    guard message.name == Self.name, message.frameInfo.isMainFrame, (message.body as? String) == "turn-complete",
-      let host = message.frameInfo.request.url?.host, NativeNavController.gameHosts.contains(host) else { return }
-    controller?.turnCompleted()
+    guard message.name == Self.name, message.frameInfo.isMainFrame, let body = message.body as? String,
+      let url = message.frameInfo.request.url else { return }
+    if body == "launcher-moved", url.scheme == "tauri", url.host == "localhost" {
+      controller?.launcherMoved()
+    } else if body == "turn-complete", let host = url.host, NativeNavController.gameHosts.contains(host) {
+      controller?.turnCompleted()
+    }
   }
 }
 

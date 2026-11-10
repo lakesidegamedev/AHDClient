@@ -131,17 +131,22 @@ const LAUNCHER_CONTROL_SCRIPT: &str = r#"
       menu.style.bottom = 'calc(' + bottom + ' + 58px)';
     }
   }
-  function tick() { mount(); lift(); }
+  var timer = 0;
+  // The native dock marks the page once it is attached; stop polling then.
+  function tick() {
+    if (window.__ahdclientNativeTabs) { if (timer) { clearInterval(timer); timer = 0; } return; }
+    mount(); lift();
+  }
   if (document.readyState === 'complete') tick();
   else window.addEventListener('load', tick);
   window.addEventListener('resize', lift);
-  setInterval(tick, 2000);
+  timer = setInterval(tick, 2000);
 })();
 "#;
 
-/// Pull down from the top of a remote page to reload it. Safari has this
-/// natively and neither WKWebView nor Android's WebView does.
-#[cfg(any(target_os = "ios", target_os = "android"))]
+/// Pull down from the top of a remote page to reload it. Android's WebView
+/// has no such gesture. iOS uses a native refresh control instead (NativeNav).
+#[cfg(target_os = "android")]
 const PULL_REFRESH_SCRIPT: &str = include_str!("pull_refresh.js");
 
 /// The app's own origin: `tauri://localhost` on iOS, `http://tauri.localhost`
@@ -230,6 +235,17 @@ fn go_home_soon(app: &AppHandle, request: &Url) {
 /// returns: the app ignores every tap until Android reports it as not
 /// responding (ticket 1450, Continue with Discord on the sign-in page).
 fn open_externally(app: &AppHandle, url: &Url) {
+  if cfg!(target_os = "ios") && is_sheet_link(url) {
+    let app = app.clone();
+    let url = url.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+      let shown = app.state::<tauri_plugin_briefing_widgets::NativeCompanion<tauri::Wry>>().show_external(&url);
+      if shown.is_err() {
+        let _ = app.opener().open_url(url, None::<&str>);
+      }
+    });
+    return;
+  }
   if matches!(url.scheme(), "https" | "http" | "mailto") {
     let app = app.clone();
     let url = url.to_string();
@@ -237,6 +253,16 @@ fn open_externally(app: &AppHandle, url: &Url) {
       let _ = app.opener().open_url(url, None::<&str>);
     });
   }
+}
+
+/// On iPhone and iPad a plain https link out of a game page opens in a Safari
+/// sheet over the game instead of throwing the player into Safari. Never a
+/// link with a name or password in it; mail and other schemes keep the opener.
+fn is_sheet_link(url: &Url) -> bool {
+  url.scheme() == "https"
+    && url.host_str().is_some()
+    && url.username().is_empty()
+    && url.password().is_none()
 }
 
 /// The sandbox is a supporter perk bought outside the App Store, so the
@@ -370,7 +396,7 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
       }
       tauri::webview::NewWindowResponse::Deny
     });
-  #[cfg(any(target_os = "ios", target_os = "android"))]
+  #[cfg(target_os = "android")]
   {
     builder = builder.initialization_script(PULL_REFRESH_SCRIPT);
   }
@@ -549,7 +575,7 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
 
 #[cfg(test)]
 mod tests {
-  use super::{classify_navigation, is_app_navigation_allowed, is_app_origin, is_launcher_request, MobileNavigationAction, USER_AGENT_MARKER};
+  use super::{is_sheet_link, classify_navigation, is_app_navigation_allowed, is_app_origin, is_launcher_request, MobileNavigationAction, USER_AGENT_MARKER};
   use tauri::Url;
 
   #[test]
@@ -642,5 +668,17 @@ mod tests {
   fn user_agent_marker_carries_the_client_version() {
     assert!(USER_AGENT_MARKER.starts_with("AHDClient-Mobile/"));
     assert_eq!(USER_AGENT_MARKER.trim_start_matches("AHDClient-Mobile/"), env!("CARGO_PKG_VERSION"));
+  }
+
+  #[test]
+  fn sheet_links_are_plain_https_only() {
+    let ok: Url = "https://discord.gg/abc".parse().unwrap();
+    let mail: Url = "mailto:help@example.com".parse().unwrap();
+    let plain: Url = "http://example.com/".parse().unwrap();
+    let login: Url = "https://user:pw@example.com/".parse().unwrap();
+    assert!(is_sheet_link(&ok));
+    assert!(!is_sheet_link(&mail));
+    assert!(!is_sheet_link(&plain));
+    assert!(!is_sheet_link(&login));
   }
 }

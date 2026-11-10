@@ -420,6 +420,7 @@ struct DockPixelIcon: View {
   var emphasized = false
   /// 1 at the default text size, growing with Dynamic Type.
   @ScaledMetric(relativeTo: .caption2) private var factor: CGFloat = 1
+  @Environment(\.displayScale) private var displayScale
 
   var body: some View {
     let side = min(base * factor, base * 1.25)
@@ -428,7 +429,7 @@ struct DockPixelIcon: View {
     Canvas { context, size in
       let columns = CGFloat(max(icon.columns, 1))
       let rows = CGFloat(max(icon.rows, 1))
-      let screen = UIScreen.main.scale
+      let screen = displayScale
       let fit = floor(min(side / columns, side / rows) * screen)
       let cell = max(fit + (emphasized ? 1 : 0), 1) / screen
       let x0 = ((size.width - cell * columns) / 2 * screen).rounded() / screen
