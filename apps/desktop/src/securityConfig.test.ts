@@ -56,6 +56,15 @@ describe("desktop security configuration", () => {
     );
   });
 
+  it("runs one app and routes ahdclient links only through the game page allowlist", () => {
+    const desktop = read("../src-tauri/src/desktop.rs");
+    expect(desktop.indexOf("tauri_plugin_single_instance::init")).toBeLessThan(desktop.indexOf("tauri_plugin_fs::init"));
+    expect(desktop).toContain("crate::links::widget_page(url)");
+    expect(tauriConfig.plugins["deep-link"].desktop.schemes).toEqual(["ahdclient"]);
+    expect(read("../src-tauri/Cargo.toml")).toMatch(/tauri-plugin-single-instance = \{ version = "2", features = \["deep-link"\] \}/);
+    expect(defaultCapability.permissions.some((p: string) => p.startsWith("deep-link:") || p.startsWith("single-instance:"))).toBe(false);
+  });
+
   it("ships a local-only CSP for the launcher window", () => {
     expect(tauriConfig.app.security.csp).toEqual({
       "default-src": "'self'",
