@@ -188,6 +188,21 @@ preview more
 shot 11-more-large-font
 a shell settings put system font_scale 1.0
 a shell cmd uimode night no >/dev/null 2>&1
+# No connection: opening a game page shows the cannot-reach screen over the page, dock still there.
+a shell svc wifi disable >/dev/null 2>&1
+a shell svc data disable >/dev/null 2>&1
+sleep 3
+a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://page/notifications" >/dev/null
+sleep 8
+shot 13-offline
+dump
+has_text() { grep -q "text=\"$1\"" probe/dock-ui.xml; }
+check "offline shows the cannot-reach title" has_text "Cannot reach the game"
+check "offline shows Retry" has_text "Retry"
+check "offline shows Back to launcher" has_text "Back to launcher"
+a shell svc wifi enable >/dev/null 2>&1
+a shell svc data enable >/dev/null 2>&1
+sleep 6
 # Crash and app log lines, so a lost emulator or a dock exception is visible next to the checks.
 a logcat -d -v time -t 800 AndroidRuntime:E AHDClient:V '*:S' > probe/dock-logcat.txt 2>/dev/null || true
 echo "Emulator state: $(a get-state 2>&1 | head -1)"

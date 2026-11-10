@@ -51,7 +51,7 @@ afterEach(() => {
   for (const [type, listener] of added.splice(0)) document.removeEventListener(type, listener);
 });
 
-describe("iOS pull to refresh", () => {
+describe("mobile pull to refresh", () => {
   it("reloads after a long pull from the top of the page", () => {
     load();
     pull(document.getElementById("inner")!, 140);
@@ -112,8 +112,9 @@ describe("iOS pull to refresh", () => {
 });
 
 describe("pull to refresh wiring", () => {
-  it("is injected on iOS only", () => {
-    expect(mobile).toMatch(/#\[cfg\(target_os = "ios"\)\]\s*const PULL_REFRESH_SCRIPT/);
-    expect(mobile).toMatch(/#\[cfg\(target_os = "ios"\)\]\s*\{\s*builder = builder\.initialization_script\(PULL_REFRESH_SCRIPT\)/);
+  it("is injected on iOS and Android", () => {
+    const both = String.raw`#\[cfg\(any\(target_os = "ios", target_os = "android"\)\)\]`;
+    expect(mobile).toMatch(new RegExp(both + String.raw`\s*const PULL_REFRESH_SCRIPT`));
+    expect(mobile).toMatch(new RegExp(both + String.raw`\s*\{\s*builder = builder\.initialization_script\(PULL_REFRESH_SCRIPT\)`));
   });
 });
