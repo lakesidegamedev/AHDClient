@@ -69,10 +69,21 @@ export function readBuildProvenance(dist) {
   return unknownBuildProvenance();
 }
 
+/** The game's own version from its package.json, or null when unreadable. */
+export function readGameVersion(dist) {
+  try {
+    const version = JSON.parse(readFileSync(path.join(dist, "package.json"), "utf8")).version;
+    return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version) ? version : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildInfoFromProvenance(dist, clientVersion) {
   const provenance = readBuildProvenance(dist);
   return {
     clientVersion,
+    gameVersion: readGameVersion(dist),
     gameCommit: provenance.sourceCommit,
     gameCommitStatus: provenance.status,
   };
