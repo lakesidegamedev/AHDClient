@@ -193,5 +193,5 @@
     <string name="widget_preview_shares">1,200</string>
     <string name="widget_preview_holding">$104.9K</string>
     <string name="widget_updated_at">updated %1$s</string>
-    <string name="widget_brand" translatable="false">AHD</string>
+    <string name="widget_brand">AHD</string>
 </resources>
