@@ -1,0 +1,33 @@
+/*
+ * One token block for the whole client: launcher, game strip, dialogs, Ask
+ * and the briefing all read these. Change a color or the font here, not in
+ * the individual stylesheets. One sans-serif stack, no serif, no web font.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #14141c;
+  --panel: #1d1d2a;
+  --panel-elevated: #26263a;
+  --panel-muted: #11111a;
+  --border: #2a2a3d;
+  --text: #e8e8ee;
+  --text-soft: #c9ccd8;
+  --muted: #858594;
+  --accent: #dc2626;
+  --accent-dark: #991b1b;
+  --secondary-accent: #1d4ed8;
+  --success: #22c55e;
+  --warning: #eab308;
+  --error: #ef4444;
+  --gold: #f3cd79;
+  --gold-soft: #e5c17a;
+  --control: #272735;
+  --control-hover: #33333c;
+  --control-border: #50505b;
+  --focus: #f87171;
+  --shadow-panel: 0 4px 12px -1px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  /* The same face on every screen of the client. */
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  --font-display: var(--font-ui);
+}
