@@ -69,7 +69,7 @@ describe("iOS dock source contract", () => {
     // Cmd+1 to Cmd+5 are the dock's tabs, whatever they are.
     expect(nav).toContain("input: String(index + 1)");
     expect(nav).toContain("controller?.tabTitles");
-    expect(view).toContain("minHeight: 54");
+    expect(view).toContain("minHeight: compact ? 44 : 54");
     expect(view).toContain("minHeight: 48");
     expect(status).toContain("minHeight: 48");
   });
