@@ -15,6 +15,10 @@ export interface WorldMeta {
   turn: number | null;
   character: string | null;
   setup?: SetupOptions | null;
+  /** Game version this world last ran on. Absent on worlds made before 2.11. */
+  gameVersion?: string | null;
+  /** Pre-1.20 world: always opens on the Classic game, never upgraded. */
+  classic?: boolean;
 }
 
 export type SaveKind = "manual" | "auto" | "safety";
@@ -72,6 +76,23 @@ export const gameVersions = {
     invoke<void>("install_game_version", { version }),
   select: (version: string | null) =>
     invoke<void>("select_game_version", { version }),
+};
+
+/** The Classic game: the last release before 1.20, kept for older worlds and eras. */
+export interface ClassicInfo {
+  /** Version to use or download. Null when none is installed or published. */
+  version: string | null;
+  installed: boolean;
+  sizeBytes: number | null;
+}
+
+/** Marks the error the game returns when a Classic world needs the download first. */
+export const CLASSIC_REQUIRED = "classic-required:";
+
+export const classicGame = {
+  info: () => invoke<ClassicInfo>("classic_game_info"),
+  install: (version: string) => invoke<void>("install_game_version", { version }),
+  cancel: () => invoke<void>("cancel_game_download"),
 };
 
 /** What the game reports about a world once its server is up. */
@@ -251,12 +272,13 @@ export function slugForWorld(name: string, taken: readonly string[]): string {
 
 export const worlds = {
   list: () => invoke<WorldMeta[]>("list_worlds"),
-  create: (slot: string, name: string, preset: string, setup?: SetupOptions) =>
+  create: (slot: string, name: string, preset: string, setup?: SetupOptions, classic = false) =>
     invoke<WorldMeta>("create_world", {
       slot,
       name,
       preset,
       setup: setup ?? null,
+      classic,
     }),
   touch: (slot: string, turn?: number | null, character?: string | null) =>
     invoke<WorldMeta>("touch_world", {

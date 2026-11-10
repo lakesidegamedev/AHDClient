@@ -261,4 +261,22 @@ describe("Launcher with a runtime manifest", () => {
     await userEvent.click(screen.getByRole("button", { name: /New Game/ }));
     expect(screen.getByText("Classic eras")).toBeTruthy();
   });
+
+  it("offers the one-time download before Classic is installed, then starts eras directly", async () => {
+    const onClassicEras = vi.fn();
+    const onClassicEra = vi.fn();
+    renderLauncher({ capabilities: manifest, classicAvailable: true, classicSizeLabel: "310 MB", onClassicEras, onClassicEra });
+    await userEvent.click(screen.getByRole("button", { name: /New Game/ }));
+    expect(screen.getByText(/One-time download, 310 MB/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Get Classic eras" }));
+    expect(onClassicEras).toHaveBeenCalled();
+    expect(onClassicEra).not.toHaveBeenCalled();
+    cleanup();
+
+    renderLauncher({ capabilities: manifest, classicAvailable: true, classicInstalled: true, onClassicEras, onClassicEra });
+    await userEvent.click(screen.getByRole("button", { name: /New Game/ }));
+    expect(screen.queryByRole("button", { name: "Get Classic eras" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /1979/ }));
+    expect(onClassicEra).toHaveBeenCalledWith("1979");
+  });
 });

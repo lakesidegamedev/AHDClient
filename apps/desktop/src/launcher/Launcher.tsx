@@ -73,7 +73,12 @@ interface Props {
    * seed then sit under a "Classic eras" heading instead of staying hidden.
    */
   classicAvailable?: boolean;
+  /** The Classic game is already on this computer: eras can be started directly. */
+  classicInstalled?: boolean;
+  /** Download size shown on the one-time download button, such as "310 MB". */
+  classicSizeLabel?: string;
   onClassicEras?: () => void;
+  onClassicEra?: (eraId: string) => void;
   onPhotoSource?: (eraId: string) => void;
   onNewWorld: (eraId: string, worldsim?: boolean) => void;
   onContinue: (slot: string) => void;
@@ -122,7 +127,10 @@ export function Launcher({
   gameVersionControl,
   capabilities,
   classicAvailable = false,
+  classicInstalled = false,
+  classicSizeLabel = "",
   onClassicEras,
+  onClassicEra,
   onPhotoSource,
   onNewWorld,
   onContinue,
@@ -350,10 +358,22 @@ export function Launcher({
               {classicAvailable && classicEras.length > 0 && onClassicEras && (
                 <div className="launcher-classic-eras">
                   <strong>Classic eras</strong>
-                  <small>{classicEras.map((era) => era.label).join(", ")}</small>
-                  <button type="button" className="launcher-btn launcher-btn-secondary" onClick={onClassicEras}>
-                    Get Classic eras
-                  </button>
+                  <small>
+                    {classicInstalled
+                      ? "Older eras, played on the game as it was before 1.20."
+                      : `${classicEras.map((era) => era.label).join(", ")}. One-time download${classicSizeLabel ? `, ${classicSizeLabel}` : ""}.`}
+                  </small>
+                  {classicInstalled && onClassicEra ? (
+                    classicEras.map((era) => (
+                      <button key={era.id} type="button" className="launcher-btn launcher-btn-secondary" onClick={() => onClassicEra(era.id)}>
+                        {era.label} · {era.subtitle}
+                      </button>
+                    ))
+                  ) : (
+                    <button type="button" className="launcher-btn launcher-btn-secondary" onClick={onClassicEras}>
+                      Get Classic eras
+                    </button>
+                  )}
                 </div>
               )}
               <div className="launcher-era-carousel">

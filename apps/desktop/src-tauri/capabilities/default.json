@@ -34,6 +34,8 @@
     "allow-list-game-versions",
     "allow-game-capabilities",
     "allow-bundled-game-info",
+    "allow-classic-game-info",
+    "allow-cancel-game-download",
     "allow-install-game-version",
     "allow-select-game-version",
     "allow-update-install-kind",

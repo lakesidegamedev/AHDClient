@@ -74,7 +74,26 @@ struct WorldMeta {
   character: Option<String>,
   #[serde(default)]
   setup: Option<serde_json::Value>,
+  /// Game version this world last ran on. Missing on worlds made before 2.11.
+  #[serde(default)]
+  game_version: Option<String>,
+  /// Pre-1.20 world that stays on the Classic game and is never upgraded.
+  #[serde(default)]
+  classic: bool,
 }
+
+/// Record the runtime a world just opened on. A world that opens on Classic is
+/// pinned there for good; a newer stamp is never replaced by an older one.
+fn stamped(mut meta: WorldMeta, version: Option<&str>, classic: bool) -> WorldMeta {
+  meta.classic = meta.classic || classic;
+  if let Some(version) = version {
+    let older = meta.game_version.as_deref().is_some_and(|old| version_tuple(old) > version_tuple(version));
+    if !older { meta.game_version = Some(version.to_string()); }
+  }
+  meta
+}
+
+fn version_tuple(v: &str) -> Vec<u64> { v.split('.').map(|p| p.parse().unwrap_or(0)).collect() }
 
 fn now_iso() -> String {
   let secs = std::time::SystemTime::now()
@@ -136,17 +155,30 @@ pub(crate) fn list_worlds(app: AppHandle) -> Result<Vec<WorldMeta>, String> {
     .flatten()
     .filter(|entry| entry.path().is_dir())
     .filter_map(|entry| read_meta(&entry.path()))
+    .map(|mut meta| { meta.classic = game_versions::world_is_classic(meta.game_version.as_deref(), meta.classic); meta })
     .collect();
   worlds.sort_by(|a, b| b.last_played_at.cmp(&a.last_played_at));
   Ok(worlds)
 }
 
 #[tauri::command]
-pub(crate) fn create_world(app: AppHandle, slot: String, name: String, preset: String, setup: Option<serde_json::Value>) -> Result<WorldMeta, String> {
+pub(crate) fn create_world(app: AppHandle, slot: String, name: String, preset: String, setup: Option<serde_json::Value>, classic: Option<bool>) -> Result<WorldMeta, String> {
   let dir = world_dir(&app, &slot)?;
   if dir.join("world.json").exists() {
     return Err(format!("a world named {slot:?} already exists"));
   }
+  // A Classic world is stamped with the Classic runtime it will always open on.
+  let (game_version, classic) = if classic.unwrap_or(false) {
+    let version = match game_versions::choose_runtime(true, game_versions::current_version(&app).as_deref(), &game_versions::installed_classic(&app), None)? {
+      game_versions::Runtime::Classic(version) => version,
+      game_versions::Runtime::Current => game_versions::current_version(&app).unwrap_or_else(|| game_versions::FALLBACK_STAMP.to_string()),
+    };
+    (version, true)
+  } else {
+    let version = game_versions::current_version(&app).unwrap_or_else(|| game_versions::FALLBACK_STAMP.to_string());
+    let classic = game_versions::is_classic_version(&version);
+    (version, classic)
+  };
   let now = now_iso();
   let meta = WorldMeta {
     slot,
@@ -157,6 +189,8 @@ pub(crate) fn create_world(app: AppHandle, slot: String, name: String, preset: S
     turn: None,
     character: None,
     setup,
+    game_version: Some(game_version),
+    classic,
   };
   write_meta(&dir, &meta)?;
   Ok(meta)
@@ -367,8 +401,8 @@ fn free_port() -> Result<u16, String> {
     .map_err(|e| format!("no free loopback port: {e}"))
 }
 
-fn launcher_script(app: &AppHandle) -> Result<PathBuf, String> {
-  let path = game_versions::game_dir(app)?.join("launch.mjs");
+fn launcher_script(dir: &std::path::Path) -> Result<PathBuf, String> {
+  let path = dir.join("launch.mjs");
   if !path.exists() {
     return Err(format!(
       "game resources are missing ({}). This build was packaged without the game.",
@@ -446,6 +480,21 @@ pub(crate) async fn game_start(app: AppHandle, game: State<'_, Game>, slot: Stri
   if !home.join("world.json").exists() {
     return Err(format!("no world at {slot:?}"));
   }
+  // Pick the runtime before anything starts: a Classic world must never be
+  // opened by a newer game, and a missing Classic runtime asks for the download.
+  let meta = read_meta(&home);
+  let world_classic = game_versions::world_is_classic(meta.as_ref().and_then(|m| m.game_version.as_deref()), meta.as_ref().is_some_and(|m| m.classic));
+  let current = game_versions::current_version(&app);
+  let runtime = game_versions::choose_runtime(
+    world_classic,
+    current.as_deref(),
+    &game_versions::installed_classic(&app),
+    meta.as_ref().and_then(|m| m.game_version.as_deref()),
+  )?;
+  let (runtime_dir, runtime_version) = match &runtime {
+    game_versions::Runtime::Classic(version) => (game_versions::runtime_dir(&app, version)?, Some(version.clone())),
+    game_versions::Runtime::Current => (game_versions::game_dir(&app)?, current),
+  };
   let generation = {
     let mut inner = game.0.lock().map_err(|_| "game state poisoned")?;
     if inner.child.is_some() {
@@ -459,7 +508,7 @@ pub(crate) async fn game_start(app: AppHandle, game: State<'_, Game>, slot: Stri
   };
   let world_lease = acquire_world_lease(&home)?;
 
-  let script = node_path::path_for_node(&launcher_script(&app)?);
+  let script = node_path::path_for_node(&launcher_script(&runtime_dir)?);
   let launch_dir = script.parent().ok_or("game resource directory is missing")?;
   let runtime_home = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runtime");
   fs::create_dir_all(&runtime_home).map_err(|e| format!("cannot create {}: {e}", runtime_home.display()))?;
@@ -565,6 +614,11 @@ pub(crate) async fn game_start(app: AppHandle, game: State<'_, Game>, slot: Stri
       }
       _ => {}
     }
+  }
+
+  // The world is open: remember which game it ran on.
+  if let Some(meta) = read_meta(&home) {
+    let _ = write_meta(&home, &stamped(meta, runtime_version.as_deref(), world_classic));
   }
 
   // Keep draining after readiness so the pipe never fills, and notice exits.
@@ -1022,6 +1076,16 @@ pub(crate) fn bundled_game_info(app: AppHandle) -> Result<game_versions::Bundled
   Ok(game_versions::read_build_info(&dir))
 }
 
+/// The Classic runtime: which version, whether it is installed, and its size.
+#[tauri::command]
+pub(crate) async fn classic_game_info(app: AppHandle) -> Result<game_versions::ClassicInfo, String> {
+  tauri::async_runtime::spawn_blocking(move || game_versions::classic_info(&app)).await.map_err(|_| "Classic game check failed.".to_string())
+}
+
+/// Stop a game download that is in progress.
+#[tauri::command]
+pub(crate) fn cancel_game_download() { game_versions::cancel_download(); }
+
 #[tauri::command]
 pub(crate) async fn install_game_version(app: AppHandle, game: State<'_, Game>, version: String) -> Result<(), String> {
   if game.0.lock().map_err(|_| "game state poisoned")?.child.is_some() { return Err("Stop the local game before changing versions.".into()); }
@@ -1096,6 +1160,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       list_game_versions,
       game_capabilities,
       bundled_game_info,
+      classic_game_info,
+      cancel_game_download,
       install_game_version,
       select_game_version,
       update_install_kind,
@@ -1126,7 +1192,7 @@ pub(crate) fn on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-  use super::{acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
+  use super::{stamped, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
 
   #[test]
@@ -1264,5 +1330,27 @@ mod tests {
     assert_eq!(list_saves_in(&world).len(), 1);
     assert!(delete_save_in(&world, "20261101T120000Z-aaaaaa").is_err());
     let _ = std::fs::remove_dir_all(world);
+  }
+
+  fn meta(game_version: Option<&str>, classic: bool) -> WorldMeta {
+    WorldMeta {
+      slot: "a".into(), name: "A".into(), preset: "1979-default".into(), created_at: String::new(), last_played_at: String::new(),
+      turn: None, character: None, setup: None, game_version: game_version.map(str::to_string), classic,
+    }
+  }
+
+  #[test]
+  fn opening_a_pre_stamp_world_on_classic_pins_it() {
+    let out = stamped(meta(None, false), Some("1.19.2"), true);
+    assert!(out.classic);
+    assert_eq!(out.game_version.as_deref(), Some("1.19.2"));
+  }
+
+  #[test]
+  fn a_stamp_never_goes_backwards_and_classic_never_unsets() {
+    let out = stamped(meta(Some("1.20.1"), false), Some("1.20.0"), false);
+    assert_eq!(out.game_version.as_deref(), Some("1.20.1"));
+    assert!(stamped(meta(Some("1.19.0"), true), Some("1.19.0"), false).classic);
+    assert_eq!(stamped(meta(Some("1.9.0"), false), Some("1.10.0"), false).game_version.as_deref(), Some("1.10.0"));
   }
 }
