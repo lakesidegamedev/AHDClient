@@ -182,3 +182,8 @@
   outline: 2px solid #e0b565;
   outline-offset: 2px;
 }
+
+.client-update-notice button:focus-visible {
+  outline: 2px solid #e0b565;
+  outline-offset: 2px;
+}

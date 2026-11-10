@@ -1,7 +1,10 @@
 /** @vitest-environment jsdom */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, readSettings, writeSettings } from "./settings.js";
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 describe("client preferences", () => {
   it("defaults to same-window gameplay", () => {
     expect(readSettings()).toEqual(DEFAULT_SETTINGS);
@@ -30,5 +33,11 @@ describe("client preferences", () => {
     expect(readSettings().openGameOnStart).toBe(false);
     localStorage.setItem("ahdclient.settings.v1", '{"openGameOnStart":"no"}');
     expect(readSettings().openGameOnStart).toBe(true);
+  });
+  it("turns animations off when the OS asks for reduced motion, unless the player chose", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    expect(readSettings().animations).toBe(false);
+    localStorage.setItem("ahdclient.settings.v1", '{"animations":true}');
+    expect(readSettings().animations).toBe(true);
   });
 });

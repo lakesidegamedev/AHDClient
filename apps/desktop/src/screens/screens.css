@@ -573,3 +573,12 @@
 .screen-launch-bar .launcher-caption small { display: block; margin-top: 0.12rem; color: var(--muted); font-size: 0.7rem; }
 .screen-launch-bar .launcher-actions { flex: none; }
 @media (max-width: 620px) { .screen-setup-panel { padding: 1rem; } .screen-launch-bar { position: static; align-items: stretch; flex-direction: column; } .screen-launch-bar .launcher-actions, .screen-launch-bar .launcher-btn { width: 100%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-story,
+  .boot-progress-wrap *,
+  .screen-spinner {
+    animation: none !important;
+    transition: none !important;
+  }
+}

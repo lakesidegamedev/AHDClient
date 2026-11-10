@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useDialog } from "./useDialog.js";
 import { game, worldSaves } from "./worlds.js";
 import type { SaveKind, SaveMeta } from "./worlds.js";
 import "./settings.css";
@@ -103,9 +104,13 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
     }
   };
 
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialog(dialogRef, () => { if (!busy) onClose(); });
+
   return (
     <div className="client-settings-backdrop" role="presentation" onMouseDown={() => !busy && onClose()}>
       <section
+        ref={dialogRef}
         className="client-settings-dialog client-saves-dialog"
         role="dialog"
         aria-modal="true"
