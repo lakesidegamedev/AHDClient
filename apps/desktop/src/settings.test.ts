@@ -24,4 +24,11 @@ describe("client preferences", () => {
     localStorage.setItem("ahdclient.settings.v1", '{"autosaveEvery":"5"}');
     expect(readSettings().autosaveEvery).toBe(1);
   });
+  it("opens into the game by default and only accepts a real boolean", () => {
+    expect(readSettings().openGameOnStart).toBe(true);
+    localStorage.setItem("ahdclient.settings.v1", '{"openGameOnStart":false}');
+    expect(readSettings().openGameOnStart).toBe(false);
+    localStorage.setItem("ahdclient.settings.v1", '{"openGameOnStart":"no"}');
+    expect(readSettings().openGameOnStart).toBe(true);
+  });
 });

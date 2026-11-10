@@ -65,6 +65,14 @@ export function SettingsMenu({ mobile = false, open, settings, onChange, onClose
               checked={settings.animations}
               onChange={(animations) => set({ animations })}
             />
+            {mobile && (
+              <Toggle
+                title={de ? "Direkt ins Spiel starten" : "Open straight into the game"}
+                detail={de ? "Öffnet das Spiel beim Start, wenn du angemeldet bist. Aus: du siehst zuerst den Launcher." : "Skips the launcher when you are signed in. Off: the launcher opens first."}
+                checked={settings.openGameOnStart}
+                onChange={(openGameOnStart) => set({ openGameOnStart })}
+              />
+            )}
             {!mobile && (
               <Toggle
                 title={de ? "Separates Spielfenster" : "Separate gameplay window"}

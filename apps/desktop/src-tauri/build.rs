@@ -33,6 +33,7 @@ fn main() {
       "open_online_window",
       "open_help_destination",
       "open_ask_window",
+      "set_open_game_on_start",
       "ask_api",
       "ask_send",
       "ask_stop",

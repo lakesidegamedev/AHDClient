@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-open-game-on-start"
+description = "Enables the set_open_game_on_start command without any pre-configured scope."
+commands.allow = ["set_open_game_on_start"]
+
+[[permission]]
+identifier = "deny-set-open-game-on-start"
+description = "Denies the set_open_game_on_start command without any pre-configured scope."
+commands.deny = ["set_open_game_on_start"]

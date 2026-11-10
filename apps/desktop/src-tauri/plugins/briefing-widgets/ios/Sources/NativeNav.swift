@@ -388,7 +388,10 @@ final class NativeNavController: NSObject {
     let isGame = url.scheme == "https"
     let path = DockTabs.path(url)
     let inbox = isGame && path == "/notifications"
-    if isGame && !inbox { lastGameURL = url }
+    if isGame && !inbox {
+      lastGameURL = url
+      rememberGamePage(url, path: path)
+    }
     lastURL = url
     // Only a move to another page closes the open sheet; a query or hash
     // update on the same page (a tabbed page syncing its tab) leaves it be.
@@ -447,10 +450,22 @@ final class NativeNavController: NSObject {
     refreshLocale()
   }
 
+  /// Keep the live page for the next launch. Signed-in only, live host only,
+  /// and never a sign-in page; the fingerprint ties it to this session.
+  private func rememberGamePage(_ url: URL, path: String) {
+    guard url.host == "ahousedividedgame.com", let account = layoutAccount else { return }
+    let first = path.split(separator: "/").first.map(String.init) ?? ""
+    guard !["login", "register", "logout", "auth", "api"].contains(first) else { return }
+    let page = path + (url.query.map { "?" + $0 } ?? "")
+    guard let safe = BriefingStore.gamePath(page) else { return }
+    LastGameStore.save(path: safe, account: account)
+  }
+
   /// /login, /register or /logout: forget the account's tabs now, then let
   /// the status poll say whether a session survived.
   private func signedOutNavigation() {
     if let account = layoutAccount { DockLayoutCache.clear(account: account) }
+    LastGameStore.clear()
     layoutAccount = nil
     layoutFetchedAt.removeAll()
     model.setLayout(nil)
@@ -553,6 +568,7 @@ final class NativeNavController: NSObject {
     let next = BriefingStore.sessionFingerprint()
     guard next != layoutAccount else { return }
     if let old = layoutAccount { DockLayoutCache.clear(account: old) }
+    if next == nil || layoutAccount != nil { LastGameStore.clear() }
     layoutAccount = next
     layoutFetchedAt.removeAll()
     if next == nil || localeKnown { reapplyLayout(strict: true) }

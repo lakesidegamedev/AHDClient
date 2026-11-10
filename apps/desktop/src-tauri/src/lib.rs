@@ -28,6 +28,8 @@ mod mobile;
 #[cfg(desktop)]
 mod node_path;
 mod briefing;
+#[cfg_attr(desktop, allow(dead_code))]
+mod launch;
 mod links;
 mod native_auth;
 mod webview_cookies;

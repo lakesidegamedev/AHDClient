@@ -24,6 +24,7 @@ describe("SettingsMenu", () => {
     expect(screen.getByRole("heading", { name: "Updates" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Support" })).toBeTruthy();
     expect(screen.getByText("Separate gameplay window")).toBeTruthy();
+    expect(screen.queryByText("Open straight into the game")).toBeNull();
     expect(screen.getByText("Anonymous simulation statistics")).toBeTruthy();
     expect(screen.getByText("Desktop updates")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Notifications" })).toBeTruthy();
@@ -47,6 +48,7 @@ describe("SettingsMenu", () => {
     );
     expect(screen.getByText("Push notifications")).toBeTruthy();
     expect(screen.getByText("Launcher animation")).toBeTruthy();
+    expect(screen.getByText("Open straight into the game")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Report a problem" })).toBeTruthy();
     expect(screen.getByText("Developer diagnostics")).toBeTruthy();
     expect(screen.queryByText("Separate gameplay window")).toBeNull();
