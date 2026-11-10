@@ -28,11 +28,19 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   openGameOnStart: true,
 };
 const KEY = "ahdclient.settings.v1";
+/** The OS "reduce motion" choice; a player who never touched the toggle gets it. */
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
 export function readSettings(): ClientSettings {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    if (!parsed || typeof parsed !== "object") return { ...DEFAULT_SETTINGS, language: defaultLanguage() };
-    const result = { ...DEFAULT_SETTINGS, language: defaultLanguage() };
+    const result = { ...DEFAULT_SETTINGS, language: defaultLanguage(), animations: !prefersReducedMotion() };
+    if (!parsed || typeof parsed !== "object") return result;
     for (const key of Object.keys(result) as (keyof ClientSettings)[]) {
       const value = (parsed as Record<string, unknown>)[key];
       if (key === "language" && (value === "de" || value === "en")) result.language = value;

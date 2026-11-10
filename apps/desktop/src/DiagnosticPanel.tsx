@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialog } from "./useDialog.js";
 import {
   clearDiagnostics,
   diagnosticEntries,
@@ -16,14 +17,19 @@ interface Props {
   onClose: () => void;
 }
 
-export function DiagnosticPanel({ open, screen, game, onClose }: Props): JSX.Element | null {
+export function DiagnosticPanel(props: Props): JSX.Element | null {
+  return props.open ? <DiagnosticDialog {...props} /> : null;
+}
+
+function DiagnosticDialog({ screen, game, onClose }: Props): JSX.Element {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialog(dialogRef, onClose);
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
   useEffect(() => subscribeDiagnostics(() => setRevision((value) => value + 1)), []);
   const runtime = useMemo(() => diagnosticRuntime(screen, game), [screen, game, revision]);
   const logs = diagnosticEntries();
-  if (!open) return null;
 
   const copy = async () => {
     try {
@@ -49,7 +55,7 @@ export function DiagnosticPanel({ open, screen, game, onClose }: Props): JSX.Ele
 
   return (
     <div className="client-settings-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="client-settings-dialog client-diagnostics-panel" role="dialog" aria-modal="true" aria-labelledby="developer-diagnostics-title" onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} className="client-settings-dialog client-diagnostics-panel" role="dialog" aria-modal="true" aria-labelledby="developer-diagnostics-title" onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div><span className="client-settings-kicker">AHDClient</span><h2 id="developer-diagnostics-title">Developer diagnostics</h2></div>
           <button className="client-settings-close" type="button" aria-label="Close diagnostics" onClick={onClose}>×</button>

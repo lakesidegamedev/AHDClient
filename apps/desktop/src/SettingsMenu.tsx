@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import desktopPackage from "../package.json";
 import { GameVersionSetting } from "./GameVersionBar.js";
 import { PushControl } from "./PushControl.js";
 import { AUTOSAVE_CHOICES } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
 import { UpdateControl } from "./UpdateControl.js";
+import { useDialog } from "./useDialog.js";
 import "./settings.css";
 
 interface Props {
@@ -40,13 +42,18 @@ function Toggle({ title, detail, checked, onChange }: { title: string; detail: s
  * with a local game or the desktop updater (store builds update through the
  * store, so an Updates section there would offer nothing to do).
  */
-export function SettingsMenu({ mobile = false, open, settings, onChange, onClose, onReportIssue, onOpenDiagnostics }: Props): JSX.Element | null {
-  if (!open) return null;
+export function SettingsMenu(props: Props): JSX.Element | null {
+  return props.open ? <SettingsDialog {...props} /> : null;
+}
+
+function SettingsDialog({ mobile = false, settings, onChange, onClose, onReportIssue, onOpenDiagnostics }: Props): JSX.Element {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialog(dialogRef, onClose);
   const de = settings.language === "de";
   const set = (patch: Partial<ClientSettings>) => onChange({ ...settings, ...patch });
   return (
     <div className="client-settings-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="client-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="client-settings-title" onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} className="client-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="client-settings-title" onMouseDown={(event) => event.stopPropagation()}>
         <header>
           <div>
             <span className="client-settings-kicker">AHDClient {desktopPackage.version}</span>

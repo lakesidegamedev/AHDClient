@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useDialog } from "./useDialog.js";
 import type { DiagnosticReason } from "./diagnostics";
 
 interface Props {
@@ -7,10 +9,15 @@ interface Props {
   onSend: () => void;
 }
 
-export function DiagnosticPrompt({ incident, sending, onDismiss, onSend }: Props): JSX.Element | null {
-  if (!incident) return null;
+export function DiagnosticPrompt(props: Props): JSX.Element | null {
+  return props.incident ? <PromptDialog {...props} incident={props.incident} /> : null;
+}
+
+function PromptDialog({ incident, sending, onDismiss, onSend }: Props & { incident: NonNullable<Props["incident"]> }): JSX.Element {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialog(dialogRef, () => { if (!sending) onDismiss(); });
   return <div className="client-settings-backdrop" role="presentation">
-    <section className="client-diagnostic-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostic-title">
+    <section ref={dialogRef} className="client-diagnostic-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostic-title">
       <span className="client-settings-kicker">Local game diagnostics</span>
       <h2 id="diagnostic-title">Report this problem?</h2>
       <p>{incident.message}</p>

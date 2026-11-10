@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialog } from "./useDialog.js";
 import { listen } from "@tauri-apps/api/event";
 import { classicGame } from "./worlds.js";
 import type { ClassicInfo } from "./worlds.js";
@@ -45,9 +46,13 @@ export function ClassicDownload({ info, worldName, onDone, onClose }: Props): JS
     }
   };
 
+  const dialogRef = useRef<HTMLElement>(null);
+  // Escape is "Not now" when idle and "Cancel" while downloading.
+  useDialog(dialogRef, () => { if (busy) void classicGame.cancel().catch(() => undefined); else onClose(); });
+
   const size = formatDownloadSize(info.sizeBytes);
   return (
-    <aside className="launcher-error" role="dialog" aria-label="Classic game download">
+    <aside ref={dialogRef} className="launcher-error" role="dialog" aria-modal="true" aria-label="Classic game download">
       <span>
         {worldName
           ? `${worldName} was made before game 1.20 and stays on the Classic game. `
