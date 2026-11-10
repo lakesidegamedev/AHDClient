@@ -24,9 +24,9 @@ for runtime, devices in json.load(sys.stdin)['devices'].items():
   for d in devices:
     if d['name'].startswith(prefix): print(d['udid']); sys.exit()" "$1"
 }
-shot() { # udid file state
+shot() { # udid file state [extra launch args]
   xcrun simctl terminate "$1" "$bundle" >/dev/null 2>&1
-  xcrun simctl launch "$1" "$bundle" -AHDDockPreview "$3" >/dev/null
+  xcrun simctl launch "$1" "$bundle" -AHDDockPreview "$3" ${4:+"$4"} >/dev/null
   # A blank frame (app still starting) is a small PNG; look again a few times.
   for _ in 1 2 3 4; do
     sleep 5
@@ -50,6 +50,9 @@ for kind in iPhone iPad; do
   shot "$udid" "$kind-13-alerts-dark" alerts
   shot "$udid" "$kind-9-statesheet-dark" sheet
   shot "$udid" "$kind-10-moresheet-dark" more
+  shot "$udid" "$kind-14-collapsed-landscape" collapsed -AHDForceLandscape
+  shot "$udid" "$kind-15-expanded-landscape" expanded -AHDForceLandscape
+  shot "$udid" "$kind-16-moresheet-landscape" more -AHDForceLandscape
   xcrun simctl ui "$udid" appearance light
   shot "$udid" "$kind-5-collapsed-light" collapsed
   shot "$udid" "$kind-6-expanded-light" expanded

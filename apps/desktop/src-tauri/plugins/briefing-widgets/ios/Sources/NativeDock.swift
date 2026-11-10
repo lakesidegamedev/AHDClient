@@ -26,6 +26,8 @@ enum DockStyle {
   static let radius: CGFloat = 26
   /// iPad and landscape: the dock stays a dock, centered, not a full-width bar.
   static let maxWidth: CGFloat = 560
+  /// A phone on its side: wide enough for the status and five icon tabs on one row.
+  static let compactMaxWidth: CGFloat = 760
   /// Space between the page and the dock surface.
   static let pageGap: CGFloat = 6
 }

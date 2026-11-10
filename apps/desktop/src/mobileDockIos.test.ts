@@ -26,13 +26,21 @@ describe("iOS dock source contract", () => {
     expect(view).toContain("struct DockView: View");
   });
 
+  it("judges the keyboard in window coordinates and sizes the dock for landscape", () => {
+    expect(nav).toContain("DockKeyboard.coversDock(keyboard: local, window: window.bounds)");
+    expect(nav).not.toContain("screen.bounds.height");
+    expect(nav).toContain("DockUserAgent.truthful(base, isPad:");
+    expect(view).toContain("verticalSizeClass == .compact");
+    expect(view).toContain(".hoverEffect(.highlight)");
+  });
+
   it("marks the user agent only from the dock's own attach path", () => {
     expect(nav).toContain(
       'static let statusMarker = "AHDClientNativeStatus/1"',
     );
     // Appended to the existing agent, never replacing it, and skipped if already present.
     expect(nav).toContain(
-      'webView.customUserAgent = base + " " + Self.statusMarker',
+      'webView.customUserAgent = truthful + " " + Self.statusMarker',
     );
     expect(nav).toContain("guard !base.contains(Self.statusMarker)");
     // The Rust side must not add the marker: an app whose dock never attached keeps the web footer.
