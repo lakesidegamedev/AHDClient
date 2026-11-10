@@ -39,7 +39,7 @@ data class PixelIcon(val rows: List<String>) {
 }
 
 /** Things only the app can do, so only app-built menu rows carry one. */
-enum class AppAction { BRIEFING, INBOX, ASK, LAUNCHER }
+enum class AppAction { BRIEFING, INBOX, ALERTS, ASK, LAUNCHER }
 
 data class DockLink(
   val id: String,
@@ -97,7 +97,7 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
 
   /**
    * The model with the app's own section first in the More sheet: Briefing,
-   * Inbox (only when signed in), Ask and Back to launcher. The More tab is
+   * Inbox and Alerts (only when signed in), Ask and Back to launcher. The More tab is
    * the one whose sheet key is "more". The game's own Notifications link is
    * dropped there: the app's Inbox row opens the same page.
    */
@@ -245,6 +245,7 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
     val GAME_ICON = grid("00000100000", "00011111000", "01111111110", "00000000000", "01010101010", "01010101010", "01010101010", "01010101010", "00000000000", "01111111110", "11111111111")
     val BRIEFING_ICON = grid("00000000000", "01111111110", "01000000010", "01011111010", "01000000010", "01011111010", "01000000010", "01011111010", "01000000010", "01111111110", "00000000000")
     val INBOX_ICON = grid("00000000000", "00000000000", "01111111110", "01100000110", "01010001010", "01001010010", "01000100010", "01000000010", "01111111110", "00000000000", "00000000000")
+    val ALERTS_ICON = grid("00000100000", "00011111000", "00100000100", "00100000100", "00100000100", "00100000100", "01000000010", "01111111110", "00000000000", "00001110000", "00000000000")
     val ASK_ICON = grid("00000000000", "01111111110", "01000000010", "01001110010", "01000010010", "01000100010", "01000000010", "01000100010", "01111111110", "00011000000", "00100000000")
     val MORE_ICON = grid("00000000000", "01111011110", "01111011110", "01111011110", "01111011110", "00000000000", "01111011110", "01111011110", "01111011110", "01111011110", "00000000000")
     val LAUNCHER_ICON = grid("00000100000", "00001010000", "00010001000", "00100000100", "01111111110", "00100000100", "00100000100", "00100100100", "00100100100", "00111111100", "00000000000")
@@ -259,6 +260,7 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
       val links = ArrayList<DockLink>()
       links.add(DockLink("app-briefing", "Briefing", null, BRIEFING_ICON, AppAction.BRIEFING))
       if (signedIn) links.add(DockLink("app-inbox", "Inbox", null, INBOX_ICON, AppAction.INBOX))
+      if (signedIn) links.add(DockLink("app-alerts", "Alerts", null, ALERTS_ICON, AppAction.ALERTS))
       links.add(DockLink("app-ask", "Ask", null, ASK_ICON, AppAction.ASK))
       links.add(DockLink("app-launcher", "Back to launcher", null, LAUNCHER_ICON, AppAction.LAUNCHER))
       return DockSection(APP_SECTION_ID, APP_SECTION_TITLE, links)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Screenshot and probe the native dock. The preview link
-# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher) draws the dock with canned
+# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher|alerts) draws the dock with canned
 # figures and no network, so every run shows the same thing. The link only exists in the
 # unsigned pull request build (BuildConfig.DOCK_PREVIEW); a store build ignores it. Then drive it the
 # way a player would (drag up, Back, tap the strip) and read the accessibility
@@ -145,12 +145,25 @@ fi
 preview more
 shot 5-more-sheet
 dump
-for row in Briefing "Inbox, 3 unread" Ask "Back to launcher" Portfolio "Discord, opens outside the game"; do check "More lists '$row'" has "$row"; done
+for row in Briefing "Inbox, 3 unread" Alerts Ask "Back to launcher" Portfolio "Discord, opens outside the game"; do check "More lists '$row'" has "$row"; done
 check "More lists the Inbox once (the game's Notifications row is dropped)" absent "Notifications ("
 a shell input keyevent 4
 sleep 2
 dump
 check "Back closes the More sheet" absent "Back to launcher"
+
+# The one-time alerts question, as a bottom sheet over the dock. Back closes it without changing anything.
+preview alerts
+shot 14-alerts-sheet
+dump
+has_text() { grep -q "text=\"$1\"" probe/dock-ui.xml; }
+check "alerts sheet shows its title" has_text "Get alerts for votes, offers and attacks?"
+check "alerts sheet shows Turn on alerts" has_text "Turn on alerts"
+check "alerts sheet shows Not now" has_text "Not now"
+a shell input keyevent 4
+sleep 2
+dump
+check "Back closes the alerts sheet" absent "Get alerts for votes"
 
 # Signed out or an older game: Game, Briefing, Ask, More and no status.
 preview signedout
@@ -196,7 +209,6 @@ a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ah
 sleep 8
 shot 13-offline
 dump
-has_text() { grep -q "text=\"$1\"" probe/dock-ui.xml; }
 check "offline shows the cannot-reach title" has_text "Cannot reach the game"
 check "offline shows Retry" has_text "Retry"
 check "offline shows Back to launcher" has_text "Back to launcher"

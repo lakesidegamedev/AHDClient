@@ -47,9 +47,9 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(model).toContain('DockTab("app-briefing", "Briefing"');
     expect(model).toContain('DockTab("app-ask", "Ask"');
     expect(model).toContain('DockTab("app-more", "More"');
-    // The app section comes first in More: Briefing, Inbox, Ask, Back to launcher.
+    // The app section comes first in More: Briefing, Inbox, Alerts, Ask, Back to launcher.
     const section = model.indexOf("fun appSection");
-    const order = ['"Briefing"', '"Inbox"', '"Ask"', '"Back to launcher"'].map((entry) => model.indexOf(entry, section));
+    const order = ['"Briefing"', '"Inbox"', '"Alerts"', '"Ask"', '"Back to launcher"'].map((entry) => model.indexOf(entry, section));
     expect(order.every((index) => index > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(model).toContain("val sections = listOf(appSection(signedIn)) + game");
@@ -126,9 +126,18 @@ describe("Android mobile dock (2.10.0)", () => {
     );
   });
 
+  it("asks about alerts once, after the first signed-in status load, with the iPhone copy", () => {
+    const policy = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/AlertsPolicy.kt");
+    const nav = read("../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient/NativeNav.kt");
+    expect(policy).toContain("Get alerts for votes, offers and attacks?");
+    expect(policy).toContain("You can change this any time under More, Alerts.");
+    expect(nav).toContain("NativeAlerts.askOnce(activity, signedIn = true, statusLoaded = true, onGamePage = true)");
+    expect(nav).toContain("AppAction.ALERTS -> NativeAlerts.showManager(activity)");
+  });
+
   it("offers a canned preview link for screenshots, in debug and CI builds only", () => {
     expect(activity).toContain('uri.host == "dock"');
-    expect(activity).toContain('setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "off")');
+    expect(activity).toContain('setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "off")');
     expect(nav).toContain("fun preview(mode: String)");
     // A store build ignores the link: no page, message or app can fake a player's dock.
     expect(activity).toContain("if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return");

@@ -33,8 +33,8 @@ class DockModelTest {
   @Test fun moreSheetStartsWithTheAppSection() {
     val sections = DockModel.fixture().sheets.getValue("more").sections
     assertEquals("app", sections[0].id)
-    assertEquals(listOf("Briefing", "Inbox", "Ask", "Back to launcher"), sections[0].links.map { it.label })
-    assertEquals(listOf(AppAction.BRIEFING, AppAction.INBOX, AppAction.ASK, AppAction.LAUNCHER), sections[0].links.map { it.app })
+    assertEquals(listOf("Briefing", "Inbox", "Alerts", "Ask", "Back to launcher"), sections[0].links.map { it.label })
+    assertEquals(listOf(AppAction.BRIEFING, AppAction.INBOX, AppAction.ALERTS, AppAction.ASK, AppAction.LAUNCHER), sections[0].links.map { it.app })
     assertEquals("you:you", sections[1].id)
   }
 
@@ -127,7 +127,7 @@ class DockModelTest {
     val links = signedOut.sheets.getValue("more").sections.single().links
     assertEquals(listOf("Briefing", "Ask", "Back to launcher"), links.map { it.label })
     val signedIn = DockModel.fallback(signedIn = true).sheets.getValue("more").sections.single().links
-    assertEquals(listOf("Briefing", "Inbox", "Ask", "Back to launcher"), signedIn.map { it.label })
+    assertEquals(listOf("Briefing", "Inbox", "Alerts", "Ask", "Back to launcher"), signedIn.map { it.label })
     // Any game page belongs to the Game tab in the fallback.
     assertEquals("app-game", signedOut.activeTab("/anything/at/all")?.id)
   }
