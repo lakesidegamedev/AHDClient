@@ -35,7 +35,6 @@
     "allow-touch-world",
     "allow-list-game-versions",
     "allow-game-capabilities",
-    "allow-warm-runtime",
     "allow-bundled-game-info",
     "allow-classic-game-info",
     "allow-cancel-game-download",

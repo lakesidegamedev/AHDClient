@@ -276,14 +276,6 @@ export function App(): JSX.Element {
   useEffect(() => {
     void checkAccount();
   }, [checkAccount]);
-  // Once the account is entitled, fetch the database in the background so the
-  // first world does not wait for it. A world the player starts wins over it.
-  const warmed = useRef(false);
-  useEffect(() => {
-    if (mobile || warmed.current || !accountChecked || !hasCachedSingleplayerEntitlement()) return;
-    warmed.current = true;
-    void gameRuntime.warmRuntime().catch(() => undefined);
-  }, [accountChecked, account]);
   useEffect(() => {
     if (screen !== "linking") return;
     let active = true;

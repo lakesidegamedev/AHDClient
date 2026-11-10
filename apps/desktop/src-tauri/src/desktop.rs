@@ -471,107 +471,13 @@ pub(crate) async fn game_stop(app: AppHandle, game: State<'_, Game>) -> Result<G
   Ok(inner.info())
 }
 
-/// True while the background database warm-up owns the start guard.
-static WARMING: AtomicBool = AtomicBool::new(false);
-/// Set by a real start so the warm-up lets go of the guard at once.
-static WARM_CANCEL: AtomicBool = AtomicBool::new(false);
-
-/// A real start always wins over the background warm-up: ask it to stop and
-/// take the guard as soon as it lets go. Any other holder is a genuine
-/// "already starting".
-async fn acquire_start_guard<'a>(game: &'a State<'_, Game>) -> Result<tokio::sync::MutexGuard<'a, ()>, String> {
-  if let Ok(guard) = game.1.try_lock() { return Ok(guard); }
-  if !WARMING.load(Ordering::SeqCst) { return Err("a world is already starting".into()); }
-  WARM_CANCEL.store(true, Ordering::SeqCst);
-  for _ in 0..150 {
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    if let Ok(guard) = game.1.try_lock() { return Ok(guard); }
-  }
-  Err("a world is already starting".into())
-}
-
-/// The shared database program is already downloaded for some game version.
-fn database_installed(runtime_home: &std::path::Path) -> bool {
-  let dir = runtime_home.join("mongodb");
-  let has_binary = dir.join("mongod").is_file() || dir.join("mongod.exe").is_file();
-  has_binary
-    && fs::read_dir(&dir)
-      .map(|entries| entries.flatten().any(|e| e.file_name().to_string_lossy().starts_with(".complete-")))
-      .unwrap_or(false)
-}
-
-/// Download the database program in the background so the first world does not
-/// wait for it. Does nothing when it is already there, a world is running or
-/// starting, or the player has pointed the game at their own database.
-/// Returns true when a download was needed and finished.
-#[tauri::command]
-pub(crate) async fn warm_runtime(app: AppHandle, game: State<'_, Game>) -> Result<bool, String> {
-  let runtime_home = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runtime");
-  if std::env::var("MONGOD_PATH").is_ok() || database_installed(&runtime_home) { return Ok(false); }
-  let Ok(_guard) = game.1.try_lock() else { return Ok(false) };
-  if game.0.lock().map_err(|_| "game state poisoned")?.child.is_some() { return Ok(false); }
-  WARM_CANCEL.store(false, Ordering::SeqCst);
-  WARMING.store(true, Ordering::SeqCst);
-  let outcome = warm_runtime_inner(&app, &runtime_home).await;
-  WARMING.store(false, Ordering::SeqCst);
-  outcome
-}
-
-async fn warm_runtime_inner(app: &AppHandle, runtime_home: &std::path::Path) -> Result<bool, String> {
-  let dir = game_versions::game_dir(app)?;
-  let script = node_path::path_for_node(&launcher_script(&dir)?);
-  let launch_dir = script.parent().ok_or("game resource directory is missing")?;
-  let scratch = runtime_home.join("warm-home");
-  fs::create_dir_all(&scratch).map_err(|e| format!("cannot create {}: {e}", scratch.display()))?;
-  let port = free_port()?;
-  let mut mongo_port = free_port()?;
-  while mongo_port == port { mongo_port = free_port()?; }
-  let (mut rx, mut child) = app
-    .shell()
-    .sidecar("ahd-node")
-    .map_err(|e| format!("bundled Node is missing: {e}"))?
-    .current_dir(launch_dir)
-    .args([
-      script.to_string_lossy().as_ref(),
-      "--port", &port.to_string(),
-      "--mongo-port", &mongo_port.to_string(),
-      "--home", node_path::path_for_node(&scratch).to_string_lossy().as_ref(),
-      "--runtime-home", node_path::path_for_node(runtime_home).to_string_lossy().as_ref(),
-      "--no-browser",
-      "--parent-pid", &std::process::id().to_string(),
-    ])
-    .env("NODE_ENV", "production")
-    .spawn()
-    .map_err(|e| format!("could not warm the game: {e}"))?;
-  let ready = format!("ready at http://127.0.0.1:{port}");
-  let deadline = tokio::time::Instant::now() + START_TIMEOUT;
-  let mut done = false;
-  while !WARM_CANCEL.load(Ordering::SeqCst) {
-    let Some(left) = deadline.checked_duration_since(tokio::time::Instant::now()) else { break };
-    let step = left.min(Duration::from_millis(500));
-    match tokio::time::timeout(step, rx.recv()).await {
-      Ok(Some(CommandEvent::Stdout(bytes))) | Ok(Some(CommandEvent::Stderr(bytes))) => {
-        if String::from_utf8_lossy(&bytes).contains(&ready) { done = true; break; }
-      }
-      Ok(Some(CommandEvent::Terminated(_))) | Ok(None) => { let _ = fs::remove_dir_all(&scratch); return Ok(false); }
-      _ => {}
-    }
-  }
-  // Same polite stop as a world: the database checkpoints before it exits.
-  let _ = child.write(b"shutdown\n");
-  let stopped = tokio::time::timeout(Duration::from_secs(20), async { while let Some(event) = rx.recv().await { if matches!(event, CommandEvent::Terminated(_)) { break; } } }).await;
-  if stopped.is_err() { let _ = child.kill(); }
-  let _ = fs::remove_dir_all(&scratch);
-  Ok(done && database_installed(runtime_home))
-}
-
 /// Start the local game for a world slot. Resolves once the server says it is
 /// ready, or fails with the tail of its output. Log lines stream to the
 /// launcher as `game:log` events the whole time, so a first-run MongoDB
 /// download is visible rather than a frozen button.
 #[tauri::command]
 pub(crate) async fn game_start(app: AppHandle, game: State<'_, Game>, slot: String, hosted: Option<bool>) -> Result<GameInfo, String> {
-  let _start_guard = acquire_start_guard(&game).await?;
+  let _start_guard = game.1.try_lock().map_err(|_| "a world is already starting")?;
   let home = world_dir(&app, &slot)?;
   if !home.join("world.json").exists() {
     return Err(format!("no world at {slot:?}"));
@@ -1463,7 +1369,6 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       request_world_save_load,
       list_game_versions,
       game_capabilities,
-      warm_runtime,
       bundled_game_info,
       classic_game_info,
       cancel_game_download,
@@ -1503,21 +1408,8 @@ pub(crate) fn on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-  use super::{database_installed, stamped, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
+  use super::{stamped, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
-
-  #[test]
-  fn database_is_installed_only_with_binary_and_marker() {
-    let dir = std::env::temp_dir().join(format!("ahd-warm-{}", std::process::id()));
-    let mongo = dir.join("mongodb");
-    std::fs::create_dir_all(&mongo).unwrap();
-    assert!(!database_installed(&dir));
-    std::fs::write(mongo.join("mongod"), b"x").unwrap();
-    assert!(!database_installed(&dir));
-    std::fs::write(mongo.join(".complete-8.0.12"), b"8.0.12\n").unwrap();
-    assert!(database_installed(&dir));
-    let _ = std::fs::remove_dir_all(&dir);
-  }
 
   #[test]
   fn zoom_steps_stay_in_range_and_never_drift() {

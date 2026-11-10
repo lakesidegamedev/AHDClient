@@ -55,7 +55,6 @@ fn main() {
       "request_world_save_load",
       "list_game_versions",
       "game_capabilities",
-      "warm_runtime",
       "bundled_game_info",
       "classic_game_info",
       "cancel_game_download",
