@@ -67,3 +67,27 @@ describe("WorldsScreen private hosting", () => {
     expect(onSaves).toHaveBeenCalledWith("private-1953");
   });
 });
+
+describe("WorldsScreen Classic tag", () => {
+  const base = { preset: "1979-default", createdAt: "2026-09-14T00:00:00Z", lastPlayedAt: "2026-09-14T00:00:00Z", turn: 1, character: null };
+  it("tags Classic worlds and only those", () => {
+    render(
+      <WorldsScreen
+        worlds={[
+          { ...base, slot: "old", name: "Old World", classic: true },
+          { ...base, slot: "new", name: "New World", classic: false, gameVersion: "1.20.0" },
+        ]}
+        runningSlot={null}
+        busy={false}
+        error={null}
+        onPlay={vi.fn()}
+        onHost={vi.fn()}
+        onDelete={vi.fn()}
+        onSaves={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText("Classic")).toHaveLength(1);
+    expect(screen.getByText("Old World").parentElement?.textContent).toContain("Classic");
+  });
+});

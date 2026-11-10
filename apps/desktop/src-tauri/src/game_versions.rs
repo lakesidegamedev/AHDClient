@@ -1,11 +1,18 @@
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, fs, io::{self, Read}, path::{Path, PathBuf}, time::{Duration, SystemTime, UNIX_EPOCH}};
-use tauri::{AppHandle, Manager};
+use std::{collections::BTreeSet, fs, io::{Read, Write}, path::{Path, PathBuf}, sync::atomic::{AtomicBool, Ordering}, time::{Duration, SystemTime, UNIX_EPOCH}};
+use tauri::{AppHandle, Emitter, Manager};
 
 const RELEASES_URL: &str = "https://api.github.com/repos/lakesidegamedev/AHDGame/releases?per_page=50";
 const MIN_VERSION: (u64, u64, u64) = (1, 6, 0);
+/// Game versions below this are the Classic generation: worlds made before the
+/// 1.20 rules, which stay on a pre-1.20 runtime and are never upgraded.
+const CLASSIC_BELOW: (u64, u64, u64) = (1, 20, 0);
+/// Stamped on a new world when the running game cannot say its own version.
+pub const FALLBACK_STAMP: &str = "1.20.0";
+/// Set by `cancel_download`, read by the download loop.
+static CANCEL_DOWNLOAD: AtomicBool = AtomicBool::new(false);
 /// How long the published-release list is reused before asking GitHub again.
 const RELEASES_CACHE_SECS: u64 = 3600;
 
@@ -55,6 +62,46 @@ fn parse_version(value: &str) -> Option<(u64, u64, u64)> {
   let parsed = (pieces.next()?.parse().ok()?, pieces.next()?.parse().ok()?, pieces.next()?.parse().ok()?);
   if pieces.next().is_some() { return None; }
   Some(parsed)
+}
+
+pub fn is_classic_version(value: &str) -> bool { parse_version(value).is_some_and(|version| version < CLASSIC_BELOW) }
+
+/// A world is Classic when it says so, when it carries a pre-1.20 stamp, or when
+/// it has no stamp at all (made before worlds remembered their game version).
+pub fn world_is_classic(game_version: Option<&str>, classic_flag: bool) -> bool {
+  classic_flag || game_version.is_none_or(is_classic_version)
+}
+
+/// Which game runtime a world starts on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Runtime {
+  /// The runtime the app would start now (bundled, or the picked version).
+  Current,
+  /// An installed Classic runtime, by version.
+  Classic(String),
+}
+
+/// Prefix of the error `game_start` returns when a Classic world needs the
+/// Classic download first. The client matches on it to offer the download.
+pub const CLASSIC_REQUIRED: &str = "classic-required:";
+
+/// The runtime for a world. A Classic world is checked here, before anything
+/// starts, so a newer runtime can never open it by accident.
+pub fn choose_runtime(world_classic: bool, current: Option<&str>, installed_classic: &[String], pinned: Option<&str>) -> Result<Runtime, String> {
+  if !world_classic { return Ok(Runtime::Current); }
+  if let Some(version) = pinned.filter(|v| installed_classic.iter().any(|i| i == v)) {
+    return Ok(Runtime::Classic(version.to_string()));
+  }
+  if let Some(version) = newest_classic(installed_classic.iter().map(String::as_str)) {
+    return Ok(Runtime::Classic(version));
+  }
+  if current.is_some_and(is_classic_version) { return Ok(Runtime::Current); }
+  Err(format!("{CLASSIC_REQUIRED} This world was made with an earlier game version. Download the Classic game to open it."))
+}
+
+/// The newest valid version below 1.20.
+fn newest_classic<'a>(versions: impl Iterator<Item = &'a str>) -> Option<String> {
+  versions.filter(|v| valid_version(v) && is_classic_version(v)).max_by_key(|v| parse_version(v)).map(str::to_string)
 }
 
 fn valid_version(value: &str) -> bool { parse_version(value).is_some_and(|version| version >= MIN_VERSION) }
@@ -156,6 +203,55 @@ fn fetch_releases(app: &AppHandle, force: bool) -> Result<Vec<Release>, String> 
   }
 }
 
+fn installed_versions(versions_root: &Path) -> Vec<String> {
+  fs::read_dir(versions_root).into_iter().flatten().flatten()
+    .map(|entry| entry.file_name().to_string_lossy().to_string())
+    .filter(|version| valid_version(version) && versions_root.join(version).join("game/launch.mjs").is_file())
+    .collect()
+}
+
+/// Installed Classic runtimes, oldest first is not promised; use `choose_runtime`.
+pub fn installed_classic(app: &AppHandle) -> Vec<String> {
+  root(app).map(|dir| installed_versions(&dir)).unwrap_or_default().into_iter().filter(|v| is_classic_version(v)).collect()
+}
+
+/// Where an installed runtime lives.
+pub fn runtime_dir(app: &AppHandle, version: &str) -> Result<PathBuf, String> { Ok(root(app)?.join(version).join("game")) }
+
+/// The version the app would start now, when it can tell.
+pub fn current_version(app: &AppHandle) -> Option<String> {
+  game_dir(app).ok().and_then(|dir| read_build_info(&dir).game_version).or_else(|| selected(app))
+}
+
+/// The Classic runtime: the newest published release below 1.20.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassicInfo {
+  /// Version to use or download. None when none is installed or published.
+  pub version: Option<String>,
+  pub installed: bool,
+  pub size_bytes: Option<u64>,
+}
+
+pub fn classic_info(app: &AppHandle) -> ClassicInfo {
+  if let Some(version) = newest_classic(installed_classic(app).iter().map(String::as_str)) {
+    return ClassicInfo { version: Some(version), installed: true, size_bytes: None };
+  }
+  let Ok(releases) = fetch_releases(app, false) else { return ClassicInfo::default(); };
+  classic_from_releases(&releases, target_name().ok())
+}
+
+fn classic_from_releases(releases: &[Release], target: Option<&str>) -> ClassicInfo {
+  let versions = releases.iter().filter_map(|r| r.tag_name.strip_prefix("game-v"));
+  let Some(version) = newest_classic(versions) else { return ClassicInfo::default(); };
+  let size_bytes = target.and_then(|target| {
+    let name = format!("ahd-singleplayer-v{version}-{target}.tar.gz");
+    releases.iter().find(|r| r.tag_name == format!("game-v{version}"))
+      .and_then(|r| r.assets.iter().find(|a| a.name == name)).and_then(|a| a.size)
+  });
+  ClassicInfo { version: Some(version), installed: false, size_bytes }
+}
+
 pub fn list(app: &AppHandle) -> Result<Vec<GameVersion>, String> {
   let selected = selected(app);
   let versions_root = root(app)?;
@@ -213,17 +309,39 @@ fn release_asset(app: &AppHandle, version: &str) -> Result<(String, String), Str
   Ok((archive.browser_download_url.clone(), checksum.browser_download_url.clone()))
 }
 
-fn download(url: &str, destination: &Path) -> Result<(), String> {
+fn download(app: &AppHandle, version: &str, url: &str, destination: &Path) -> Result<(), String> {
   let response = ureq::AgentBuilder::new().timeout(Duration::from_secs(300)).build()
     .get(url).set("User-Agent", "AHDClient/2").call().map_err(|_| "Game download failed.".to_string())?;
+  let total: Option<u64> = response.header("Content-Length").and_then(|v| v.parse().ok());
   let mut input = response.into_reader();
   let mut output = fs::File::create(destination).map_err(|e| e.to_string())?;
-  io::copy(&mut input, &mut output).map_err(|e| e.to_string())?;
+  let mut buffer = vec![0_u8; 256 * 1024];
+  let (mut done, mut last_percent) = (0_u64, u64::MAX);
+  loop {
+    if CANCEL_DOWNLOAD.load(Ordering::SeqCst) { return Err("Download cancelled.".into()); }
+    let read = input.read(&mut buffer).map_err(|_| "Game download failed.".to_string())?;
+    if read == 0 { break; }
+    output.write_all(&buffer[..read]).map_err(|e| e.to_string())?;
+    done += read as u64;
+    let percent = total.filter(|t| *t > 0).map_or(0, |t| done * 100 / t);
+    if percent != last_percent {
+      last_percent = percent;
+      let _ = app.emit("game:download", DownloadProgress { version: version.to_string(), downloaded: done, total });
+    }
+  }
   Ok(())
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadProgress { version: String, downloaded: u64, total: Option<u64> }
+
+/// Ask a running `install` to stop at its next chunk.
+pub fn cancel_download() { CANCEL_DOWNLOAD.store(true, Ordering::SeqCst); }
+
 pub fn install(app: &AppHandle, version: &str) -> Result<(), String> {
   if !valid_version(version) { return Err("Only game versions 1.6.0 and newer are supported.".into()); }
+  CANCEL_DOWNLOAD.store(false, Ordering::SeqCst);
   let (archive_url, checksum_url) = release_asset(app, version)?;
   let version_root = root(app)?.join(version);
   let staging = root(app)?.join(format!(".{version}.staging"));
@@ -231,7 +349,10 @@ pub fn install(app: &AppHandle, version: &str) -> Result<(), String> {
   if staging.exists() { fs::remove_dir_all(&staging).map_err(|e| e.to_string())?; }
   fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
   let archive = staging.join("game.tar.gz");
-  download(&archive_url, &archive)?;
+  if let Err(error) = download(app, version, &archive_url, &archive) {
+    let _ = fs::remove_dir_all(&staging);
+    return Err(error);
+  }
   let expected = ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build()
     .get(&checksum_url).set("User-Agent", "AHDClient/2").call()
     .map_err(|_| "Could not verify the game download.".to_string())?.into_string()
@@ -268,7 +389,7 @@ pub fn select(app: &AppHandle, version: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use super::{cache_is_fresh, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
+  use super::{cache_is_fresh, choose_runtime, classic_from_releases, is_classic_version, world_is_classic, Asset, Release, Runtime, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
   use std::fs;
 
   fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -350,5 +471,53 @@ mod tests {
     assert_eq!(target_name_for("linux", "aarch64"), Some("linux-aarch64"));
     assert_eq!(target_name_for("linux", "x86_64"), Some("linux-x86_64"));
     assert_eq!(target_name_for("windows", "aarch64"), None);
+  }
+
+  fn installed(list: &[&str]) -> Vec<String> { list.iter().map(|v| v.to_string()).collect() }
+
+  #[test]
+  fn worlds_without_a_stamp_or_with_an_old_one_are_classic() {
+    assert!(world_is_classic(None, false));
+    assert!(world_is_classic(Some("1.19.4"), false));
+    assert!(world_is_classic(Some("1.20.0"), true));
+    assert!(!world_is_classic(Some("1.20.0"), false));
+    assert!(!world_is_classic(Some("1.21.3"), false));
+    assert!(is_classic_version("1.6.0") && !is_classic_version("1.20.0"));
+  }
+
+  #[test]
+  fn a_plain_world_always_uses_the_current_runtime() {
+    assert_eq!(choose_runtime(false, Some("1.20.0"), &[], None), Ok(Runtime::Current));
+  }
+
+  #[test]
+  fn a_classic_world_uses_classic_and_never_the_newer_runtime() {
+    let have = installed(&["1.18.0", "1.19.2"]);
+    assert_eq!(choose_runtime(true, Some("1.20.0"), &have, None), Ok(Runtime::Classic("1.19.2".into())));
+    assert_eq!(choose_runtime(true, Some("1.20.0"), &have, Some("1.18.0")), Ok(Runtime::Classic("1.18.0".into())));
+    assert_eq!(choose_runtime(true, Some("1.20.0"), &have, Some("1.17.0")), Ok(Runtime::Classic("1.19.2".into())));
+  }
+
+  #[test]
+  fn a_classic_world_without_classic_installed_asks_for_the_download() {
+    let error = choose_runtime(true, Some("1.20.0"), &[], None).unwrap_err();
+    assert!(error.starts_with("classic-required:"));
+    assert!(choose_runtime(true, None, &[], None).is_err());
+    // An app whose own game is still pre-1.20 can open Classic worlds itself.
+    assert_eq!(choose_runtime(true, Some("1.19.0"), &[], None), Ok(Runtime::Current));
+  }
+
+  #[test]
+  fn classic_release_is_the_newest_below_1_20() {
+    let release = |tag: &str, size: u64| Release {
+      tag_name: tag.into(),
+      assets: vec![Asset { name: format!("ahd-singleplayer-v{}-linux-x86_64.tar.gz", &tag[6..]), browser_download_url: String::new(), size: Some(size) }],
+    };
+    let releases = vec![release("game-v1.20.0", 9), release("game-v1.19.1", 5), release("game-v1.19.3", 7), release("game-v1.8.0", 1)];
+    let info = classic_from_releases(&releases, Some("linux-x86_64"));
+    assert_eq!(info.version.as_deref(), Some("1.19.3"));
+    assert_eq!(info.size_bytes, Some(7));
+    assert!(!info.installed);
+    assert_eq!(classic_from_releases(&releases[..1], None).version, None);
   }
 }

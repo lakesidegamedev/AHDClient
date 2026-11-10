@@ -1273,3 +1273,13 @@
   font-size: 9px;
   letter-spacing: 0.04em;
 }
+
+.worlds-classic-tag {
+  margin-left: 0.4em;
+  padding: 0 0.5em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.7em;
+  font-weight: 500;
+  opacity: 0.8;
+}

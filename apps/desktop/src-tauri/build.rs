@@ -52,6 +52,8 @@ fn main() {
       "list_game_versions",
       "game_capabilities",
       "bundled_game_info",
+      "classic_game_info",
+      "cancel_game_download",
       "install_game_version",
       "select_game_version",
       "update_install_kind",

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   },
   worldSaves: { list: vi.fn(), remove: vi.fn(), requestLoad: vi.fn() },
   worlds: { list: vi.fn(), create: vi.fn(), touch: vi.fn(), remove: vi.fn() },
+  classicGame: { info: vi.fn(async () => ({ version: null, installed: false, sizeBytes: null })), install: vi.fn(), cancel: vi.fn() },
   online: { account: vi.fn(), open: vi.fn(), link: vi.fn() },
   ask: { open: vi.fn() },
   listen: vi.fn(),
@@ -42,6 +43,8 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("./worlds.js", () => ({
   game: mocks.game,
   worlds: mocks.worlds,
+  classicGame: mocks.classicGame,
+  CLASSIC_REQUIRED: "classic-required:",
   worldSaves: mocks.worldSaves,
   online: mocks.online,
   ask: mocks.ask,

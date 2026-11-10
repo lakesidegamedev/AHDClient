@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-classic-game-info"
+description = "Enables the classic_game_info command without any pre-configured scope."
+commands.allow = ["classic_game_info"]
+
+[[permission]]
+identifier = "deny-classic-game-info"
+description = "Denies the classic_game_info command without any pre-configured scope."
+commands.deny = ["classic_game_info"]

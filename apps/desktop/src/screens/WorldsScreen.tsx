@@ -54,7 +54,7 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
                   <li key={world.slot} className="worlds-row" data-running={running || undefined}>
                     <span className="launcher-era-swatch" style={{ backgroundColor: theme.phosphor }} aria-hidden="true" />
                     <div className="worlds-meta">
-                      <strong>{world.name}</strong>
+                      <strong>{world.name}{world.classic ? <span className="worlds-classic-tag"> Classic</span> : null}</strong>
                       <small>
                         {era?.label ?? world.preset}
                         {world.turn != null ? ` · turn ${world.turn}` : ""}

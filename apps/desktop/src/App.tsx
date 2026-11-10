@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Launcher } from "./launcher/Launcher.js";
-import { gameRuntime } from "./capabilities.js";
+import { gameRuntime, legacyCapabilities } from "./capabilities.js";
+import { ClassicDownload, formatDownloadSize } from "./ClassicDownload.js";
 import type { Capabilities } from "./capabilities.js";
 import { NewWorldScreen } from "./screens/NewWorldScreen.js";
 import { WorldsScreen } from "./screens/WorldsScreen.js";
@@ -9,8 +10,9 @@ import { BootScreen } from "./screens/BootScreen.js";
 import { WorldsimScreen } from "./screens/WorldsimScreen.js";
 import type { SetupOptions } from "./screens/setupOptions.js";
 import { PlayingScreen } from "./screens/PlayingScreen.js";
-import { ask, eraById, game, online, slugForWorld, worldSaves, worlds } from "./worlds.js";
+import { CLASSIC_REQUIRED, ask, classicGame, eraById, game, online, slugForWorld, worldSaves, worlds } from "./worlds.js";
 import type {
+  ClassicInfo,
   GameInfo,
   LinkedAccount,
   OnlineTarget,
@@ -107,6 +109,20 @@ export function App(): JSX.Element {
       live = false;
     };
   }, []);
+  // The Classic game (last release before 1.20): older eras and pre-1.20 worlds.
+  const [classic, setClassic] = useState<ClassicInfo | null>(null);
+  const [classicPrompt, setClassicPrompt] = useState<{ slot: string | null; hosted: boolean } | null>(null);
+  const [pendingClassic, setPendingClassic] = useState(false);
+  const refreshClassic = useCallback(async () => {
+    try {
+      setClassic(await classicGame.info());
+    } catch {
+      setClassic(null);
+    }
+  }, []);
+  useEffect(() => {
+    if (!mobile) void refreshClassic();
+  }, [refreshClassic]);
   const [pendingWorldsim, setPendingWorldsim] = useState(false);
   const [runningWorldsim, setRunningWorldsim] = useState(false);
   const [pendingEra, setPendingEra] = useState<string | null>(null);
@@ -473,7 +489,15 @@ export function App(): JSX.Element {
         } catch {
           setInfo(IDLE);
         }
-        fail(e);
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.startsWith(CLASSIC_REQUIRED)) {
+          // A Classic world needs its game first: offer the download, not an error.
+          await refreshClassic();
+          setClassicPrompt({ slot, hosted });
+          setScreen("launcher");
+        } else {
+          fail(e);
+        }
       }
     } finally {
       if (generation === bootId.current) setBusy(false);
@@ -504,7 +528,7 @@ export function App(): JSX.Element {
    * fills in a world they cannot create. The check runs again at creation in
    * case access changed mid-setup; that refusal keeps the form mounted.
    */
-  const handleNewWorld = (eraId: string, worldsim = false) => {
+  const handleNewWorld = (eraId: string, worldsim = false, classicWorld = false) => {
     void (async () => {
       setError(null);
       setEntitlementBlocked(false);
@@ -515,6 +539,7 @@ export function App(): JSX.Element {
         return;
       }
       setPendingWorldsim(worldsim);
+      setPendingClassic(classicWorld);
       setPendingEra(eraId);
       setSetupError(null);
       setScreen("newWorld");
@@ -543,7 +568,7 @@ export function App(): JSX.Element {
       allWorlds.map((w) => w.slot),
     );
     try {
-      await worlds.create(slot, name.trim() || era.label, era.preset, setup);
+      await worlds.create(slot, name.trim() || era.label, era.preset, setup, pendingClassic);
       await refreshWorlds();
     } catch (e) {
       creating.current = false;
@@ -907,7 +932,7 @@ export function App(): JSX.Element {
         <NewWorldScreen
           language={settings.language}
           era={era}
-          capabilities={capabilities}
+          capabilities={pendingClassic ? legacyCapabilities() : capabilities}
           initialWorldsim={pendingWorldsim}
           shareStatistics={settings.shareStatistics}
           onStatisticsChange={(shareStatistics) =>
@@ -1010,6 +1035,19 @@ export function App(): JSX.Element {
           </button>
         </aside>
       )}
+      {classicPrompt && classic && (
+        <ClassicDownload
+          info={classic}
+          worldName={allWorlds.find((w) => w.slot === classicPrompt.slot)?.name ?? null}
+          onClose={() => setClassicPrompt(null)}
+          onDone={() => {
+            const waiting = classicPrompt;
+            setClassicPrompt(null);
+            void refreshClassic();
+            if (waiting.slot) void boot(waiting.slot, null, waiting.hosted);
+          }}
+        />
+      )}
       <Launcher
         language={settings.language}
         mobile={mobile}
@@ -1018,6 +1056,11 @@ export function App(): JSX.Element {
         askControl={askControl}
         briefingControl={briefingControl}
         capabilities={capabilities}
+        classicAvailable={!mobile && classic?.version != null}
+        classicInstalled={classic?.installed === true}
+        classicSizeLabel={formatDownloadSize(classic?.sizeBytes)}
+        onClassicEras={() => setClassicPrompt({ slot: null, hosted: false })}
+        onClassicEra={(eraId) => handleNewWorld(eraId, false, true)}
         gameVersionControl={mobile ? undefined : <GameVersionLine />}
         onPhotoSource={(eraId) => {
           void online.help(`help.era-photo-${eraId}`).catch(fail);
