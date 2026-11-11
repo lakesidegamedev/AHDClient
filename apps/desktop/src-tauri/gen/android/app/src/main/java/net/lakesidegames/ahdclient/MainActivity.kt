@@ -114,6 +114,15 @@ class MainActivity : TauriActivity() {
       loadWhenReady(uri.toString())
       return
     }
+    if (uri.scheme == "https") {
+      // A shared game link (verified App Link). Signed-out players stay on the launcher;
+      // sign-in is never started from a link.
+      intent.data = null
+      val linked = AppLinks.pathFor(uri.scheme, uri.host, uri.encodedPath, uri.encodedQuery) ?: return
+      if (BriefingWidgets.identity() == null) return
+      loadWhenReady(BriefingWidgets.ORIGIN + linked)
+      return
+    }
     if (uri.scheme != "ahdclient") return
     if (uri.host == "ask") {
       // Design review only: the sheet with a canned chat and no network.

@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+        <shortcut android:shortcutId="inbox" android:enabled="true" android:icon="@drawable/ic_shortcut_inbox" android:shortcutShortLabel="@string/shortcut_inbox">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.lakesidegames.ahdclient" android:targetClass="net.lakesidegames.ahdclient.MainActivity" android:data="ahdclient://inbox" />
+    </shortcut>
+    <shortcut android:shortcutId="ask" android:enabled="true" android:icon="@drawable/ic_shortcut_ask" android:shortcutShortLabel="@string/shortcut_ask">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.lakesidegames.ahdclient" android:targetClass="net.lakesidegames.ahdclient.MainActivity" android:data="ahdclient://ask" />
+    </shortcut>
     <shortcut android:shortcutId="profile" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_profile">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="net.lakesidegames.ahdclient" android:targetClass="net.lakesidegames.ahdclient.MainActivity" android:data="ahdclient://briefing/profile" />
     </shortcut>

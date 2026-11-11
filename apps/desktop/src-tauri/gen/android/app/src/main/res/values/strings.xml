@@ -173,6 +173,7 @@
     <string name="widget_section_of">%1$s · %2$d of %3$d</string>
     <string name="widget_chart">Recent trend</string>
     <string name="widget_change_legend">Green and red: change per turn</string>
+    <string name="shortcut_inbox">Inbox</string>
     <string name="shortcut_profile">Profile</string>
     <string name="shortcut_election">My election</string>
     <string name="shortcut_corporation">My corporation</string>
