@@ -15,7 +15,9 @@ describe("TurnReminderControl", () => {
     invoke.mockImplementation(async (cmd: string, args?: { turnReminder: boolean; quiet: unknown }) =>
       cmd === "get_reminder_settings" ? off : args);
     render(<TurnReminderControl />);
-    const [reminder, quiet] = await screen.findAllByRole("switch") as HTMLInputElement[];
+    const switches = await screen.findAllByRole("switch") as HTMLInputElement[];
+    const reminder = switches[0]!;
+    const quiet = switches[1]!;
     await waitFor(() => expect(reminder.disabled).toBe(false));
     expect(reminder.checked).toBe(false);
     expect(quiet.checked).toBe(false);
