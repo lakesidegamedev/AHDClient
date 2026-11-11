@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     setAutosaveEvery: vi.fn(),
     saves: vi.fn(),
     saveNow: vi.fn(),
+    batchStatus: vi.fn(),
   },
   worldSaves: { list: vi.fn(), remove: vi.fn(), requestLoad: vi.fn() },
   worlds: { list: vi.fn(), create: vi.fn(), touch: vi.fn(), remove: vi.fn() },
@@ -37,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen, emit: vi.fn(async () => undefined) }));
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn(async () => null) }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 vi.mock("./worlds.js", () => ({
@@ -188,6 +189,7 @@ function prepare(status = normalStatus) {
   mocks.game.status.mockResolvedValue(idle);
   mocks.game.start.mockResolvedValue(running);
   mocks.game.stop.mockResolvedValue(idle);
+  mocks.game.batchStatus.mockResolvedValue({ batch: null });
   mocks.game.setup.mockResolvedValue({ ok: true });
   mocks.game.setupProgress.mockResolvedValue({
     active: true,
@@ -537,5 +539,44 @@ describe("App singleplayer integration", () => {
     mocks.game.start.mockClear();
     await userEvent.click(screen.getByRole("button", { name: "Restart world" }));
     await waitFor(() => expect(mocks.game.start).toHaveBeenCalled());
+  });
+
+  async function openRunningWorld() {
+    prepare({ ...normalStatus, hasCharacter: true, characterName: "Ada" });
+    mocks.worlds.list.mockResolvedValue([{ slot: "test-world", name: "Test world", preset: "1953-default" }]);
+    const handlers: Record<string, () => void> = {};
+    mocks.listen.mockImplementation(async (name: string, cb: () => void) => {
+      handlers[name] = cb;
+      return vi.fn();
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "New world" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(mocks.game.openWindow).toHaveBeenCalledWith("/profile", false));
+    await waitFor(() => expect(handlers["app:close-requested"]).toBeTruthy());
+    return handlers;
+  }
+
+  it("saves and quits when the window is closed with a world running", async () => {
+    const handlers = await openRunningWorld();
+    mocks.game.stop.mockClear();
+    await act(async () => handlers["app:close-requested"]?.());
+    await waitFor(() => expect(mocks.game.stop).toHaveBeenCalledWith(true));
+    expect(screen.getByText("Saving and closing")).toBeTruthy();
+  });
+
+  it("asks first when a run of turns is still playing, and keeps playing on cancel", async () => {
+    const handlers = await openRunningWorld();
+    mocks.game.stop.mockClear();
+    mocks.game.batchStatus.mockResolvedValue({ batch: { status: "running" } });
+    await act(async () => handlers["app:close-requested"]?.());
+    expect(await screen.findByText("Turns are still playing")).toBeTruthy();
+    expect(mocks.game.stop).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Keep playing" }));
+    expect(screen.queryByText("Turns are still playing")).toBeNull();
+    expect(mocks.game.stop).not.toHaveBeenCalled();
+    await act(async () => handlers["app:close-requested"]?.());
+    await userEvent.click(await screen.findByRole("button", { name: "Save and close" }));
+    await waitFor(() => expect(mocks.game.stop).toHaveBeenCalledWith(true));
   });
 });

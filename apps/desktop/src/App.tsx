@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { Launcher } from "./launcher/Launcher.js";
 import { gameRuntime, legacyCapabilities } from "./capabilities.js";
 import { ClassicDownload, formatDownloadSize } from "./ClassicDownload.js";
@@ -41,6 +41,7 @@ import { AccountControl } from "./AccountControl.js";
 import { clearCachedAskSession } from "./ask/session.js";
 import { GameToolbar } from "./GameToolbar.js";
 import { SavesDialog } from "./SavesDialog.js";
+import { CloseDialog } from "./CloseDialog.js";
 import { GameVersionLine } from "./GameVersionBar.js";
 import { DiagnosticPrompt } from "./DiagnosticPrompt.js";
 import { CrashDialog } from "./CrashDialog.js";
@@ -157,6 +158,7 @@ export function App(): JSX.Element {
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const slotRef = useRef<string | null>(null);
+  const closeRequestRef = useRef<() => Promise<void>>(async () => {});
   const [bootTitle, setBootTitle] = useState("Starting");
   const [bootProgress, setBootProgress] = useState<SetupProgress | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -188,7 +190,9 @@ export function App(): JSX.Element {
    * closes. Derived from the union, so the settings to diagnostics handoff
    * never flashes the game back. Mobile has no embedded views to hide.
    */
-  const dialogOpen = settingsOpen || diagnosticsOpen || shortcutsOpen || savesFor != null;
+  const [closing, setClosing] = useState<"confirm" | "saving" | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const dialogOpen = settingsOpen || diagnosticsOpen || shortcutsOpen || savesFor != null || closing != null || summaryOpen;
   useEffect(() => {
     if (mobile || !embedded) return;
     void game.setEmbeddedVisible(!dialogOpen).catch(() => {});
@@ -344,6 +348,11 @@ export function App(): JSX.Element {
       }),
       listen("game:window-closed", () => {
         void recordProgress();
+      }),
+      // The main window was closed with a world running (Rust kept it open).
+      listen("app:close-requested", () => {
+        void emit("app:close-handled");
+        void closeRequestRef.current();
       }),
       // Open, never toggle: the menu accelerator and the in-game fallback
       // can both deliver the same keypress.
@@ -738,6 +747,31 @@ export function App(): JSX.Element {
     void boot(slot, null, hosted);
   };
 
+  const saveAndQuit = async () => {
+    setClosing("saving");
+    try {
+      if (info.slot) await captureStatistics(info.slot, true).catch(() => {});
+      await recordProgress();
+      // Rust stops the world, waits for it to finish writing, then quits.
+      await game.stop(true);
+    } catch (e) {
+      setClosing(null);
+      fail(e);
+    }
+  };
+  const requestClose = async () => {
+    if (closing === "saving") return;
+    let playing = false;
+    try {
+      playing = (await game.batchStatus()).batch?.status === "running";
+    } catch {
+      // No answer from the game: nothing known to confirm, just save and close.
+    }
+    if (playing) setClosing("confirm");
+    else await saveAndQuit();
+  };
+  closeRequestRef.current = requestClose;
+
   const handleStop = async () => {
     if (info.slot) await captureStatistics(info.slot, true);
     await recordProgress();
@@ -920,6 +954,7 @@ export function App(): JSX.Element {
       onClose={() => setSavesFor(null)}
     />
   ) : null;
+  const closeDialog = closing ? <CloseDialog mode={closing} onKeepPlaying={() => setClosing(null)} onSaveAndClose={() => void saveAndQuit()} /> : null;
   const withSettings = (content: JSX.Element) => (
     <>
       {content}
@@ -930,6 +965,7 @@ export function App(): JSX.Element {
       {diagnosticPanel}
       {diagnosticPrompt}
       {crashDialog}
+      {closeDialog}
     </>
   );
   const latest = allWorlds[0] ?? null;
@@ -954,6 +990,7 @@ export function App(): JSX.Element {
               worldsim={runningWorldsim}
               onLauncher={() => void returnToLauncher().catch(fail)}
               onSaveAndStop={() => void handleStop().catch(fail)}
+              onDialogOpenChange={setSummaryOpen}
               onOpenSaves={() => setSavesFor(info.slot)}
               onOpenAsk={() => void ask.open().catch(fail)}
               onOpenUpdates={mobile ? undefined : () => setSettingsOpen(true)}
@@ -987,6 +1024,7 @@ export function App(): JSX.Element {
           {settingsMenu}
           {diagnosticPanel}
           {diagnosticPrompt}
+          {closeDialog}
         </>
       );
     }
@@ -1009,6 +1047,7 @@ export function App(): JSX.Element {
         {settingsMenu}
         {diagnosticPanel}
         {diagnosticPrompt}
+        {closeDialog}
       </>
     );
   }

@@ -356,7 +356,8 @@ export interface TurnBatch {
 export const game = {
   start: (slot: string, hosted = false) =>
     invoke<GameInfo>("game_start", { slot, hosted }),
-  stop: () => invoke<GameInfo>("game_stop"),
+  /** `quit` closes the app once the world has stopped (the window close path). */
+  stop: (quit = false) => (quit ? invoke<GameInfo>("game_stop", { quit: true }) : invoke<GameInfo>("game_stop")),
   status: () => invoke<GameInfo>("game_status"),
   request: <T>(method: string, path: string, body?: unknown) =>
     invoke<T>("game_request", { method, path, body: body ?? null }),
