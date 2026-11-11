@@ -280,7 +280,7 @@ final class DockContainerView: UIView {
 /// briefing (signed out fallback on the Briefing tab), offline (the
 /// "cannot reach the game" screen).
 enum NativeDockPreview {
-  static let states: Set<String> = ["collapsed", "expanded", "sheet", "more", "signedout", "briefing", "offline", "alerts"]
+  static let states: Set<String> = ["collapsed", "expanded", "sheet", "more", "signedout", "briefing", "offline", "alerts", "reminder"]
 
   static func requestedState(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> String? {
     guard let index = arguments.firstIndex(of: "-AHDDockPreview") else { return nil }

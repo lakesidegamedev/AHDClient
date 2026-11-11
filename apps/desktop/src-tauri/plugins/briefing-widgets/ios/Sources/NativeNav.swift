@@ -581,6 +581,7 @@ final class NativeNavController: NSObject {
     layoutAccount = nil
     layoutFetchedAt.removeAll()
     model.setLayout(nil)
+    NativeAlerts.shared.cancelReminder()
     refreshStatus(maxAge: 0)
   }
 
@@ -633,6 +634,7 @@ final class NativeNavController: NSObject {
     scheduleTurnRefresh()
     if let saved { NativeAlerts.shared.updateBadge(unread: saved.data.inbox?.unread ?? 0) }
     offerAlerts(saved)
+    NativeAlerts.shared.syncReminder(signedIn: saved != nil && layoutAccount != nil)
   }
 
   /// Widgets draw from the same snapshot. When the dock sees new figures, ask
@@ -806,6 +808,11 @@ final class NativeNavController: NSObject {
     if state == "alerts" {
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
         NativeAlerts.shared.present(.ask, from: self?.topController(), preview: true)
+      }
+    }
+    if state == "reminder" {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        NativeAlerts.shared.present(.on, from: self?.topController(), preview: true)
       }
     }
     let panel: DockPanel? = state == "expanded" ? .status : state == "sheet" ? .sheet("state") : state == "more" ? .sheet("more") : nil
