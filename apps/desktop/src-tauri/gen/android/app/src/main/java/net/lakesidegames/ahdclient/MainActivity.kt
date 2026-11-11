@@ -55,7 +55,34 @@ class MainActivity : TauriActivity() {
     shownDensity = newConfig.densityDpi
     shownDirection = newConfig.layoutDirection
     if (changed) CompanionSafety.run("dock rebuild") { nav?.rebuildDock() }
+    CompanionSafety.run("dock window size") { nav?.windowChanged() }
   }
+
+  override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+      val action = DockShortcuts.resolve(event.keyCode, event.isCtrlPressed, event.isAltPressed, event.isShiftPressed)
+      var handled = false
+      if (action != null) CompanionSafety.run("keyboard shortcut") { handled = nav?.shortcut(action) == true }
+      if (handled) return true
+    }
+    return super.dispatchKeyEvent(event)
+  }
+
+  override fun onProvideKeyboardShortcuts(
+    data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int,
+  ) {
+    super.onProvideKeyboardShortcuts(data, menu, deviceId)
+    CompanionSafety.run("keyboard shortcut help") {
+      val ctrl = android.view.KeyEvent.META_CTRL_ON
+      val items = ArrayList<android.view.KeyboardShortcutInfo>()
+      for (index in 0 until DockShortcuts.TAB_COUNT) {
+        items.add(android.view.KeyboardShortcutInfo(Texts.s(R.string.shortcut_tab, index + 1), android.view.KeyEvent.KEYCODE_1 + index, ctrl))
+      }
+      items.add(android.view.KeyboardShortcutInfo(Texts.s(R.string.shortcut_ask), android.view.KeyEvent.KEYCODE_K, ctrl))
+      items.add(android.view.KeyboardShortcutInfo(Texts.s(R.string.shortcut_reload), android.view.KeyEvent.KEYCODE_R, ctrl))
+      items.add(android.view.KeyboardShortcutInfo(Texts.s(R.string.shortcut_back), android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.META_ALT_ON))
+      data.add(android.view.KeyboardShortcutGroup(Texts.s(R.string.shortcuts_group), items))
+    }  }
 
   override fun onResume() {
     super.onResume()

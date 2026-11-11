@@ -194,4 +194,9 @@
     <string name="widget_preview_holding">104,9 Tsd. $</string>
     <string name="widget_updated_at">aktualisiert um %1$s</string>
     <string name="widget_brand">AHD</string>
+    <string name="shortcuts_group">Navigation</string>
+    <string name="shortcut_tab">Zu Tab %1$d</string>
+    <string name="shortcut_ask">AHD fragen</string>
+    <string name="shortcut_reload">Seite neu laden</string>
+    <string name="shortcut_back">Zurück</string>
 </resources>
