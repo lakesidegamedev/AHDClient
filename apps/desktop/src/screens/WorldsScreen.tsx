@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { WorldMeta } from "../worlds.js";
 import { eraForPreset } from "../worlds.js";
 import { themeForEra } from "../launcher/CommandGlobe.js";
+import { useT } from "../i18n.js";
 
 interface Props {
   worlds: WorldMeta[];
@@ -21,6 +22,7 @@ function whenLabel(iso: string): string {
 }
 
 export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost, onDelete, onSaves, onBack }: Props): JSX.Element {
+  const t = useT();
   const [confirming, setConfirming] = useState<string | null>(null);
 
   return (
@@ -31,9 +33,9 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
       <section className="launcher-stage screen-stage" aria-labelledby="worlds-title">
         <header className="screen-head">
           <button className="launcher-btn launcher-btn-secondary screen-back" onClick={onBack}>
-            <span aria-hidden="true">&#8592;</span> Back
+            <span aria-hidden="true">&#8592;</span> {t("common.back")}
           </button>
-          <h1 id="worlds-title">Your worlds</h1>
+          <h1 id="worlds-title">{t("worlds.title")}</h1>
         </header>
 
         <div className="launcher-console screen-console">
@@ -43,7 +45,7 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
             </div>
           )}
           {worlds.length === 0 ? (
-            <p className="launcher-caption">No worlds yet. Start one from the launcher.</p>
+            <p className="launcher-caption">{t("worlds.empty")}</p>
           ) : (
             <ul className="worlds-list">
               {worlds.map((world) => {
@@ -54,14 +56,14 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
                   <li key={world.slot} className="worlds-row" data-running={running || undefined}>
                     <span className="launcher-era-swatch" style={{ backgroundColor: theme.phosphor }} aria-hidden="true" />
                     <div className="worlds-meta">
-                      <strong>{world.name}{world.classic ? <span className="worlds-classic-tag"> Classic</span> : null}</strong>
+                      <strong>{world.name}{world.classic ? <span className="worlds-classic-tag"> {t("worlds.classic")}</span> : null}</strong>
                       <small>
                         {era?.label ?? world.preset}
-                        {world.turn != null ? ` · turn ${world.turn}` : ""}
+                        {world.turn != null ? ` · ${t("world.turn", { turn: world.turn })}` : ""}
                         {world.character ? ` · ${world.character}` : ""}
-                        {running ? " · running" : ""}
+                        {running ? ` · ${t("worlds.running")}` : ""}
                       </small>
-                      <small>Last played {whenLabel(world.lastPlayedAt)}</small>
+                      <small>{t("worlds.lastPlayed", { when: whenLabel(world.lastPlayedAt) })}</small>
                     </div>
                     <div className="worlds-actions">
                       {confirming === world.slot ? (
@@ -74,10 +76,10 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
                             }}
                             disabled={running}
                           >
-                            Delete for good
+                            {t("worlds.deleteForGood")}
                           </button>
                           <button className="launcher-btn launcher-btn-secondary" onClick={() => setConfirming(null)}>
-                            Keep
+                            {t("common.keep")}
                           </button>
                         </>
                       ) : (
@@ -87,33 +89,33 @@ export function WorldsScreen({ worlds, runningSlot, busy, error, onPlay, onHost,
                             onClick={() => onPlay(world.slot)}
                             disabled={busy}
                           >
-                            {running ? "Resume" : "Play"}
+                            {running ? t("launcher.resume") : t("worlds.play")}
                           </button>
                           {!running && (
                             <button
                               className="launcher-btn launcher-btn-secondary"
                               onClick={() => onHost(world.slot)}
                               disabled={busy}
-                              title="Let other players join this world over your network"
+                              title={t("worlds.hostTitle")}
                             >
-                              Host
+                              {t("worlds.host")}
                             </button>
                           )}
                           <button
                             className="launcher-btn launcher-btn-secondary"
                             onClick={() => onSaves(world.slot)}
                             disabled={busy}
-                            title="Save this world, or go back to an earlier save"
+                            title={t("toolbar.savesTitle")}
                           >
-                            Saves
+                            {t("worlds.saves")}
                           </button>
                           <button
                             className="launcher-btn launcher-btn-secondary"
                             onClick={() => setConfirming(world.slot)}
                             disabled={busy || running}
-                            title={running ? "Stop the game before deleting this world" : "Delete this world"}
+                            title={running ? t("worlds.deleteRunningTitle") : t("worlds.deleteTitle")}
                           >
-                            Delete
+                            {t("common.delete")}
                           </button>
                         </>
                       )}

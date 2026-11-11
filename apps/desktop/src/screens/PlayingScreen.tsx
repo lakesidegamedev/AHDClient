@@ -1,4 +1,5 @@
 import type { WorldMeta } from "../worlds.js";
+import { useT } from "../i18n.js";
 
 interface Props {
   world: WorldMeta | null;
@@ -14,6 +15,7 @@ interface Props {
  * game is in the other window, this one just keeps the server honest.
  */
 export function PlayingScreen({ world, lines, hosted, port, onResume, onStop }: Props): JSX.Element {
+  const t = useT();
   return (
     <main className="launcher-scope screen-scope">
       <div className="launcher-pattern" aria-hidden="true">
@@ -22,31 +24,29 @@ export function PlayingScreen({ world, lines, hosted, port, onResume, onStop }: 
       <section className="launcher-stage screen-stage" aria-labelledby="playing-title">
         <header className="screen-head">
           <span className="launcher-live-dot" aria-hidden="true" />
-          <h1 id="playing-title">{world ? world.name : "Playing"}</h1>
+          <h1 id="playing-title">{world ? world.name : t("playing.title")}</h1>
         </header>
         <div className="launcher-console screen-console">
           <p className="launcher-caption">
-            The game is open in its own window. Closing that window keeps the world running so you can
-            come straight back; Stop shuts the server down and returns to the launcher.
+            {t("playing.body")}
           </p>
           {hosted && (
             <p className="launcher-caption" role="status">
-              <strong>Private world hosting is on.</strong> Players on your network can join at
-              {` http://<this-computer>:${port ?? "port"}`}. The first account owns the admin panel
-              and can ban or unban guests in this world only. Forward this port when hosting on a VPS.
+              <strong>{t("playing.hostingOn")}</strong>{" "}
+              {t("playing.hostingBody", { address: `http://<this-computer>:${port ?? "port"}` })}
             </p>
           )}
           <div className="launcher-actions">
             <button className="launcher-btn launcher-btn-primary" onClick={onResume}>
-              Back to the game <span aria-hidden="true">&#8594;</span>
+              {t("playing.back")} <span aria-hidden="true">&#8594;</span>
             </button>
             <button className="launcher-btn launcher-btn-secondary" onClick={onStop}>
-              Stop
+              {t("playing.stop")}
             </button>
           </div>
           <details className="screen-details">
-            <summary>Server log</summary>
-            <pre className="screen-log">{lines.join("\n") || "quiet"}</pre>
+            <summary>{t("playing.log")}</summary>
+            <pre className="screen-log">{lines.join("\n") || t("playing.quiet")}</pre>
           </details>
         </div>
       </section>

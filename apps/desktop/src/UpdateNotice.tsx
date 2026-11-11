@@ -8,6 +8,7 @@ import {
   type UpdaterSnapshot,
 } from "./updater.js";
 import { online } from "./worlds.js";
+import { useT } from "./i18n.js";
 import "./update.css";
 
 interface Props {
@@ -28,6 +29,7 @@ function releaseNotes(notes: string): string[] {
 }
 
 export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
+  const t = useT();
   const [state, setState] = useState<UpdaterSnapshot>(getUpdaterSnapshot);
   const [dismissed, setDismissed] = useState(false);
 
@@ -62,7 +64,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               !
             </span>
             <div>
-              <strong>Update stopped</strong>
+              <strong>{t("update.stopped")}</strong>
               <p>{state.message}</p>
             </div>
           </div>
@@ -71,7 +73,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
             type="button"
             onClick={() => setDismissed(true)}
           >
-            Dismiss
+            {t("common.dismiss")}
           </button>
         </>
       ) : state.kind === "available" || state.kind === "package" ? (
@@ -81,17 +83,17 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               &#8593;
             </span>
             <div>
-              <strong>AHDClient {state.version} is available</strong>
+              <strong>{t("update.noticeAvailable", { version: state.version })}</strong>
               <p>
                 {state.kind === "package"
-                  ? "This copy was installed from a package, so it cannot update itself. Get the new package from the download page."
-                  : `${size ? `${size} download. ` : ""}Nothing is downloaded until you choose.`}
+                  ? t("update.noticePackage")
+                  : `${size ? `${t("update.size", { size })} ` : ""}${t("update.nothingYet")}`}
               </p>
             </div>
           </div>
           {notes.length > 0 && (
             <details className="client-update-details">
-              <summary>What's new</summary>
+              <summary>{t("update.whatsNew")}</summary>
               <ul>
                 {notes.map((note, index) => (
                   <li key={`${index}-${note}`}>{note}</li>
@@ -106,7 +108,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
                 type="button"
                 onClick={() => void online.help("help.download-client").catch(() => {})}
               >
-                Open download page
+                {t("update.btnPackage")}
               </button>
             ) : (
               <button
@@ -114,7 +116,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
                 type="button"
                 onClick={() => void downloadAvailableUpdate()}
               >
-                Download update
+                {t("update.btnDownload")}
               </button>
             )}
             <button
@@ -122,7 +124,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               type="button"
               onClick={() => setDismissed(true)}
             >
-              Later
+              {t("common.later")}
             </button>
           </div>
         </>
@@ -135,8 +137,8 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
             &#8593;
           </span>
           <div>
-            <strong>Installing update</strong>
-            <p>AHDClient will reopen on the new build.</p>
+            <strong>{t("update.noticeInstalling")}</strong>
+            <p>{t("update.reopen")}</p>
           </div>
         </div>
       ) : state.kind === "downloading" ? (
@@ -149,11 +151,11 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               &#8593;
             </span>
             <div>
-              <strong>Downloading AHDClient {state.version}</strong>
+              <strong>{t("update.noticeDownloading", { version: state.version })}</strong>
               <p>
                 {progressPercent(state) == null
-                  ? "The update is downloading in the background."
-                  : `${progressPercent(state)}% downloaded. You can keep playing.`}
+                  ? t("update.background")
+                  : t("update.percent", { percent: progressPercent(state)! })}
               </p>
             </div>
           </div>
@@ -177,7 +179,7 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
             type="button"
             onClick={() => setDismissed(true)}
           >
-            Hide
+            {t("update.hide")}
           </button>
         </>
       ) : (
@@ -187,13 +189,13 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               &#8593;
             </span>
             <div>
-              <strong>AHDClient {state.version} is ready</strong>
-              <p>Restart to install the downloaded update.</p>
+              <strong>{t("update.noticeReady", { version: state.version })}</strong>
+              <p>{t("update.restartText")}</p>
             </div>
           </div>
           {notes.length > 0 && (
             <details className="client-update-details">
-              <summary>What's new</summary>
+              <summary>{t("update.whatsNew")}</summary>
               <ul>
                 {notes.map((note, index) => (
                   <li key={`${index}-${note}`}>{note}</li>
@@ -207,14 +209,14 @@ export function UpdateNotice({ enabled = true }: Props): JSX.Element | null {
               type="button"
               onClick={() => void confirmRestartToUpdate()}
             >
-              Restart to update
+              {t("update.btnRestart")}
             </button>
             <button
               className="client-update-later"
               type="button"
               onClick={() => setDismissed(true)}
             >
-              Later
+              {t("common.later")}
             </button>
           </div>
         </>

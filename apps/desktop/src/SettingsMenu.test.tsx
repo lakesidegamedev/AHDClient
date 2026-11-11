@@ -54,10 +54,10 @@ describe("SettingsMenu", () => {
     expect(screen.getByText("Launcher animation")).toBeTruthy();
     expect(screen.getByText("Open straight into the game")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Report a problem" })).toBeTruthy();
-    expect(screen.getByText("Developer diagnostics")).toBeTruthy();
+    expect(screen.getByText("Diagnostics")).toBeTruthy();
     expect(screen.queryByText("Separate gameplay window")).toBeNull();
     expect(screen.queryByText("Anonymous simulation statistics")).toBeNull();
-    expect(screen.queryByText("Technical startup logs")).toBeNull();
+    expect(screen.queryByText("Startup log")).toBeNull();
     expect(screen.queryByText("Desktop updates")).toBeNull();
     // Store builds update through the store: no Updates section to act on.
     expect(screen.queryByRole("heading", { name: "Updates" })).toBeNull();

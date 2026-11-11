@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorldsScreen } from "./WorldsScreen.js";
+import { LanguageProvider } from "../i18n.js";
 
 vi.mock("../launcher/CommandGlobe.js", () => ({
   themeForEra: () => ({ phosphor: "#0f0" }),
@@ -89,5 +90,17 @@ describe("WorldsScreen Classic tag", () => {
     );
     expect(screen.getAllByText("Classic")).toHaveLength(1);
     expect(screen.getByText("Old World").parentElement?.textContent).toContain("Classic");
+  });
+});
+
+describe("WorldsScreen in German", () => {
+  it("shows German copy when the language is German", () => {
+    render(
+      <LanguageProvider language="de">
+        <WorldsScreen worlds={[]} runningSlot={null} busy={false} error={null} onPlay={vi.fn()} onHost={vi.fn()} onDelete={vi.fn()} onSaves={vi.fn()} onBack={vi.fn()} />
+      </LanguageProvider>,
+    );
+    expect(screen.getByRole("heading", { name: "Deine Welten" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Zurück/ })).toBeTruthy();
   });
 });

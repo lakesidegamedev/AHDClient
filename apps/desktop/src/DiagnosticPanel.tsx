@@ -57,7 +57,7 @@ function DiagnosticDialog({ screen, game, onClose }: Props): JSX.Element {
     <div className="client-settings-backdrop" role="presentation" onMouseDown={onClose}>
       <section ref={dialogRef} className="client-settings-dialog client-diagnostics-panel" role="dialog" aria-modal="true" aria-labelledby="developer-diagnostics-title" onMouseDown={(event) => event.stopPropagation()}>
         <header>
-          <div><span className="client-settings-kicker">AHDClient</span><h2 id="developer-diagnostics-title">Developer diagnostics</h2></div>
+          <div><span className="client-settings-kicker">AHDClient</span><h2 id="developer-diagnostics-title">Diagnostics</h2></div>
           <button className="client-settings-close" type="button" aria-label="Close diagnostics" onClick={onClose}>×</button>
         </header>
         <p className="client-diagnostics-privacy">Crash, setup and update failures send a small redacted report automatically. Manual logs are sent only when you tap Send. User paths, world names, email addresses, credentials, and tokens are redacted.</p>

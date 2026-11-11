@@ -9,7 +9,7 @@ import type { Capabilities, CapabilityPreset } from "../capabilities.js";
 import { CommandGlobe, themeForEra } from "./CommandGlobe.js";
 import { ERA_PHOTOS } from "./eraPhotos.js";
 import "./launcher.css";
-import type { ClientLanguage } from "../i18n.js";
+import { translate, useLanguage, type ClientLanguage, type TranslationKey, type TranslationVars } from "../i18n.js";
 
 type Mode = "sp" | "mp" | "sandbox" | "worldsim";
 
@@ -120,7 +120,7 @@ function writePreference(key: string, value: string): void {
 }
 
 export function Launcher({
-  language = "en",
+  language,
   mobile = false,
   settingsControl,
   accountControl,
@@ -146,14 +146,16 @@ export function Launcher({
   continueBusy,
   // Optional, so an omitted gate has to mean "no gate". Without the default it
   // arrives as undefined, which is not null, which disabled the Enter button
-  // permanently — the prop's own optionality turned the sandbox off.
+  // permanently; the prop's own optionality turned the sandbox off.
   sandboxGate = null,
   sandboxAvailable = true,
   onLinkAccount,
   onUpgradeSupporter,
   errorOffersLink = false,
 }: Props): JSX.Element {
-  const de = language === "de";
+  const contextLanguage = useLanguage();
+  const activeLanguage = language ?? contextLanguage;
+  const t = (key: TranslationKey, vars?: TranslationVars) => translate(activeLanguage, key, vars);
   const caps = useMemo(() => capabilities ?? legacyCapabilities(), [capabilities]);
   // Only eras this runtime can seed are offered. An era with nothing to tap is
   // never shown; the rest are Classic eras, listed only once Classic exists.
@@ -243,7 +245,7 @@ export function Launcher({
             <p className="launcher-edition">AHDClient</p>
             <h1 id="launcher-title">A House Divided</h1>
             <p className="launcher-subtitle">
-              {de ? "Eine historische politische Simulation" : "A historical political simulation"}
+              {t("launcher.subtitle")}
             </p>
           </div>
         </header>
@@ -254,7 +256,7 @@ export function Launcher({
             className="launcher-toggle"
             data-mode={mode}
             data-modes={modes.length}
-            aria-label="Play mode"
+            aria-label={t("launcher.playMode")}
           >
             <div className="launcher-toggle-thumb" aria-hidden="true" />
             {!mobile && (
@@ -263,7 +265,7 @@ export function Launcher({
                 onClick={() => setMode("sp")}
                 aria-pressed={mode === "sp"}
               >
-                {de ? "Einzelspieler" : "Singleplayer"} <span className="client-beta">Beta</span>
+                {t("launcher.singleplayer")} <span className="client-beta">Beta</span>
               </button>
             )}
             <button
@@ -271,7 +273,7 @@ export function Launcher({
               onClick={() => setMode("mp")}
               aria-pressed={mode === "mp"}
             >
-              {de ? "Mehrspieler" : "Multiplayer"}
+              {t("launcher.multiplayer")}
             </button>
             {modes.includes("sandbox") && (
               <button
@@ -301,9 +303,9 @@ export function Launcher({
             <div className="launcher-error" role="alert">
               <span>{error}</span>
               {errorOffersLink && onLinkAccount && (
-                <button onClick={onLinkAccount}>Link account</button>
+                <button onClick={onLinkAccount}>{t("common.linkAccount")}</button>
               )}
-              <button onClick={onClearError}>Dismiss</button>
+              <button onClick={onClearError}>{t("common.dismiss")}</button>
             </div>
           )}
 
@@ -313,58 +315,59 @@ export function Launcher({
               <span>
                 <strong>
                   {mode === "sandbox"
-                    ? "Enter the sandbox server"
-                    : "Continue in the online world"}
+                    ? t("launcher.sandboxTitle")
+                    : t("launcher.onlineTitle")}
                 </strong>
                 <small>
                   {mode === "sandbox"
-                    ? "A separate world for trying things out. Nothing here touches the main game."
+                    ? t("launcher.sandboxBody")
                     : mobile
-                      ? "Your session stays in the app. The bar at the bottom moves between your company, state, nation and actions, and More holds Briefing, Inbox and Ask."
-                      : "Your account and session stay together in the app."}
+                      ? t("launcher.mobileBody")
+                      : t("launcher.onlineBody")}
                 </small>
               </span>
               {mode === "sandbox" && sandboxGate === "unlinked" && (
                 <span className="launcher-sandbox-gate">
-                  <strong>Link your account to enter the sandbox.</strong>
-                  <button onClick={onLinkAccount}>Link account</button>
+                  <strong>{t("launcher.sandboxLink")}</strong>
+                  <button onClick={onLinkAccount}>{t("common.linkAccount")}</button>
                 </span>
               )}
               {mode === "sandbox" && sandboxGate === "upgrade" && (
                 <span className="launcher-sandbox-gate">
-                  <strong>
-                    Sandbox access requires an active Supporter tier.
-                  </strong>
+                  <strong>{t("launcher.sandboxUpgrade")}</strong>
                   {onUpgradeSupporter && (
                     <button onClick={onUpgradeSupporter}>
-                      View Supporter tiers
+                      {t("launcher.viewSupporter")}
                     </button>
                   )}
                 </span>
               )}
             </div>
           ) : choosingEra ? (
-            <div className="launcher-era-panel" aria-label="New game setup">
+            <div className="launcher-era-panel" aria-label={t("launcher.setupAria")}>
               <div className="launcher-panel-label">
                 <button
                   className="launcher-back"
                   onClick={() => setChoosingEra(false)}
                 >
-                  {de ? "Zurück" : "Back"}
+                  {t("common.back")}
                 </button>
-                <span>{de ? "Startzeitalter wählen" : "Choose a starting era"}</span>
-                <span>{eras.length} {de ? "Zeitalter" : "eras"}</span>
+                <span>{t("launcher.chooseEra")}</span>
+                <span>{t("launcher.erasCount", { n: eras.length })}</span>
               </div>
-              <div className="launcher-era-timeline" role="list" aria-label={de ? "Zeitleiste der Startzeitalter" : "Starting era timeline"}>
+              <div className="launcher-era-timeline" role="list" aria-label={t("launcher.eraTimeline")}>
                 {eras.map((era) => <div role="listitem" key={era.id}><button type="button" aria-current={era.id === eraId ? "true" : undefined} className={era.id === eraId ? "active" : ""} onClick={() => setEraId(era.id)}><span className="launcher-era-node" style={{ borderColor: themeForEra(era.id).phosphor }} /><strong>{era.label}</strong><small>{era.subtitle}</small></button></div>)}
               </div>
               {classicAvailable && classicEras.length > 0 && onClassicEras && (
                 <div className="launcher-classic-eras">
-                  <strong>Classic eras</strong>
+                  <strong>{t("launcher.classicEras")}</strong>
                   <small>
                     {classicInstalled
-                      ? "Older eras, played on the game as it was before 1.20."
-                      : `${classicEras.map((era) => era.label).join(", ")}. One-time download${classicSizeLabel ? `, ${classicSizeLabel}` : ""}.`}
+                      ? t("launcher.classicInstalledBody")
+                      : t(classicSizeLabel ? "launcher.classicDownloadSized" : "launcher.classicDownload", {
+                          eras: classicEras.map((era) => era.label).join(", "),
+                          size: classicSizeLabel,
+                        })}
                   </small>
                   {classicInstalled && onClassicEra ? (
                     classicEras.map((era) => (
@@ -374,7 +377,7 @@ export function Launcher({
                     ))
                   ) : (
                     <button type="button" className="launcher-btn launcher-btn-secondary" onClick={onClassicEras}>
-                      Get Classic eras
+                      {t("launcher.getClassic")}
                     </button>
                   )}
                 </div>
@@ -395,13 +398,13 @@ export function Launcher({
                   <span>{selectedEra?.startDate}</span>
                   <p>{selectedEra?.description}</p>
                   <p className="launcher-playable">
-                    <strong>Playable nations</strong>
+                    <strong>{t("launcher.playableNations")}</strong>
                     <br />
                     {playableSummary(
                       selectedEra,
                       caps.presets.find((preset) => preset.preset === selectedEra?.preset),
                       caps.source,
-                    ) ?? "Availability is checked during setup"}
+                    ) ?? t("launcher.availabilityChecked")}
                   </p>
                   {selectedPhoto && (
                     <div className="launcher-era-attribution">
@@ -413,7 +416,7 @@ export function Launcher({
                           type="button"
                           onClick={() => onPhotoSource(selectedEra!.id)}
                         >
-                          Photo source
+                          {t("launcher.photoSource")}
                         </button>
                       ) : null}
                     </div>
@@ -433,7 +436,7 @@ export function Launcher({
                     continueBusy || (mode === "sandbox" && sandboxGate !== null)
                   }
                 >
-                  {mode === "sandbox" ? "Enter sandbox" : "Enter multiplayer"}{" "}
+                  {mode === "sandbox" ? t("launcher.enterSandbox") : t("launcher.enterMultiplayer")}{" "}
                   <span aria-hidden="true">&#8599;</span>
                 </button>
                 {quickControls.length > 0 && (
@@ -455,7 +458,7 @@ export function Launcher({
                   }
                   disabled={continueBusy}
                 >
-                    {choosingEra ? (de ? "Neues Spiel starten" : "Start new game") : (de ? "Neues Spiel" : "New Game")}{" "}
+                    {choosingEra ? t("launcher.startNewGame") : t("launcher.newGame")}{" "}
                   <span aria-hidden="true">&#8594;</span>
                 </button>
                 {choosingEra && mode === "sp" && onQuickStart && (
@@ -463,9 +466,9 @@ export function Launcher({
                     className="launcher-btn launcher-btn-secondary"
                     onClick={() => onQuickStart(eraId)}
                     disabled={continueBusy}
-                    title={de ? "Startet sofort mit den empfohlenen Einstellungen" : "Starts right away with the recommended settings"}
+                    title={t("launcher.quickStartTitle")}
                   >
-                    {de ? "Schnellstart" : "Quick start"}
+                    {t("launcher.quickStart")}
                   </button>
                 )}
                 {!choosingEra && (
@@ -474,7 +477,7 @@ export function Launcher({
                     onClick={onLoad}
                     disabled={continueBusy}
                   >
-                    {de ? "Spiel laden" : "Load Game"}
+                    {t("launcher.loadGame")}
                   </button>
                 )}
                 {latestWorld && !choosingEra && (
@@ -483,19 +486,19 @@ export function Launcher({
                     onClick={() => onContinue(latestWorld.slot)}
                     disabled={continueBusy}
                     aria-busy={continueBusy}
-                    title={`${latestWorld.name}${latestWorld.turn != null ? ` · turn ${latestWorld.turn}` : ""}`}
+                    title={`${latestWorld.name}${latestWorld.turn != null ? ` · ${t("world.turn", { turn: latestWorld.turn })}` : ""}`}
                   >
                     <span>
                       {continueBusy
-                        ? "Starting"
+                        ? t("launcher.starting")
                         : latestRunning
-                          ? "Resume"
-                          : "Continue"}
+                          ? t("launcher.resume")
+                          : t("launcher.continue")}
                       <small>
                         {latestWorld.name}
                         {latestEra ? ` · ${latestEra.label}` : ""}
                         {latestWorld.turn != null
-                          ? ` · turn ${latestWorld.turn}`
+                          ? ` · ${t("world.turn", { turn: latestWorld.turn })}`
                           : ""}
                       </small>
                     </span>
