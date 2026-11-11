@@ -146,7 +146,7 @@ export function Launcher({
   continueBusy,
   // Optional, so an omitted gate has to mean "no gate". Without the default it
   // arrives as undefined, which is not null, which disabled the Enter button
-  // permanently — the prop's own optionality turned the sandbox off.
+  // permanently; the prop's own optionality turned the sandbox off.
   sandboxGate = null,
   sandboxAvailable = true,
   onLinkAccount,
