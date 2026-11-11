@@ -53,7 +53,7 @@ object TurnReminder {
     if (at == null) { cancel(context); return }
     if (saved.getLong(SET_AT, 0L) == at && saved.getString(SET_TITLE, null) == title) return
     createChannel(context)
-    // set(), not setExact: no special permission, and a few minutes of drift is fine for this.
+    // Inexact set(): no special permission, and a few minutes of drift is fine for this.
     alarms.set(AlarmManager.RTC_WAKEUP, at, intent(context, title))
     saved.edit().putLong(SET_AT, at).putString(SET_TITLE, title).apply()
   }
