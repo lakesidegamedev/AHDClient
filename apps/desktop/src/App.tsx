@@ -1266,6 +1266,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         world={world}
         hosted={info.hosted}
         port={info.port}
+        lanUrl={info.lanUrl}
         lines={log}
         onResume={() => handleContinue(info.slot!)}
         onStop={handleStop}

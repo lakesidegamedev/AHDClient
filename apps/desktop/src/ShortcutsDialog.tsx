@@ -16,6 +16,7 @@ export const SHORTCUTS: ReadonlyArray<{ keys: string; does: TranslationKey }> = 
   { keys: `${MOD}+E`, does: "shortcuts.endTurn" },
   { keys: `${MOD}+,`, does: "shortcuts.settings" },
   { keys: `${MOD}+R`, does: "shortcuts.reload" },
+  { keys: `${MOD}+P`, does: "shortcuts.print" },
   { keys: MAC ? "Cmd+[" : "Alt+Left", does: "shortcuts.back" },
   { keys: MAC ? "Cmd+]" : "Alt+Right", does: "shortcuts.forward" },
   { keys: `${MOD}+ +`, does: "shortcuts.zoomIn" },

@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Listener, Manager, State, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent, WebviewBuilder, LogicalPosition, LogicalSize};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -541,6 +542,8 @@ struct GameInfo {
   port: Option<u16>,
   slot: Option<String>,
   url: Option<String>,
+  /// Address friends on the same network can open, only while hosting.
+  lan_url: Option<String>,
 }
 
 impl GameInner {
@@ -551,6 +554,7 @@ impl GameInner {
       port: self.port,
       slot: self.slot.clone(),
       url: self.port.map(|p| format!("http://127.0.0.1:{p}")),
+      lan_url: if self.hosted { self.port.zip(crate::hosting::lan_address()).map(|(p, ip)| crate::hosting::share_url(ip, p)) } else { None },
     }
   }
 }
@@ -715,10 +719,27 @@ pub(crate) async fn game_start(app: AppHandle, game: State<'_, Game>, slot: Stri
   let launch_dir = script.parent().ok_or("game resource directory is missing")?;
   let runtime_home = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runtime");
   fs::create_dir_all(&runtime_home).map_err(|e| format!("cannot create {}: {e}", runtime_home.display()))?;
-  let port = free_port()?;
-  let mut mongo_port = free_port()?;
-  while mongo_port == port { mongo_port = free_port()?; }
   let hosted = hosted.unwrap_or(false);
+  let mut mongo_port = free_port()?;
+  // A hosted world keeps the port friends were given; a busy one falls back
+  // to a free port, which is then remembered instead.
+  let port = if hosted {
+    let chosen = crate::hosting::choose_host_port(
+      crate::hosting::read_preferred_port(&home),
+      &[mongo_port],
+      crate::hosting::host_port_free,
+      || loop {
+        let candidate = free_port()?;
+        if candidate != mongo_port && crate::hosting::host_port_free(candidate) { break Ok(candidate); }
+      },
+    )?;
+    crate::hosting::remember_port(&home, chosen);
+    chosen
+  } else {
+    let mut port = free_port()?;
+    while port == mongo_port { port = free_port()?; }
+    port
+  };
   let mut command = app
     .shell()
     // Named ahd-node, not node: Linux packages install sidecars into
@@ -1161,6 +1182,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
       &item("game_zoom_reset", "Actual size", "CmdOrCtrl+0")?,
       &item("game_fullscreen", "Full screen", if cfg!(target_os = "macos") { "Ctrl+Cmd+F" } else { "F11" })?,
       &PredefinedMenuItem::separator(app)?,
+      &item("game_print", "Print...", "CmdOrCtrl+P")?,
+      &PredefinedMenuItem::separator(app)?,
       &item("client_ask", "Ask about the game", "CmdOrCtrl+K")?,
       &item("client_end_turn", "End turn", "CmdOrCtrl+E")?,
       &item("client_settings", "Settings", "CmdOrCtrl+,")?,
@@ -1187,6 +1210,7 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
     "game_zoom_out" => { let _ = game_zoom(app.clone(), "out".into()); }
     "game_zoom_reset" => { let _ = game_zoom(app.clone(), "reset".into()); }
     "game_fullscreen" => toggle_game_fullscreen(app),
+    "game_print" => { if let Some(view) = active_game_view(app) { let _ = view.print(); } }
     "client_ask" => {
       let ask_app = app.clone();
       tauri::async_runtime::spawn(async move { let _ = crate::ask::open_ask_window(ask_app).await; });
@@ -1195,6 +1219,39 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
     "client_settings" => { bring_launcher_forward(app); let _ = app.emit("client:settings", ()); }
     "client_shortcuts" => { bring_launcher_forward(app); let _ = app.emit("client:shortcuts", ()); }
     _ => {}
+  }
+}
+
+/// Handles a file the game page asks to download: it goes to the Downloads
+/// folder under a name that never replaces another file, and a notice says
+/// where it went. Files from anywhere other than the game page are refused.
+fn download_handler(app: AppHandle, local_port: Option<u16>) -> impl Fn(tauri::Webview, tauri::webview::DownloadEvent<'_>) -> bool + Send + Sync + 'static {
+  move |_webview, event| match event {
+    tauri::webview::DownloadEvent::Requested { url, destination } => {
+      let same_origin = match local_port {
+        Some(port) => is_local_game_url(&url, port),
+        None => is_online_navigation_allowed(&url),
+      };
+      if !crate::downloads::download_allowed(&url, same_origin) { return false; }
+      let Ok(dir) = app.path().download_dir() else { return false };
+      let name = crate::downloads::safe_file_name(destination);
+      *destination = crate::downloads::unique_path(&dir, &name, |p| p.exists());
+      true
+    }
+    tauri::webview::DownloadEvent::Finished { path, success, .. } => {
+      let body = if success {
+        match path.as_ref().and_then(|p| p.file_name()) {
+          Some(name) => format!("{} is in your Downloads folder.", name.to_string_lossy()),
+          None => "The file is in your Downloads folder.".to_string(),
+        }
+      } else {
+        "The file could not be saved.".to_string()
+      };
+      let title = if success { "Saved" } else { "Download failed" };
+      let _ = app.notification().builder().title(title).body(body).show();
+      true
+    }
+    _ => true,
   }
 }
 
@@ -1208,6 +1265,7 @@ fn open_embedded(app: &AppHandle, url: Url, local_port: Option<u16>) -> Result<(
   let label = if local_port.is_some() { "game-embedded" } else { "online-embedded" };
   let builder = WebviewBuilder::new(label, WebviewUrl::External(url))
     .user_agent(&desktop_user_agent())
+    .on_download(download_handler(app.clone(), local_port))
     .initialization_script(SETTINGS_SHORTCUT_SCRIPT)
     .on_navigation(move |url| {
       if handle_settings_shortcut(&nav_app, url) { return false; }
@@ -1268,6 +1326,7 @@ pub(crate) async fn open_game_window(app: AppHandle, game: State<'_, Game>, path
   let close_app = app.clone();
   let window = WebviewWindowBuilder::new(&app, "game", WebviewUrl::External(url))
     .user_agent(&desktop_user_agent())
+    .on_download(download_handler(app.clone(), Some(port)))
     .initialization_script(SETTINGS_SHORTCUT_SCRIPT)
     .title("A House Divided")
     .inner_size(1440.0, 900.0)
@@ -1343,6 +1402,7 @@ async fn open_online_url(app: AppHandle, url: Url) -> Result<(), String> {
   };
   let window = WebviewWindowBuilder::new(&app, "online", WebviewUrl::External(url))
     .user_agent(&desktop_user_agent())
+    .on_download(download_handler(app.clone(), None))
     .initialization_script(SETTINGS_SHORTCUT_SCRIPT)
     .title(title)
     .inner_size(1280.0, 800.0)
