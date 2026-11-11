@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-world-sizes"
+description = "Enables the world_sizes command without any pre-configured scope."
+commands.allow = ["world_sizes"]
+
+[[permission]]
+identifier = "deny-world-sizes"
+description = "Denies the world_sizes command without any pre-configured scope."
+commands.deny = ["world_sizes"]

@@ -607,3 +607,28 @@
     transition: none !important;
   }
 }
+
+.screen-head-action {
+  margin-left: auto;
+}
+
+.worlds-rename {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.worlds-rename input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  color: inherit;
+  background: var(--panel-muted);
+  border: 1px solid var(--border);
+}
+
+.worlds-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
