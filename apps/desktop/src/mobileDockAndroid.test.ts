@@ -163,9 +163,26 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(nav).toContain("AppAction.ALERTS -> NativeAlerts.showManager(activity)");
   });
 
+  it("has an opt-in turn reminder: inexact alarm, own channel, off by default, in the Alerts sheet", () => {
+    const dir = "../src-tauri/gen/android/app/src/main/java/net/lakesidegames/ahdclient";
+    const reminder = read(`${dir}/TurnReminder.kt`);
+    const alerts = read(`${dir}/NativeAlerts.kt`);
+    expect(reminder).toContain('const val CHANNEL = "ahd-turn"');
+    expect(reminder).toContain('getBoolean(ON, false)');
+    expect(reminder).toContain("alarms.set(AlarmManager.RTC_WAKEUP");
+    expect(reminder).not.toContain("setExact");
+    expect(read("../src-tauri/gen/android/app/src/main/AndroidManifest.xml")).not.toContain("SCHEDULE_EXACT_ALARM");
+    expect(read("../src-tauri/gen/android/app/src/main/AndroidManifest.xml")).toContain(".TurnReminderReceiver");
+    expect(alerts).toContain("R.string.alerts_turn_reminder");
+    expect(nav).toContain("NativeAlerts.syncReminder(");
+    expect(string("alerts_turn_reminder")).toBe("Remind me when a new turn starts");
+    expect(string("turn_reminder_title")).toBe("Turn %1$d is in");
+    expect(read("../src-tauri/gen/android/app/src/main/res/values-de/strings.xml")).toContain('name="turn_reminder_title"');
+  });
+
   it("offers a canned preview link for screenshots, in debug and CI builds only", () => {
     expect(activity).toContain('uri.host == "dock"');
-    expect(activity).toContain('setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "off")');
+    expect(activity).toContain('setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "reminder", "off")');
     expect(nav).toContain("fun preview(mode: String)");
     // A store build ignores the link: no page, message or app can fake a player's dock.
     expect(activity).toContain("if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return");

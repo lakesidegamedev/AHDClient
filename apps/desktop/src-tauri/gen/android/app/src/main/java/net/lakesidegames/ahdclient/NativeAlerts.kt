@@ -13,6 +13,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.Switch
 import android.widget.TextView
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -32,12 +33,18 @@ object NativeAlerts {
   private val ACCENT = Color.parseColor("#DC2626")
 
   private var showing: BottomSheetDialog? = null
+  private val NOTHING: () -> Unit = {}
+
+  /** The player switched the reminder on before alerts were allowed; finish it when they are. */
+  private var pendingReminder = false
+  private var lastSignedIn = false
+  private var lastStatus: DockStatus? = null
 
   private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
   fun asked(context: Context) = prefs(context).getBoolean(ASKED, false)
 
-  private fun permission(context: Context): AlertsPolicy.Permission = AlertsPolicy.permission(
+  fun permission(context: Context): AlertsPolicy.Permission = AlertsPolicy.permission(
     Build.VERSION.SDK_INT, NotificationManagerCompat.from(context).areNotificationsEnabled(), prefs(context).getInt(DENIALS, 0))
 
   /** After a signed-in status load. Does nothing unless every rule passes; the question is shown once, ever. */
@@ -55,21 +62,46 @@ object NativeAlerts {
     present(activity, AlertsPolicy.mode(NativePush.isEnabled(activity), permission(activity)))
   }
 
+  /**
+   * Schedules, moves or cancels the one pending "Turn N is in" reminder from the dock's next-turn
+   * time. Cheap and safe to repeat; call after every status load and every sign-in change.
+   */
+  fun syncReminder(context: Context, signedIn: Boolean, status: DockStatus?) {
+    lastSignedIn = signedIn
+    lastStatus = status
+    val at = AlertsPolicy.reminderAt(status?.nextTurnAt, System.currentTimeMillis(), TurnReminder.isOn(context),
+      permission(context), signedIn, status?.turnActive ?: false)
+    if (at == null) { TurnReminder.cancel(context); return }
+    val title = Texts.s(AlertsPolicy.reminderTitle(AlertsPolicy.reminderTurn(status?.turnNumber)), AlertsPolicy.reminderTurn(status?.turnNumber) ?: 0)
+    TurnReminder.schedule(context, at, title)
+  }
+
+  private fun setReminder(context: Context, on: Boolean) {
+    TurnReminder.setOn(context, on)
+    syncReminder(context, lastSignedIn, lastStatus)
+  }
+
   /** [preview] draws the sheet only, for screenshots: its buttons change nothing. */
   fun present(activity: Activity, mode: AlertsPolicy.Mode, preview: Boolean = false) {
     if (showing != null || activity.isFinishing) return
     val dialog = BottomSheetDialog(activity)
-    dialog.setContentView(content(activity, mode) { primary ->
+    var chosen = false
+    dialog.setContentView(content(activity, mode, preview) { primary ->
+      chosen = primary !== NOTHING
       dialog.dismiss()
       if (!preview) primary()
     })
     dialog.behavior.apply { state = BottomSheetBehavior.STATE_EXPANDED; skipCollapsed = true }
-    dialog.setOnDismissListener { showing = null }
+    dialog.setOnDismissListener {
+      showing = null
+      // A pre-prompt closed without turning alerts on drops the reminder the player asked for.
+      if (!chosen) pendingReminder = false
+    }
     showing = dialog
     dialog.show()
   }
 
-  private fun content(activity: Activity, mode: AlertsPolicy.Mode, done: (() -> Unit) -> Unit): View {
+  private fun content(activity: Activity, mode: AlertsPolicy.Mode, preview: Boolean, done: (() -> Unit) -> Unit): View {
     Texts.syncFromCookie()
     val copy = AlertsPolicy.copy(mode)
     val density = activity.resources.displayMetrics.density
@@ -88,6 +120,8 @@ object NativeAlerts {
     column.addView(TextView(activity).apply {
       text = Texts.s(copy.body); setTextColor(Color.argb(179, 255, 255, 255)); textSize = 16f; gravity = Gravity.CENTER
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+    if (mode == AlertsPolicy.Mode.ON || mode == AlertsPolicy.Mode.OFF) column.addView(reminderRow(activity, preview, done),
+      LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(18) })
     column.addView(TextView(activity).apply {
       text = Texts.s(copy.primary); setTextColor(Color.WHITE); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
       gravity = Gravity.CENTER; minHeight = dp(48)
@@ -101,9 +135,45 @@ object NativeAlerts {
     column.addView(TextView(activity).apply {
       text = Texts.s(copy.secondary); setTextColor(Color.argb(204, 255, 255, 255)); textSize = 16f
       gravity = Gravity.CENTER; minHeight = dp(48)
-      setOnClickListener { done { } }
+      setOnClickListener { done(NOTHING) }
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
     return column
+  }
+
+  /** "Remind me when a new turn starts", off until the player says so. */
+  private fun reminderRow(activity: Activity, preview: Boolean, done: (() -> Unit) -> Unit): View {
+    val density = activity.resources.displayMetrics.density
+    val row = LinearLayout(activity).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+      minimumHeight = (48 * density).toInt()
+    }
+    val label = Texts.s(R.string.alerts_turn_reminder)
+    row.addView(TextView(activity).apply {
+      text = label; setTextColor(Color.WHITE); textSize = 16f
+    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    val toggle = Switch(activity).apply {
+      contentDescription = label
+      isChecked = preview || (TurnReminder.isOn(activity) && permission(activity) == AlertsPolicy.Permission.GRANTED)
+    }
+    toggle.setOnCheckedChangeListener { _, on ->
+      if (preview) return@setOnCheckedChangeListener
+      when {
+        !on -> setReminder(activity, false)
+        permission(activity) == AlertsPolicy.Permission.GRANTED -> setReminder(activity, true)
+        // Alerts are not allowed yet: the same pre-prompt as the one-time question, then the system's.
+        else -> done { askForReminder(activity) }
+      }
+    }
+    row.addView(toggle)
+    return row
+  }
+
+  /** Switching the reminder on without alerts allowed: the pre-prompt, and on a yes the reminder follows. */
+  private fun askForReminder(activity: Activity) {
+    if (permission(activity) == AlertsPolicy.Permission.BLOCKED) { openSettings(activity); return }
+    pendingReminder = true
+    present(activity, AlertsPolicy.Mode.ASK)
   }
 
   private fun primaryTapped(activity: Activity, mode: AlertsPolicy.Mode) {
@@ -118,14 +188,20 @@ object NativeAlerts {
   private fun turnOn(activity: Activity) {
     NativePush.setEnabled(activity, true)
     when (permission(activity)) {
-      AlertsPolicy.Permission.GRANTED -> NativePush.sync(activity, true)
-      AlertsPolicy.Permission.BLOCKED -> openSettings(activity)
+      AlertsPolicy.Permission.GRANTED -> { NativePush.sync(activity, true); finishPendingReminder(activity) }
+      AlertsPolicy.Permission.BLOCKED -> { pendingReminder = false; openSettings(activity) }
       AlertsPolicy.Permission.ASKABLE -> (activity as? MainActivity)?.requestNotificationPermission { granted ->
-        if (granted) NativePush.sync(activity, true)
+        if (granted) { NativePush.sync(activity, true); finishPendingReminder(activity) }
         else prefs(activity).edit().putInt(DENIALS, AlertsPolicy.denialsAfterRefusal(
           prefs(activity).getInt(DENIALS, 0), activity.shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS))).apply()
       }
     }
+  }
+
+  private fun finishPendingReminder(context: Context) {
+    if (!pendingReminder) return
+    pendingReminder = false
+    setReminder(context, true)
   }
 
   private fun openSettings(activity: Activity) {

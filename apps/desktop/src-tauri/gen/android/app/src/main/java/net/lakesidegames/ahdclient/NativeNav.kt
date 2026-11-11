@@ -360,6 +360,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       "more" -> dock.openMenu("more", animate = false)
       // Design review only: the one-time sheet over the dock, buttons inert.
       "alerts" -> NativeAlerts.present(activity, AlertsPolicy.Mode.ASK, preview = true)
+      // Design review only: the manager sheet with the turn reminder switch on, inert.
+      "reminder" -> NativeAlerts.present(activity, AlertsPolicy.Mode.ON, preview = true)
     }
   }
 
@@ -577,6 +579,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     }
     applyModel()
     showStatus()
+    // Signed out or switched account: no reminder for the old one stays pending.
+    if (accountChanged) CompanionSafety.run("turn reminder") { syncReminder() }
     // A different account, or language, has not fetched yet: look now.
     if (nowId != null) handler.post { CompanionSafety.run("dock account refresh") { requestRefresh(force = true) } }
   }
@@ -670,6 +674,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
       applyModel()
       showStatus()
       CompanionSafety.run("alerts offer") { offerAlerts() }
+      CompanionSafety.run("turn reminder") { syncReminder() }
     }
     if (refreshAgain) {
       refreshAgain = false
@@ -694,6 +699,12 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private fun offerAlerts() {
     if (previewing || !accountLive() || page != Page.SITE || statusNow == null) return
     NativeAlerts.askOnce(activity, signedIn = true, statusLoaded = true, onGamePage = true)
+  }
+
+  /** Keeps the turn reminder matched to the next-turn time held in memory. */
+  private fun syncReminder() {
+    if (previewing) return
+    NativeAlerts.syncReminder(activity.applicationContext, accountLive(), if (accountLive()) statusNow else null)
   }
 
   /** Redraws the dock from the figures held in memory. Cheap; safe to call often. */

@@ -11,6 +11,12 @@
     <string name="alerts_on_title">Alerts are on</string>
     <string name="alerts_on_body">You will hear about votes, offers and attacks, even when the app is closed.</string>
     <string name="alerts_turn_off">Turn off alerts</string>
+    <string name="alerts_turn_reminder">Remind me when a new turn starts</string>
+    <string name="turn_reminder_title">Turn %1$d is in</string>
+    <string name="turn_reminder_title_unknown">A new turn is in</string>
+    <string name="turn_reminder_body">Open the game to see what changed and take your actions.</string>
+    <string name="turn_reminder_channel">Turn reminders</string>
+    <string name="turn_reminder_channel_desc">A reminder when a new turn starts</string>
     <string name="alerts_done">Done</string>
     <string name="alerts_blocked_title">Alerts are blocked in Android</string>
     <string name="alerts_blocked_body">Allow notifications for this app in Android Settings to get alerts.</string>

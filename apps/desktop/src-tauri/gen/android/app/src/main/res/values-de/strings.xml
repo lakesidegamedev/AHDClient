@@ -11,6 +11,12 @@
     <string name="alerts_on_title">Benachrichtigungen sind an</string>
     <string name="alerts_on_body">Du erfährst von Abstimmungen, Angeboten und Angriffen, auch bei geschlossener App.</string>
     <string name="alerts_turn_off">Benachrichtigungen deaktivieren</string>
+    <string name="alerts_turn_reminder">Erinnere mich, wenn ein neuer Zug beginnt</string>
+    <string name="turn_reminder_title">Zug %1$d hat begonnen</string>
+    <string name="turn_reminder_title_unknown">Ein neuer Zug hat begonnen</string>
+    <string name="turn_reminder_body">Öffne das Spiel, sieh nach, was sich geändert hat, und setze deine Aktionen ein.</string>
+    <string name="turn_reminder_channel">Zugerinnerungen</string>
+    <string name="turn_reminder_channel_desc">Eine Erinnerung, wenn ein neuer Zug beginnt</string>
     <string name="alerts_done">Fertig</string>
     <string name="alerts_blocked_title">Benachrichtigungen sind in Android blockiert</string>
     <string name="alerts_blocked_body">Erlaube Benachrichtigungen für diese App in den Android-Einstellungen.</string>
