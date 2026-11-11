@@ -596,8 +596,9 @@ struct BriefingWidgetView: View {
         Image(uiImage: image).resizable().scaledToFit()
       } else {
         Text("AHD").font(.system(size: 9, weight: .black, design: .default)).foregroundColor(Palette.cream.opacity(0.7))
+          .lineLimit(1).fixedSize()
       }
-    }.frame(width: 16, height: 16).opacity(0.9)
+    }.frame(minWidth: 16, minHeight: 16, maxHeight: 16).opacity(0.9)
   }
 
   private func identity(size: CGFloat) -> some View {
