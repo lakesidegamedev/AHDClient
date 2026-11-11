@@ -573,3 +573,40 @@ describe("iOS quick actions", () => {
     }
   });
 });
+
+describe("iOS game links", () => {
+  const links = read("NativeLinks.swift");
+  const nav = read("NativeNav.swift");
+  const root = resolve(here, "../../../");
+
+  it("claims only the live game hosts and refuses account and api routes", () => {
+    expect(links).toContain('"ahousedividedgame.com", "www.ahousedividedgame.com"');
+    for (const blocked of ["/api", "/login", "/auth", "/register", "/logout"]) expect(links).toContain(`"${blocked}"`);
+    expect(links).toContain("BriefingStore.gamePath");
+  });
+
+  it("returns false for unsafe links so iOS hands them to Safari", () => {
+    expect(links).toContain("else { return false }");
+    expect(links).toContain("application:continueUserActivity:restorationHandler:");
+  });
+
+  it("opens through the dock and sends signed-out players to the launcher", () => {
+    expect(nav).toContain("func openLink");
+    expect(nav).toMatch(/func openLink[\s\S]*session\(\) \?\? ""\)\.isEmpty[\s\S]*Self\.launcher/);
+  });
+
+  it("adds the entitlement to the app and the capability to the App ID", () => {
+    const rb = readFileSync(resolve(root, "scripts/configure-ios-widgets.rb"), "utf8");
+    expect(rb).toContain("com.apple.developer.associated-domains");
+    expect(rb).toContain("applinks:ahousedividedgame.com");
+    const py = readFileSync(resolve(root, "scripts/ensure-ios-push-capability.py"), "utf8");
+    expect(py).toContain("ASSOCIATED_DOMAINS");
+    expect(py).toContain("PUSH_NOTIFICATIONS");
+  });
+
+  it("is in every isolated swiftc list", () => {
+    for (const file of ["workflows/ios-dock-preview.yml", "workflows/release-mobile.yml", "scripts/ios-dock-screens.sh"]) {
+      expect(readFileSync(resolve(root, ".github", file), "utf8")).toContain("NativeLinks.swift");
+    }
+  });
+});

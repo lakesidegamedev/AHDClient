@@ -15,6 +15,8 @@ team = ENV.fetch('APPLE_DEVELOPMENT_TEAM', '').strip
 abort 'APPLE_DEVELOPMENT_TEAM is required to configure iOS widgets' if team.empty?
 keychain = "#{team}.net.lakesidegames.ahdclient.widgets"
 entitlements = { 'keychain-access-groups' => [keychain] }
+# The widget extension must not get this one; it is added to the app only.
+app_only = { 'com.apple.developer.associated-domains' => ['applinks:ahousedividedgame.com', 'applinks:www.ahousedividedgame.com'] }
 app['entitlements'] ||= { 'path' => "#{app_name}/#{app_name}.entitlements" }
 app['entitlements']['properties'] ||= {}
 entitlements.each do |key, values|
@@ -24,6 +26,11 @@ end
 # but came out empty in the signed entitlements, so iOS refused APNs
 # registration on every device. Every signed build here is App Store/TestFlight.
 app['entitlements']['properties']['aps-environment'] = 'production'
+# Game links open the app. The App ID needs the Associated Domains capability
+# (scripts/ensure-ios-push-capability.py) or the signed export fails.
+app_only.each do |key, values|
+  app['entitlements']['properties'][key] = (Array(app['entitlements']['properties'][key]) + values).uniq
+end
 app['settings'] ||= {}
 app['settings']['base'] ||= {}
 app['settings']['base']['AHD_WIDGET_KEYCHAIN_GROUP'] = keychain
