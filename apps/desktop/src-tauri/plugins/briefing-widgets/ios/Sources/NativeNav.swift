@@ -464,6 +464,24 @@ final class NativeNavController: NSObject {
     if let tab { select(tab.id) }
   }
 
+  /// A Home Screen quick action. Signed-out players land on the launcher, the
+  /// rest use the same openers as the dock. False means the webview is not ready yet.
+  func openQuickAction(_ action: QuickAction) -> Bool {
+    guard let webView, let current = webView.url, current.absoluteString != "about:blank" else { return false }
+    guard !(BriefingStore.session() ?? "").isEmpty else {
+      if let url = URL(string: Self.launcher) { webView.load(URLRequest(url: url)) }
+      return true
+    }
+    model.close()
+    switch action {
+    case .inbox: perform(.inbox)
+    case .briefing: perform(.briefing)
+    case .ask: perform(.ask)
+    case .actions: openGamePath("/actions")
+    }
+    return true
+  }
+
   /// A row in a sheet or the status: a game page, never anything off the site.
   private func openGamePath(_ path: String) {
     guard let webView, let safe = BriefingStore.gamePath(path), let url = URL(string: siteOrigin() + safe) else { return }

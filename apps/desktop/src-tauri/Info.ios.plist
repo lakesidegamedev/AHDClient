@@ -20,6 +20,22 @@
        compliance questionnaire on every TestFlight upload. -->
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
+  <!-- Long-press the Home Screen icon. Handled by NativeQuickActions. -->
+  <key>UIApplicationShortcutItems</key>
+  <array>
+    <dict><key>UIApplicationShortcutItemType</key><string>net.lakesidegames.ahdclient.quick.inbox</string>
+      <key>UIApplicationShortcutItemTitle</key><string>Inbox</string>
+      <key>UIApplicationShortcutItemIconSymbolName</key><string>tray</string></dict>
+    <dict><key>UIApplicationShortcutItemType</key><string>net.lakesidegames.ahdclient.quick.actions</string>
+      <key>UIApplicationShortcutItemTitle</key><string>Actions</string>
+      <key>UIApplicationShortcutItemIconSymbolName</key><string>bolt.fill</string></dict>
+    <dict><key>UIApplicationShortcutItemType</key><string>net.lakesidegames.ahdclient.quick.ask</string>
+      <key>UIApplicationShortcutItemTitle</key><string>Ask</string>
+      <key>UIApplicationShortcutItemIconSymbolName</key><string>sparkles</string></dict>
+    <dict><key>UIApplicationShortcutItemType</key><string>net.lakesidegames.ahdclient.quick.briefing</string>
+      <key>UIApplicationShortcutItemTitle</key><string>Briefing</string>
+      <key>UIApplicationShortcutItemIconSymbolName</key><string>doc.text</string></dict>
+  </array>
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

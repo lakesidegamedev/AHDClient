@@ -526,3 +526,37 @@ describe("iOS alerts", () => {
     expect(alerts).not.toContain("NativePush");
   });
 });
+
+describe("iOS quick actions", () => {
+  const quick = read("NativeQuickActions.swift");
+  const nav = read("NativeNav.swift");
+  const plist = readFileSync(resolve(here, "../src-tauri/Info.ios.plist"), "utf8");
+  const root = resolve(here, "../../../.github");
+
+  it("lists the four items on the icon", () => {
+    for (const key of ["inbox", "actions", "ask", "briefing"]) {
+      expect(plist).toContain(`net.lakesidegames.ahdclient.quick.${key}`);
+      expect(quick).toContain(key);
+    }
+    expect(plist).toContain("UIApplicationShortcutItems");
+  });
+
+  it("adds the handler only when absent, like push", () => {
+    expect(quick).toContain("class_getInstanceMethod(cls, selector) == nil");
+    expect(quick).toContain("performActionForShortcutItem");
+    expect(quick).toContain("attempts < 100");
+  });
+
+  it("goes through the dock openers and sends signed-out players to the launcher", () => {
+    expect(nav).toContain("func openQuickAction");
+    expect(nav).toContain("session() ?? \"\").isEmpty");
+    expect(nav).toContain('openGamePath("/actions")');
+    expect(nav).toContain("case .ask: perform(.ask)");
+  });
+
+  it("is in every isolated swiftc list", () => {
+    for (const file of ["workflows/ios-dock-preview.yml", "workflows/release-mobile.yml", "scripts/ios-dock-screens.sh"]) {
+      expect(readFileSync(resolve(root, file), "utf8")).toContain("NativeQuickActions.swift");
+    }
+  });
+});
