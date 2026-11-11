@@ -205,4 +205,9 @@
     <string name="shortcut_ask">AHD fragen</string>
     <string name="shortcut_reload">Seite neu laden</string>
     <string name="shortcut_back">Zurück</string>
+    <string name="dock_update">Update verfügbar (%1$s)</string>
+    <string name="update_title">Version %1$s ist verfügbar</string>
+    <string name="update_body">Eine neuere Version der App liegt auf der Download-Seite bereit. Es wird nichts installiert, bevor du es willst.</string>
+    <string name="update_download">Download-Seite öffnen</string>
+    <string name="update_later">Später</string>
 </resources>

@@ -39,7 +39,7 @@ data class PixelIcon(val rows: List<String>) {
 }
 
 /** Things only the app can do, so only app-built menu rows carry one. */
-enum class AppAction { BRIEFING, INBOX, ALERTS, ASK, LAUNCHER }
+enum class AppAction { BRIEFING, INBOX, ALERTS, ASK, LAUNCHER, UPDATE }
 
 data class DockLink(
   val id: String,
@@ -101,13 +101,13 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
    * the one whose sheet key is "more". The game's own Notifications link is
    * dropped there: the app's Inbox row opens the same page.
    */
-  fun withApp(signedIn: Boolean): DockModel {
+  fun withApp(signedIn: Boolean, update: String? = null): DockModel {
     val existing = sheets["more"]
     val game = existing?.sections.orEmpty().mapNotNull { section ->
       val links = section.links.filter { it.id != DUPLICATE_INBOX_ID }
       if (links.isEmpty()) null else if (links.size == section.links.size) section else DockSection(section.id, section.title, links)
     }
-    val sections = listOf(appSection(signedIn)) + game
+    val sections = listOf(appSection(signedIn, update)) + game
     val merged = sheets + ("more" to DockSheet(existing?.title ?: Texts.s(R.string.dock_more), sections))
     return DockModel(tabs, merged, fromGame)
   }
@@ -251,12 +251,14 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
     val CLOCK_ICON = grid("00011111000", "00100000100", "01000000010", "10000100001", "10000100001", "10000111001", "10000000001", "01000000010", "00100000100", "00011111000", "00000000000")
     val FUNDS_ICON = grid("00000000000", "00000000000", "11111111111", "10000000001", "10001110001", "10001010001", "10001110001", "10000000001", "11111111111", "00000000000", "00000000000")
     val ACTIONS_ICON = grid("00000111000", "00001110000", "00011100000", "00111000000", "01111111100", "00000111000", "00001110000", "00011100000", "00111000000", "01110000000", "00000000000")
+    val UPDATE_ICON = grid("00000100000", "00001110000", "00011111000", "00111111100", "00001110000", "00001110000", "00001110000", "00000000000", "01111111110", "00000000000", "00000000000")
     val CHEVRON_ICON = grid("00000000000", "00000000000", "00000000000", "00000100000", "00001010000", "00010001000", "00100000100", "01000000010", "00000000000", "00000000000", "00000000000")
 
     private fun grid(vararg rows: String) = PixelIcon(rows.toList())
 
-    fun appSection(signedIn: Boolean): DockSection {
+    fun appSection(signedIn: Boolean, update: String? = null): DockSection {
       val links = ArrayList<DockLink>()
+      if (update != null) links.add(DockLink("app-update", Texts.s(R.string.dock_update, update), null, UPDATE_ICON, AppAction.UPDATE))
       links.add(DockLink("app-briefing", Texts.s(R.string.dock_briefing), null, BRIEFING_ICON, AppAction.BRIEFING))
       if (signedIn) links.add(DockLink("app-inbox", Texts.s(R.string.dock_inbox), null, INBOX_ICON, AppAction.INBOX))
       if (signedIn) links.add(DockLink("app-alerts", Texts.s(R.string.dock_alerts), null, ALERTS_ICON, AppAction.ALERTS))
@@ -269,14 +271,14 @@ class DockModel(val tabs: List<DockTab>, val sheets: Map<String, DockSheet>, val
      * Signed out, offline, or a game that predates the endpoint: Game, Briefing,
      * Ask and More, so the player is never stuck. More holds the app section only.
      */
-    fun fallback(signedIn: Boolean): DockModel {
+    fun fallback(signedIn: Boolean, update: String? = null): DockModel {
       val tabs = listOf(
         DockTab("app-game", Texts.s(R.string.dock_game), GAME_ICON, href = "/", activePrefixes = listOf("/")),
         DockTab("app-briefing", Texts.s(R.string.dock_briefing), BRIEFING_ICON, app = AppAction.BRIEFING),
         DockTab("app-ask", Texts.s(R.string.dock_ask), ASK_ICON, app = AppAction.ASK),
         DockTab("app-more", Texts.s(R.string.dock_more), MORE_ICON, sheet = "more"),
       )
-      return DockModel(tabs, emptyMap(), fromGame = false).withApp(signedIn)
+      return DockModel(tabs, emptyMap(), fromGame = false).withApp(signedIn, update)
     }
 
     /**

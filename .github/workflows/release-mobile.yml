@@ -121,10 +121,15 @@ jobs:
           apk=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -print -quit)
           python3 scripts/verify-android-16k-pages.py "$apk"
 
+      # Published next to the APK so direct-download players hear about it.
+      - name: Write the Android update manifest
+        run: node scripts/generate-android-manifest.mjs AHDClient-android-latest.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: ahdclient-android
           path: |
+            AHDClient-android-latest.json
             apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
             apps/desktop/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
           if-no-files-found: error
