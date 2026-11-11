@@ -48,6 +48,7 @@ for kind in iPhone iPad; do
   shot "$udid" "$kind-4-briefing-dark" briefing
   shot "$udid" "$kind-12-offline-dark" offline
   shot "$udid" "$kind-13-alerts-dark" alerts
+  shot "$udid" "$kind-17-turn-reminder-dark" reminder
   shot "$udid" "$kind-9-statesheet-dark" sheet
   shot "$udid" "$kind-10-moresheet-dark" more
   shot "$udid" "$kind-14-collapsed-landscape" collapsed -AHDForceLandscape

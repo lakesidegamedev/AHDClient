@@ -20,7 +20,7 @@ SOURCES = Path(__file__).resolve().parents[1] / "apps/desktop/src-tauri/plugins/
 MARKERS = {
     "NativePush.swift": ["Apple declined push registration: ", "This build is not set up for push alerts.",
         "Push alerts are on. Tap one to open what it is about."],
-    "NativeAlerts.swift": ["Get alerts for votes, offers and attacks?", "Alerts are blocked in iOS"],
+    "NativeAlerts.swift": ["Get alerts for votes, offers and attacks?", "Alerts are blocked in iOS", "Remind me when a new turn starts"],
     "NativeDockView.swift": ["Opens outside the game", "Shows the full status"],
     "NativeAskView.swift": ["Ask uses outside AI services", "Ask sends nothing until you allow it."],
 }

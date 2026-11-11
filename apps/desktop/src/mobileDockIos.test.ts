@@ -521,6 +521,19 @@ describe("iOS alerts", () => {
     expect(push).toContain("NativeAlerts.openInboxAction");
   });
 
+  it("has an opt-in turn reminder, off by default, cancelled on sign-out", () => {
+    expect(alerts).toContain("Remind me when a new turn starts");
+    expect(alerts).toContain("UNCalendarNotificationTrigger");
+    expect(alerts).toContain("static func reminderDate");
+    expect(alerts).toContain("guard on, permission == .granted, signedIn");
+    expect(alerts).toContain("return \"Turn \\(Int(current) + 1) is in\"");
+    expect(alerts).toContain("pendingReminder");
+    expect(nav).toContain("NativeAlerts.shared.syncReminder");
+    expect(nav).toContain("NativeAlerts.shared.cancelReminder()");
+    expect(nav).toContain('state == "reminder"');
+    expect(dock).toContain('"reminder"');
+  });
+
   it("keeps UIKit-free policy and no push state in the sheet code", () => {
     expect(alerts).toContain("enum AlertsPolicy");
     expect(alerts).not.toContain("NativePush");

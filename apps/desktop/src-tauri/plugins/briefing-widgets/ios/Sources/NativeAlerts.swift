@@ -24,6 +24,20 @@ enum AlertsPolicy {
     return Int(min(max(unread, 0), 9_999))
   }
 
+  /// When the turn reminder should fire, or nil when none should be pending.
+  /// Off by default; needs the switch on, system permission, a signed-in
+  /// player and a next turn that is still ahead.
+  static func reminderDate(next: Date?, now: Date, on: Bool, permission: Permission, signedIn: Bool) -> Date? {
+    guard on, permission == .granted, signedIn, let next, next.timeIntervalSince(now) > 5 else { return nil }
+    return next
+  }
+
+  /// "Turn 413 is in": the turn after the current one. No number, no guess.
+  static func reminderTitle(current: Double?) -> String {
+    guard let current, current.isFinite, current >= 0, current < 1_000_000 else { return "A new turn is in" }
+    return "Turn \(Int(current) + 1) is in"
+  }
+
   /// An alert is cleared when the player is on the page it is about, or on the
   /// inbox, which lists them all. `href` is a game path, query allowed.
   static func shouldClear(href: String?, viewing path: String) -> Bool {
@@ -48,8 +62,21 @@ final class NativeAlerts {
   /// Turns alerts on or off; the system prompt appears on the first "on".
   var setEnabled: ((Bool, @escaping () -> Void) -> Void)?
 
-  private var permission = AlertsPolicy.Permission.unknown
+  private static let reminderKey = "ahd.alerts.turnReminder"
+  static let reminderID = "ahd.turn-reminder"
+
+  private(set) var permission = AlertsPolicy.Permission.unknown
   private var presenting = false
+  /// The player asked for the reminder before alerts were allowed; finish it
+  /// once the pre-prompt succeeds.
+  fileprivate var pendingReminder = false
+  private var scheduled: (date: Date, title: String)?
+
+  /// The turn reminder switch. Off until the player turns it on.
+  var reminderOn: Bool {
+    get { UserDefaults.standard.bool(forKey: Self.reminderKey) }
+    set { UserDefaults.standard.set(newValue, forKey: Self.reminderKey) }
+  }
 
   var asked: Bool {
     get { UserDefaults.standard.bool(forKey: Self.askedKey) }
@@ -109,7 +136,52 @@ final class NativeAlerts {
 
   fileprivate func turnOn(_ done: @escaping () -> Void) {
     guard let setEnabled else { done(); return }
-    setEnabled(true, done)
+    setEnabled(true) { [weak self] in
+      guard let self else { done(); return }
+      self.refreshPermission { permission in
+        if self.pendingReminder && permission == .granted { self.setReminder(true) }
+        self.pendingReminder = false
+        done()
+      }
+    }
+  }
+
+  // MARK: Turn reminder
+
+  func setReminder(_ on: Bool) {
+    reminderOn = on
+    syncReminder(signedIn: !(BriefingStore.session() ?? "").isEmpty)
+  }
+
+  /// Schedules, moves or cancels the one pending "Turn N is in" notification
+  /// from the next-turn time the dock already holds. Safe to call often.
+  func syncReminder(signedIn: Bool) {
+    refreshPermission { [weak self] permission in
+      guard let self else { return }
+      let data = BriefingStore.read()?.data
+      let next = data?.turn?.active == false ? nil : data?.nextTurn
+      guard let fire = AlertsPolicy.reminderDate(next: next, now: Date(), on: self.reminderOn,
+        permission: permission, signedIn: signedIn) else { self.cancelReminder(); return }
+      let title = AlertsPolicy.reminderTitle(current: data?.turn?.current)
+      if let scheduled = self.scheduled, scheduled.date == fire, scheduled.title == title { return }
+      let content = UNMutableNotificationContent()
+      content.title = title
+      content.sound = .default
+      let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fire)
+      let request = UNNotificationRequest(identifier: Self.reminderID, content: content,
+        trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false))
+      UNUserNotificationCenter.current().add(request) { error in
+        if error == nil { DispatchQueue.main.async { self.scheduled = (fire, title) } }
+      }
+    }
+  }
+
+  /// Sign-out, the switch turned off, or permission gone.
+  func cancelReminder() {
+    scheduled = nil
+    let center = UNUserNotificationCenter.current()
+    center.removePendingNotificationRequests(withIdentifiers: [Self.reminderID])
+    center.removeDeliveredNotifications(withIdentifiers: [Self.reminderID])
   }
 
   fileprivate func turnOff(_ done: @escaping () -> Void) {
@@ -152,6 +224,8 @@ final class AlertsSheetController: UIViewController {
   private let mode: AlertsPolicy.Mode
   private let preview: Bool
   private let onEnd: () -> Void
+
+  private var reminderSwitch: UISwitch?
 
   init(mode: AlertsPolicy.Mode, preview: Bool, onEnd: @escaping () -> Void) {
     self.mode = mode
@@ -205,6 +279,7 @@ final class AlertsSheetController: UIViewController {
     body.numberOfLines = 0
 
     var views: [UIView] = [title, body]
+    if mode == .on || mode == .off { views.append(reminderRow()) }
     if let primary = text.primary {
       let button = UIButton(type: .system)
       button.setTitle(primary, for: .normal)
@@ -241,9 +316,48 @@ final class AlertsSheetController: UIViewController {
     ])
   }
 
+  /// "Remind me when a new turn starts", off until the player says so.
+  private func reminderRow() -> UIView {
+    let label = UILabel()
+    label.text = "Remind me when a new turn starts"
+    label.font = UIFont.preferredFont(forTextStyle: .body)
+    label.adjustsFontForContentSizeCategory = true
+    label.textColor = .white
+    label.numberOfLines = 0
+    let toggle = UISwitch()
+    toggle.onTintColor = AlertsSheetController.accent
+    toggle.isOn = preview ? true : NativeAlerts.shared.reminderOn && NativeAlerts.shared.permission == .granted
+    toggle.accessibilityLabel = label.text
+    toggle.accessibilityIdentifier = "alerts-turn-reminder"
+    toggle.addTarget(self, action: #selector(reminderChanged(_:)), for: .valueChanged)
+    toggle.setContentHuggingPriority(.required, for: .horizontal)
+    toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
+    reminderSwitch = toggle
+    let row = UIStackView(arrangedSubviews: [label, toggle])
+    row.axis = .horizontal
+    row.alignment = .center
+    row.spacing = 12
+    return row
+  }
+
+  @objc private func reminderChanged(_ sender: UISwitch) {
+    if preview { return }
+    let shared = NativeAlerts.shared
+    guard sender.isOn else { shared.setReminder(false); return }
+    if shared.permission == .granted { shared.setReminder(true); return }
+    // Not allowed yet: the same pre-prompt as the first-time sheet.
+    sender.setOn(false, animated: true)
+    shared.pendingReminder = true
+    let presenter = presentingViewController
+    dismiss(animated: true) { shared.present(.ask, from: presenter) }
+  }
+
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
-    if isBeingDismissed || presentingViewController == nil { onEnd() }
+    if isBeingDismissed || presentingViewController == nil {
+      if mode == .ask { NativeAlerts.shared.pendingReminder = false }
+      onEnd()
+    }
   }
 
   @objc private func primaryTapped() {
