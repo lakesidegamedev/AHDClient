@@ -226,6 +226,26 @@ describe("ask quota updates", () => {
   });
 });
 
+describe("ask screen reader support", () => {
+  it("marks the thread as a log and announces a finished answer once", async () => {
+    render(<AskApp />);
+    await waitFor(() =>
+      expect((screen.getByLabelText("Ask a question") as HTMLTextAreaElement).disabled).toBe(false),
+    );
+    expect(screen.getByRole("log").getAttribute("aria-live")).toBe("off");
+
+    fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "Why?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
+    expect(screen.getByRole("log").getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    mocks.streamHandler?.({ reqId: "req-1", kind: "done", data: { answer: "Blight.", usage: baseUsage } });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Answer ready"));
+    expect(screen.getByRole("log").getAttribute("aria-busy")).toBe("false");
+  });
+});
+
 describe("ask AI provider consent", () => {
   const providers = [
     { id: "muse", name: "Meta", detail: "Muse Spark models" },

@@ -475,6 +475,7 @@ export const EN = {
   "app.pickEra": "Pick an era first.",
   "app.sandboxOffline": "Connect to the internet to check sandbox access.",
   "app.askTitle": "Ask questions about the game. Opens beside the client and signs you in with your game account.",
+  "ask.answerReady": "Answer ready",
   "app.ask": "Ask",
   "app.diagnosticsFailed": "The report could not be sent. Use Report a problem in Settings instead.",
   "app.linkTitle": "Link your game account",
