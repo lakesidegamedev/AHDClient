@@ -38,6 +38,8 @@ class DockStatus(
   val notifications: Int,
   val mail: Int,
   val updatedAt: Long,
+  /** The turn that is running now, when the server said. */
+  val turnNumber: Int? = null,
 ) {
   /** True when there is anything worth a strip. */
   val hasStrip: Boolean get() = funds != null || actions != null || nextTurnAt != null || !turnActive
@@ -56,6 +58,7 @@ class DockStatus(
       notifications = 3,
       mail = 2,
       updatedAt = now,
+      turnNumber = 214,
     )
 
     /** Null for a signed-out player, a player with no character, or no cache. */
@@ -106,6 +109,7 @@ class DockStatus(
         notifications = (double(inbox, "unread") ?: 0.0).coerceIn(0.0, 99_999.0).toInt(),
         mail = (double(inbox, "mail") ?: 0.0).coerceIn(0.0, 99_999.0).toInt(),
         updatedAt = data.optLong("updatedAt", 0L),
+        turnNumber = current?.takeIf { it in 1..99_999 }?.toInt(),
       )
     }
 

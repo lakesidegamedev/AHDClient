@@ -70,4 +70,27 @@ class AlertsPolicyTest {
     assertFalse(AlertsPolicy.isViewing(null, "/country/fr"))
     assertFalse(AlertsPolicy.isViewing("https://evil.example/country/fr", "/country/fr"))
   }
+
+  @Test fun theReminderNeedsEverythingInPlace() {
+    fun at(next: Long? = 100_000L, on: Boolean = true, permission: Permission = Permission.GRANTED,
+      signedIn: Boolean = true, active: Boolean = true) = AlertsPolicy.reminderAt(next, 0L, on, permission, signedIn, active)
+    assertEquals(100_000L, at())
+    assertEquals(null, at(on = false))
+    assertEquals(null, at(permission = Permission.ASKABLE))
+    assertEquals(null, at(permission = Permission.BLOCKED))
+    assertEquals(null, at(signedIn = false))
+    assertEquals(null, at(active = false))
+    assertEquals(null, at(next = null))
+    assertEquals(null, at(next = -5_000L))
+    assertEquals(null, at(next = 4_000L))
+  }
+
+  @Test fun theReminderAnnouncesTheTurnAfterTheRunningOne() {
+    assertEquals(215, AlertsPolicy.reminderTurn(214))
+    assertEquals(null, AlertsPolicy.reminderTurn(null))
+    assertEquals(null, AlertsPolicy.reminderTurn(-1))
+    assertEquals("Turn 215 is in", Texts.s(AlertsPolicy.reminderTitle(215), 215))
+    assertEquals("A new turn is in", Texts.s(AlertsPolicy.reminderTitle(null), 0))
+  }
 }
+

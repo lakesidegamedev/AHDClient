@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Screenshot and probe the native dock. The preview link
-# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher|alerts) draws the dock with canned
+# (ahdclient://dock?preview=collapsed|expanded|state|more|signedout|launcher|alerts|reminder) draws the dock with canned
 # figures and no network, so every run shows the same thing. The link only exists in the
 # unsigned pull request build (BuildConfig.DOCK_PREVIEW); a store build ignores it. Then drive it the
 # way a player would (drag up, Back, tap the strip) and read the accessibility
@@ -164,6 +164,17 @@ a shell input keyevent 4
 sleep 2
 dump
 check "Back closes the alerts sheet" absent "Get alerts for votes"
+
+# The manager sheet with the turn reminder switch (on in the preview, buttons inert).
+preview reminder
+shot 18-turn-reminder
+dump
+check "reminder sheet shows the switch label" has "Remind me when a new turn starts"
+check "reminder sheet shows Turn off alerts" has "Turn off alerts"
+a shell input keyevent 4
+sleep 2
+dump
+check "Back closes the reminder sheet" absent "Remind me when a new turn starts"
 
 # Signed out or an older game: Game, Briefing, Ask, More and no status.
 preview signedout

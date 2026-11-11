@@ -59,4 +59,22 @@ object AlertsPolicy {
     if (href == null || !href.startsWith("/")) return false
     return href.substringBefore('?').trimEnd('/') == page
   }
+
+  /** A turn closer than this is not worth a reminder: it would arrive as the player looks at the screen. */
+  private const val MIN_LEAD_MS = 5_000L
+
+  /**
+   * When the turn reminder should fire, or null when none should be pending. Needs the switch on,
+   * alerts allowed, a signed-in player, a running game and a next-turn time still ahead.
+   */
+  fun reminderAt(next: Long?, now: Long, on: Boolean, permission: Permission, signedIn: Boolean, turnActive: Boolean): Long? {
+    if (!on || permission != Permission.GRANTED || !signedIn || !turnActive || next == null) return null
+    return next.takeIf { it - now > MIN_LEAD_MS }
+  }
+
+  /** The turn number the reminder announces: the one after the running turn, or null when that is not known. */
+  fun reminderTurn(current: Int?): Int? = current?.takeIf { it in 0..99_998 }?.plus(1)
+
+  /** Resource id for the notification title: "Turn N is in", or the plain one when the number is not known. */
+  fun reminderTitle(turn: Int?): Int = if (turn != null) R.string.turn_reminder_title else R.string.turn_reminder_title_unknown
 }

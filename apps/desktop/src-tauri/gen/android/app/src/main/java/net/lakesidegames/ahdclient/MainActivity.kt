@@ -132,7 +132,7 @@ class MainActivity : TauriActivity() {
       // builds only; a store build ignores the link, so no page or app can fake a dock.
       intent.data = null
       if (!(BuildConfig.DEBUG || BuildConfig.DOCK_PREVIEW)) return
-      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "off") } ?: "collapsed"
+      pendingDockPreview = uri.getQueryParameter("preview")?.takeIf { it in setOf("collapsed", "expanded", "state", "more", "signedout", "launcher", "alerts", "reminder", "off") } ?: "collapsed"
       applyDockPreview()
       return
     }
