@@ -28,11 +28,12 @@ class CookieOptions { var url: String = "" }
 @TauriPlugin(permissions = [Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications")])
 class BriefingPlugin(private val activity: Activity) : Plugin(activity), Application.ActivityLifecycleCallbacks {
   private val handler = Handler(Looper.getMainLooper())
+  private companion object { const val POLL_MS = 60_000L }
   private val poll = object : Runnable {
     override fun run() {
       NativeSafety.run("push poll") {
-        syncSafely()
-        handler.postDelayed(this, 5000)
+        syncInBackground()
+        handler.postDelayed(this, POLL_MS)
       }
     }
   }
@@ -121,7 +122,7 @@ class BriefingPlugin(private val activity: Activity) : Plugin(activity), Applica
     if (target === activity) {
       NativeSafety.run("push poll pause") {
         handler.removeCallbacks(poll)
-        syncSafely()
+        syncInBackground()
       }
     }
   }
@@ -137,6 +138,13 @@ class BriefingPlugin(private val activity: Activity) : Plugin(activity), Applica
   override fun onActivityStarted(target: Activity) {}
   override fun onActivityStopped(target: Activity) {}
   override fun onActivitySaveInstanceState(target: Activity, state: Bundle) {}
+
+  /** Reads and parses the push file off the main thread. */
+  private fun syncInBackground() {
+    NativeSafety.run("push sync schedule") {
+      NativePush.runOnWorker { syncSafely() }
+    }
+  }
 
   private fun syncSafely(force: Boolean = false) {
     NativeSafety.run("push sync") {

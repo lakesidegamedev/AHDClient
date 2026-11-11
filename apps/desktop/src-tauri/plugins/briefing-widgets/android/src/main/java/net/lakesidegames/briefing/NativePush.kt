@@ -45,6 +45,8 @@ object NativePush {
   @Volatile var holdBack: ((String?) -> Boolean)? = null
   private val worker = Executors.newSingleThreadExecutor()
   private var busy = false
+  /** Runs file and cookie work on the push thread instead of the main thread. */
+  fun runOnWorker(block: () -> Unit) { worker.execute { NativeSafety.run("push worker task") { block() } } }
   private var tokenPending = false
   private var nextAttempt = 0L
   private var statusMessage = R.string.push_status_idle

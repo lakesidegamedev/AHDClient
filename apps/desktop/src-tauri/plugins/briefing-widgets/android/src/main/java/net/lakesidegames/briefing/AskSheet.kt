@@ -1022,6 +1022,8 @@ internal class AskSheet(
       tint(downButton, message.feedback == "down", T.s(R.string.ask_not_helpful))
       shareButton.visibility = if (session.conversationID.isNotBlank()) View.VISIBLE else View.GONE
       if (renderedState != null && renderedState != state && state == AskMessageState.DONE) ui.arrive(actions)
+      // One spoken cue when a streamed answer finishes; never on the streaming text itself.
+      if (renderedState == AskMessageState.STREAMING && state == AskMessageState.DONE) root.announceForAccessibility(T.s(R.string.ask_answer_ready))
       renderedState = state
     }
 
