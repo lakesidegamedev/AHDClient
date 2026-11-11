@@ -16,7 +16,7 @@ fn main() {
   // capabilities/mobile.json.
   tauri_build::try_build(
     tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
-      "get_tray_settings", "set_keep_in_tray",
+      "get_tray_settings", "set_keep_in_tray", "get_reminder_settings", "set_reminder_settings",
       "get_autostart", "set_autostart", "data_folder_info", "open_data_folder", "reset_native_settings", "get_push_status", "configure_push", "send_test_push", "get_briefing",
       "open_briefing_page",
       "open_game_page",

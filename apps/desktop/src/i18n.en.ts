@@ -71,6 +71,14 @@ export const EN = {
   "tray.unavailable": "Your system has no tray available, so closing the window quits the app.",
   "tray.readError": "Could not read this setting.",
   "tray.changeError": "Could not change this setting. Please try again.",
+  "reminder.label": "Remind me when a new turn starts",
+  "reminder.detail": "Shows a notification when a new turn of the online game starts. Off while you play a singleplayer world or look at the live game.",
+  "reminder.quietLabel": "Quiet hours",
+  "reminder.quietDetail": "No alerts or reminders between these times. Alerts that come in wait until quiet hours end.",
+  "reminder.from": "From",
+  "reminder.to": "Until",
+  "reminder.readError": "Could not read these settings.",
+  "reminder.changeError": "Could not change these settings. Please try again.",
 
   // Updates
   "update.title": "Desktop updates",

@@ -18,7 +18,7 @@ const POLL: Duration = Duration::from_secs(60);
 const MAX_BODY: u64 = 32 * 1024;
 
 #[derive(Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 struct Saved {
   /// Missing on first run: desktop alerts default on, with no OS prompt to pass.
   enabled: Option<bool>,
@@ -26,6 +26,26 @@ struct Saved {
   cursor: Option<String>,
   /// SHA-256 of the session cookies the cursor belongs to.
   account: String,
+  /// "Remind me when a new turn starts". Missing means off.
+  turn_reminder: Option<bool>,
+  /// Hours when nothing is shown. Missing means off.
+  quiet: Option<Quiet>,
+  /// Newest turn already seen, and the account it was seen for.
+  last_turn: Option<u64>,
+  turn_account: String,
+}
+
+/// Quiet hours as minutes after local midnight.
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Quiet {
+  enabled: bool,
+  start: u32,
+  end: u32,
+}
+
+impl Default for Quiet {
+  fn default() -> Self { Self { enabled: false, start: 22 * 60, end: 7 * 60 } }
 }
 
 #[derive(Default)]
@@ -70,6 +90,30 @@ pub(crate) fn notifications_for(feed: &Feed) -> Vec<(String, String)> {
   shown
 }
 
+/// True when `now` (minutes after local midnight) falls inside the quiet
+/// window. A window that ends before it starts runs overnight.
+pub(crate) fn in_quiet_hours(quiet: &Quiet, now: u32) -> bool {
+  if !quiet.enabled || quiet.start == quiet.end { return false; }
+  if quiet.start < quiet.end { now >= quiet.start && now < quiet.end } else { now >= quiet.start || now < quiet.end }
+}
+
+fn quiet_now(app: &AppHandle) -> bool {
+  use chrono::Timelike;
+  let now = chrono::Local::now();
+  in_quiet_hours(&read(app).quiet.unwrap_or_default(), now.hour() * 60 + now.minute())
+}
+
+/// A reminder goes out once per turn: only when the turn number moved up
+/// since the last one this player's client saw. The first sighting is a
+/// baseline, never a reminder.
+pub(crate) fn reminder_due(last: Option<u64>, current: u64) -> bool {
+  last.is_some_and(|seen| current > seen)
+}
+
+fn turn_number(value: f64) -> Option<u64> {
+  if value.is_finite() && (0.0..1e9).contains(&value) { Some(value as u64) } else { None }
+}
+
 fn clean(text: &str, limit: usize) -> String {
   let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
   let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -103,6 +147,11 @@ fn set_message(app: &AppHandle, registered: bool, message: &str) {
   let state = app.state::<AlertState>();
   if let Ok(mut slot) = state.message.lock() { *slot = message.into(); }
   if let Ok(mut slot) = state.registered.lock() { *slot = registered; };
+}
+
+/// A singleplayer world is open: the online game is not what is being played.
+fn playing_singleplayer(app: &AppHandle) -> bool {
+  app.get_webview_window("game").is_some() || app.get_webview("game-embedded").is_some()
 }
 
 /// The player is already looking at the live site, which shows the alert itself.
@@ -161,6 +210,10 @@ async fn poll(app: &AppHandle) {
   if latest.enabled == Some(false) || crate::briefing::session_header(app).unwrap_or_default() != header { return; }
   match outcome {
     Outcome::Feed(feed) => {
+      if !first && quiet_now(app) {
+        // Hold alerts back, cursor included, so they show once quiet hours end.
+        return set_message(app, true, "Quiet hours are on. Alerts will show afterwards.");
+      }
       if !first && !watching_game(app) {
         for (title, body) in notifications_for(&feed) {
           let _ = app.notification().builder().title(title).body(body).show();
@@ -169,12 +222,41 @@ async fn poll(app: &AppHandle) {
       // A player with an empty inbox starts before everything, so their first alert still shows.
       saved.cursor = feed.cursor.or(saved.cursor).or_else(|| Some("0".repeat(24)));
       saved.enabled = latest.enabled;
+      saved.turn_reminder = latest.turn_reminder;
+      saved.quiet = latest.quiet;
+      saved.last_turn = latest.last_turn;
+      saved.turn_account = latest.turn_account;
       let _ = save(app, &saved);
       set_message(app, true, "Desktop alerts are on. New inbox alerts appear while AHDClient is open.");
     }
     Outcome::SignedOut => set_message(app, false, "Sign in to multiplayer to receive alerts."),
     Outcome::Unsupported => set_message(app, false, "The game server does not offer desktop alerts yet. We will keep checking."),
     Outcome::Offline => set_message(app, false, "Could not reach the game. We will retry when online."),
+  }
+}
+
+/// Runs after each alert check, from the same briefing the launcher shows:
+/// keeps the unread badge current and sends the turn reminder.
+async fn turn_step(app: &AppHandle) {
+  let Ok(briefing) = crate::briefing::get_briefing(app.clone()).await else { return };
+  let unread = briefing.inbox.as_ref().map(|i| i.unread).filter(|n| n.is_finite() && *n > 0.0).map(|n| n as i64);
+  if let Some(window) = app.get_webview_window("main") { let _ = window.set_badge_count(unread); }
+  let Some(current) = briefing.turn.as_ref().and_then(|t| turn_number(t.current)) else { return };
+  let Ok(header) = crate::briefing::session_header(app) else { return };
+  if header.is_empty() { return; }
+  let account = fingerprint(&header);
+  let mut saved = read(app);
+  if saved.turn_account != account {
+    saved.turn_account = account;
+    saved.last_turn = None;
+  }
+  let due = reminder_due(saved.last_turn, current);
+  if due || saved.last_turn.is_none() {
+    saved.last_turn = Some(current);
+    let _ = save(app, &saved);
+  }
+  if due && saved.turn_reminder == Some(true) && !quiet_now(app) && !playing_singleplayer(app) && !watching_game(app) {
+    let _ = app.notification().builder().title(format!("Turn {current} is in")).body("A new turn has started in A House Divided.").show();
   }
 }
 
@@ -185,6 +267,7 @@ pub(crate) fn start(app: &AppHandle) {
     tokio::time::sleep(Duration::from_secs(10)).await;
     loop {
       poll(&app).await;
+      turn_step(&app).await;
       tokio::time::sleep(POLL).await;
     }
   });
@@ -233,6 +316,30 @@ pub(crate) async fn configure_push(app: AppHandle, enabled: bool) -> Result<serd
   Ok(status(&app))
 }
 
+#[tauri::command]
+pub(crate) fn get_reminder_settings(app: AppHandle) -> serde_json::Value {
+  let saved = read(&app);
+  serde_json::json!({ "turnReminder": saved.turn_reminder == Some(true), "quiet": saved.quiet.unwrap_or_default() })
+}
+
+#[tauri::command]
+pub(crate) fn set_reminder_settings(app: AppHandle, turn_reminder: bool, quiet: Quiet) -> Result<serde_json::Value, String> {
+  if quiet.start >= 24 * 60 || quiet.end >= 24 * 60 { return Err("Choose a time of day.".into()); }
+  let mut saved = read(&app);
+  saved.turn_reminder = Some(turn_reminder);
+  saved.quiet = Some(quiet);
+  save(&app, &saved)?;
+  Ok(get_reminder_settings(app))
+}
+
+/// Back to the defaults: reminder off, quiet hours off.
+pub(crate) fn reset_reminder(app: &AppHandle) {
+  let mut saved = read(app);
+  saved.turn_reminder = None;
+  saved.quiet = None;
+  let _ = save(app, &saved);
+}
+
 /// Desktop alerts are local system notifications, so the test is too: it
 /// shows one straight away and says whether the system allowed it.
 #[tauri::command]
@@ -251,7 +358,7 @@ pub(crate) fn send_test_push(app: AppHandle) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-  use super::{clean, notifications_for, Feed, FeedItem};
+  use super::{clean, in_quiet_hours, notifications_for, reminder_due, Feed, FeedItem, Quiet, Saved};
 
   fn item(title: &str, subtitle: &str, body: &str) -> FeedItem {
     FeedItem { title: title.into(), subtitle: subtitle.into(), body: body.into() }
@@ -298,5 +405,34 @@ mod tests {
     assert_eq!(feed.items, vec![item("T", "Party", "B")]);
     let baseline: Feed = serde_json::from_value(serde_json::json!({ "cursor": null, "items": [], "more": 0 })).unwrap();
     assert!(notifications_for(&baseline).is_empty());
+  }
+
+  #[test]
+  fn quiet_hours_cover_overnight_windows_and_default_to_off() {
+    let night = Quiet { enabled: true, start: 22 * 60, end: 7 * 60 };
+    assert!(in_quiet_hours(&night, 23 * 60));
+    assert!(in_quiet_hours(&night, 3 * 60));
+    assert!(!in_quiet_hours(&night, 7 * 60));
+    assert!(!in_quiet_hours(&night, 12 * 60));
+    let day = Quiet { enabled: true, start: 9 * 60, end: 17 * 60 };
+    assert!(in_quiet_hours(&day, 10 * 60));
+    assert!(!in_quiet_hours(&day, 18 * 60));
+    assert!(!in_quiet_hours(&Quiet { enabled: false, ..night }, 23 * 60));
+    assert!(!in_quiet_hours(&Quiet { enabled: true, start: 60, end: 60 }, 60));
+    let saved: Saved = serde_json::from_str("{}").unwrap();
+    // A file written before these settings existed still keeps its alert choice.
+    let old: Saved = serde_json::from_str(r#"{"enabled":false,"cursor":"x","account":"a"}"#).unwrap();
+    assert_eq!(old.enabled, Some(false));
+    assert_eq!(old.turn_reminder, None);
+    assert_eq!(saved.turn_reminder, None);
+    assert_eq!(saved.quiet, None);
+  }
+
+  #[test]
+  fn the_reminder_fires_once_per_new_turn_and_never_on_first_sight() {
+    assert!(!reminder_due(None, 215));
+    assert!(!reminder_due(Some(215), 215));
+    assert!(reminder_due(Some(214), 215));
+    assert!(!reminder_due(Some(216), 215));
   }
 }

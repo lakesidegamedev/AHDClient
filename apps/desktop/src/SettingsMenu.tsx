@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { AUTOSAVE_CHOICES, UI_SCALE_CHOICES, defaultSettingsFor } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
 import { TrayControl } from "./TrayControl.js";
+import { TurnReminderControl } from "./TurnReminderControl.js";
 import { UpdateControl } from "./UpdateControl.js";
 import { useDialog } from "./useDialog.js";
 import "./settings.css";
@@ -119,6 +120,7 @@ function SettingsDialog({ mobile = false, settings, onChange, onClose, onReportI
           <Section id="client-settings-notifications" title={t("settings.notifications")}>
             <PushControl mobile={mobile} onOpenedPage={onClose} />
             {!mobile && <TrayControl key={`tray-${generation}`} />}
+            {!mobile && <TurnReminderControl key={`reminder-${generation}`} />}
           </Section>
           {!mobile && (
             <Section id="client-settings-game" title={t("settings.singleplayer")}>
