@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLanguage, useT } from "./i18n.js";
 import { useDialog } from "./useDialog.js";
 import { game, worldSaves } from "./worlds.js";
 import type { SaveKind, SaveMeta } from "./worlds.js";
@@ -15,20 +16,20 @@ interface Props {
   onClose: () => void;
 }
 
-const KIND_LABEL: Record<SaveKind, string> = {
-  manual: "Save",
-  auto: "Autosave",
-  safety: "Before a load",
-};
+const KIND_KEY = {
+  manual: "saves.kindManual",
+  auto: "saves.kindAuto",
+  safety: "saves.kindSafety",
+} as const satisfies Record<SaveKind, string>;
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
-function whenLabel(iso: string): string {
+function whenLabel(iso: string, language: "en" | "de"): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString(language === "de" ? "de-DE" : undefined);
 }
 
 /**
@@ -36,6 +37,8 @@ function whenLabel(iso: string): string {
  * dialog works with the game stopped; making a save needs the running game.
  */
 export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props): JSX.Element {
+  const t = useT();
+  const language = useLanguage();
   const [saves, setSaves] = useState<SaveMeta[] | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<"save" | "load" | "delete" | null>(null);
@@ -120,9 +123,9 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
         <header>
           <div>
             <span className="client-settings-kicker">{worldName}</span>
-            <h2 id="client-saves-title">Saves</h2>
+            <h2 id="client-saves-title">{t("saves.title")}</h2>
           </div>
-          <button className="client-settings-close" type="button" aria-label="Close saves" disabled={busy === "load"} onClick={onClose}>
+          <button className="client-settings-close" type="button" aria-label={t("saves.close")} disabled={busy === "load"} onClick={onClose}>
             ×
           </button>
         </header>
@@ -139,20 +142,20 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
                 type="text"
                 value={name}
                 maxLength={60}
-                placeholder="Name this save (optional)"
-                aria-label="Save name"
+                placeholder={t("saves.namePlaceholder")}
+                aria-label={t("saves.nameLabel")}
                 onChange={(event) => setName(event.target.value)}
               />
               <button type="submit" disabled={busy !== null}>
-                {busy === "save" ? "Saving" : "Save now"}
+                {busy === "save" ? t("saves.saving") : t("saves.saveNow")}
               </button>
             </form>
           ) : (
-            <p className="client-saves-note">Open the world to save it. You can load or delete saves from here at any time.</p>
+            <p className="client-saves-note">{t("saves.openToSave")}</p>
           )}
           {autosaveError && (
             <p className="client-saves-warning" role="alert">
-              The last autosave did not work: {autosaveError}
+              {t("saves.autosaveFailed", { reason: autosaveError })}
             </p>
           )}
           {error && (
@@ -162,13 +165,13 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
           )}
           {busy === "load" && (
             <p className="client-saves-note" role="status">
-              Loading. The world restarts and this can take a minute.
+              {t("saves.loading")}
             </p>
           )}
           {saves === null ? (
-            <p className="client-saves-note">Looking for saves.</p>
+            <p className="client-saves-note">{t("saves.looking")}</p>
           ) : saves.length === 0 ? (
-            <p className="client-saves-note">No saves yet. Autosaves appear here after the next turn.</p>
+            <p className="client-saves-note">{t("saves.none")}</p>
           ) : (
             <ul className="client-saves-list">
               {saves.map((save) => (
@@ -176,12 +179,12 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
                   <div className="client-saves-meta">
                     <strong>{save.name}</strong>
                     <small>
-                      {KIND_LABEL[save.kind]}
-                      {save.turn != null ? ` · turn ${save.turn}` : ""}
+                      {t(KIND_KEY[save.kind])}
+                      {save.turn != null ? ` · ${t("saves.turn", { turn: save.turn })}` : ""}
                       {save.characterName ? ` · ${save.characterName}` : ""}
                     </small>
                     <small>
-                      {whenLabel(save.createdAt)} · {formatSize(save.sizeBytes)}
+                      {whenLabel(save.createdAt, language)} · {formatSize(save.sizeBytes)}
                     </small>
                   </div>
                   <div className="client-saves-actions">
@@ -190,31 +193,31 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
                         {confirming.action === "load" ? (
                           <>
                             <span className="client-saves-confirm">
-                              Go back to {save.turn != null ? `turn ${save.turn}` : "this save"}? Where you are now is kept as a save first.
+                              {save.turn != null ? t("saves.confirmLoadTurn", { turn: save.turn }) : t("saves.confirmLoadThis")}
                             </span>
                             <button type="button" disabled={busy !== null} onClick={() => void load(save)}>
-                              Load it
+                              {t("saves.loadIt")}
                             </button>
                           </>
                         ) : (
                           <>
-                            <span className="client-saves-confirm">Delete this save for good?</span>
+                            <span className="client-saves-confirm">{t("saves.confirmDelete")}</span>
                             <button type="button" disabled={busy !== null} onClick={() => void remove(save)}>
-                              Delete
+                              {t("common.delete")}
                             </button>
                           </>
                         )}
                         <button type="button" className="secondary" disabled={busy !== null} onClick={() => setConfirming(null)}>
-                          Keep
+                          {t("common.keep")}
                         </button>
                       </>
                     ) : (
                       <>
                         <button type="button" disabled={busy !== null} onClick={() => setConfirming({ id: save.id, action: "load" })}>
-                          Load
+                          {t("saves.load")}
                         </button>
                         <button type="button" className="secondary" disabled={busy !== null} onClick={() => setConfirming({ id: save.id, action: "delete" })}>
-                          Delete
+                          {t("common.delete")}
                         </button>
                       </>
                     )}
@@ -225,9 +228,9 @@ export function SavesDialog({ slot, worldName, running, onLoad, onClose }: Props
           )}
         </div>
         <footer>
-          <span>Autosaves keep the last 3. Change how often in Settings.</span>
+          <span>{t("saves.footer")}</span>
           <button type="button" disabled={busy === "load"} onClick={onClose}>
-            Done
+            {t("common.done")}
           </button>
         </footer>
       </section>

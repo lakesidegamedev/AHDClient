@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, readSettings, writeSettings } from "./settings.js";
+import { DEFAULT_SETTINGS, applySettings, readSettings, writeSettings } from "./settings.js";
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -39,5 +39,19 @@ describe("client preferences", () => {
     expect(readSettings().animations).toBe(false);
     localStorage.setItem("ahdclient.settings.v1", '{"animations":true}');
     expect(readSettings().animations).toBe(true);
+  });
+  it("accepts only the offered interface sizes", () => {
+    expect(DEFAULT_SETTINGS.uiScale).toBe(100);
+    localStorage.setItem("ahdclient.settings.v1", '{"uiScale":125}');
+    expect(readSettings().uiScale).toBe(125);
+    localStorage.setItem("ahdclient.settings.v1", '{"uiScale":300}');
+    expect(readSettings().uiScale).toBe(100);
+  });
+  it("applies the interface size to the page and clears it at 100", () => {
+    applySettings({ ...DEFAULT_SETTINGS, uiScale: 110 });
+    expect(document.documentElement.dataset.uiScale).toBe("110");
+    expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe("1.1");
+    applySettings(DEFAULT_SETTINGS);
+    expect(document.documentElement.dataset.uiScale).toBeUndefined();
   });
 });

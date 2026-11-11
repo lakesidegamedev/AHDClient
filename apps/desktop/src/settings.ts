@@ -11,12 +11,15 @@ export interface ClientSettings {
   autosaveEvery: number;
   /** Download and offer to install updates without asking first. */
   autoInstallUpdates: boolean;
+  /** Size of the launcher and dialogs, as a percent. The game itself has its own zoom. */
+  uiScale: number;
   /** Phones: skip the launcher and open the game when signed in. */
   openGameOnStart: boolean;
 }
 
 /** What Settings offers; the game accepts any whole number up to 100. */
 export const AUTOSAVE_CHOICES = [1, 2, 5, 10, 0] as const;
+export const UI_SCALE_CHOICES = [90, 100, 110, 125] as const;
 export const DEFAULT_SETTINGS: ClientSettings = {
   language: "en",
   separateWindow: false,
@@ -25,6 +28,7 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   showBootLogs: false,
   autosaveEvery: 1,
   autoInstallUpdates: false,
+  uiScale: 100,
   openGameOnStart: true,
 };
 const KEY = "ahdclient.settings.v1";
@@ -47,6 +51,8 @@ export function readSettings(): ClientSettings {
       else if (key === "autosaveEvery") {
         if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100)
           result.autosaveEvery = value;
+      } else if (key === "uiScale") {
+        if (UI_SCALE_CHOICES.some((n) => n === value)) result.uiScale = value as number;
       } else if (typeof value === "boolean") result[key] = value as never;
     }
     return result;
@@ -74,5 +80,12 @@ export function applySettings(settings: ClientSettings): void {
   document.documentElement.dataset.animations = settings.animations
     ? "on"
     : "off";
+  document.documentElement.style.setProperty("--ui-scale", String(settings.uiScale / 100));
+  if (settings.uiScale === 100) delete document.documentElement.dataset.uiScale;
+  else document.documentElement.dataset.uiScale = String(settings.uiScale);
   window.dispatchEvent(new CustomEvent("ahdclient:settings"));
+}
+/** What a reset puts back: everything the page keeps, in the player's own language. */
+export function defaultSettingsFor(language: ClientLanguage): ClientSettings {
+  return { ...DEFAULT_SETTINGS, language, animations: !prefersReducedMotion() };
 }
