@@ -1,6 +1,7 @@
 import Combine
 import SafariServices
 import SwiftUI
+import WidgetKit
 import UIKit
 import WebKit
 
@@ -68,6 +69,8 @@ final class NativeNavController: NSObject {
   private var inboxVisitedAt = Date.distantPast
   private var urlObservation: NSKeyValueObservation?
   private var turnRefresh: DispatchWorkItem?
+  /// The figures the widgets last drew from, so a reload only follows a change.
+  private var widgetFigures: Data?
   private var lastTurnSignal = Date.distantPast
   private var timers = [Timer]()
   private var observers = [NSObjectProtocol]()
@@ -626,9 +629,23 @@ final class NativeNavController: NSObject {
     if model.status != next { model.status = next }
     syncAccount()
     refreshBadge(saved)
+    reloadWidgetsIfChanged(saved)
     scheduleTurnRefresh()
     if let saved { NativeAlerts.shared.updateBadge(unread: saved.data.inbox?.unread ?? 0) }
     offerAlerts(saved)
+  }
+
+  /// Widgets draw from the same snapshot. When the dock sees new figures, ask
+  /// for a reload, but only if they changed: reloads count against a daily budget.
+  private func reloadWidgetsIfChanged(_ saved: SavedBriefing?) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    let figures = saved.flatMap { try? encoder.encode($0.data) }
+    guard figures != widgetFigures else { return }
+    let first = widgetFigures == nil
+    widgetFigures = figures
+    // The first look after launch is the baseline; the app already reloads then.
+    if !first { WidgetCenter.shared.reloadAllTimelines() }
   }
 
   /// The one-time alerts question, a moment after the first signed-in status

@@ -24,8 +24,17 @@ import WidgetKit
     ("medium", .systemMedium, CGSize(width: 364, height: 170)),
     ("large", .systemLarge, CGSize(width: 364, height: 382)),
   ]
+  // iPad Pro 11 inch sizes: the same families plus extra large, which only
+  // iPad offers (Overview and Stocks).
+  let ipadSizes: [(String, WidgetFamily, CGSize)] = [
+    ("ipad-small", .systemSmall, CGSize(width: 155, height: 155)),
+    ("ipad-medium", .systemMedium, CGSize(width: 329, height: 155)),
+    ("ipad-large", .systemLarge, CGSize(width: 329, height: 345)),
+    ("ipad-extralarge", .systemExtraLarge, CGSize(width: 690, height: 345)),
+  ]
   for section in ["corporation", "profile", "overview", "election", "stocks"] {
-    for (name, family, size) in sizes where !(section == "overview" && family == .systemSmall) {
+    let all = sizes + ipadSizes.filter { $0.1 != .systemExtraLarge || section == "overview" || section == "stocks" }
+    for (name, family, size) in all where !(section == "overview" && family == .systemSmall) {
       let view = BriefingWidgetView(entry: entry, section: section, familyOverride: family)
         .padding(16)
         .frame(width: size.width, height: size.height, alignment: .topLeading)
