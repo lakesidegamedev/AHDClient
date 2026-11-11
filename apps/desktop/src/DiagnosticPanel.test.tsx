@@ -15,7 +15,7 @@ describe("DiagnosticPanel", () => {
 
   it("shows redacted console and runtime details on every shell", () => {
     render(<DiagnosticPanel open screen="launcher" game="remote only" onClose={vi.fn()} />);
-    expect(screen.getByRole("dialog", { name: "Developer diagnostics" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeTruthy();
     expect(screen.getByLabelText("Recent console output").textContent).toContain("renderer warning");
     expect(screen.getByText("launcher")).toBeTruthy();
     expect(screen.getByText("remote only")).toBeTruthy();

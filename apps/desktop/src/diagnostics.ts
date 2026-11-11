@@ -137,7 +137,7 @@ export function buildDiagnosticReport(reason: DiagnosticReason, message: string,
 }
 
 export function formatDiagnosticBundle(runtime: DiagnosticRuntime, lines = diagnosticLines()): string {
-  return JSON.stringify(buildDiagnosticReport("manual", "Copied from Developer diagnostics.", lines, runtime), null, 2);
+  return JSON.stringify(buildDiagnosticReport("manual", "Copied from Diagnostics.", lines, runtime), null, 2);
 }
 
 export async function submitDiagnostics(reason: DiagnosticReason, message: string, lines: readonly string[], runtime?: DiagnosticRuntime): Promise<void> {
