@@ -10,6 +10,8 @@
   "permissions": [
     "allow-get-tray-settings",
     "allow-set-keep-in-tray",
+    "allow-get-reminder-settings",
+    "allow-set-reminder-settings",
     "allow-get-autostart",
     "allow-set-autostart",
     "allow-data-folder-info",

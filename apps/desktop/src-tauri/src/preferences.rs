@@ -56,6 +56,7 @@ pub(crate) fn reset_native_settings(app: AppHandle) -> Result<(), String> {
   let manager = app.autolaunch();
   if manager.is_enabled().unwrap_or(false) { manager.disable().map_err(|e| e.to_string())?; }
   crate::tray::reset(&app);
+  crate::desktop_alerts::reset_reminder(&app);
   if let Some(path) = crate::desktop::zoom_file(&app) { let _ = std::fs::remove_file(path); }
   Ok(())
 }

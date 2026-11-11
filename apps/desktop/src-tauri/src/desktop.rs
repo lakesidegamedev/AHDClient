@@ -1369,6 +1369,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       crate::desktop_alerts::send_test_push,
       crate::tray::get_tray_settings,
       crate::tray::set_keep_in_tray,
+      crate::desktop_alerts::get_reminder_settings,
+      crate::desktop_alerts::set_reminder_settings,
       crate::preferences::get_autostart,
       crate::preferences::set_autostart,
       crate::preferences::data_folder_info,

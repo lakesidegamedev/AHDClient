@@ -314,6 +314,8 @@ describe("desktop security configuration", () => {
       "game-zoom",
       "get-tray-settings",
       "set-keep-in-tray",
+      "get-reminder-settings",
+      "set-reminder-settings",
       "get-autostart",
       "set-autostart",
       "data-folder-info",
