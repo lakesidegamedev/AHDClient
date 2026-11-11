@@ -263,7 +263,7 @@ jobs:
       - name: Check native dock Swift sources
         run: |
           d=apps/desktop/src-tauri/plugins/briefing-widgets/ios/Sources
-          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeQuickActions.swift $d/NativeLoad.swift $d/NativeAlerts.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
+          xcrun swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" $d/BriefingStore.swift $d/NativeNav.swift $d/NativeQuickActions.swift $d/NativeLinks.swift $d/NativeLoad.swift $d/NativeAlerts.swift $d/NativeDock*.swift $d/FoundationModelBridge.swift $d/NativeAsk*.swift
       - name: Generate native app icons
         run: |
           npm run tauri --workspace apps/desktop -- icon src/assets/ahd-logo.png --ios-color '#ffffff'
@@ -299,7 +299,7 @@ jobs:
       # Automatic signing only adds aps-environment to the App Store profile
       # when the App ID has the capability; without it every device fails
       # registerForRemoteNotifications. Prints capability names only.
-      - name: Enable Push Notifications on the App ID
+      - name: Enable Push Notifications and Associated Domains on the App ID
         if: steps.signing.outputs.mode == 'store'
         env:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}

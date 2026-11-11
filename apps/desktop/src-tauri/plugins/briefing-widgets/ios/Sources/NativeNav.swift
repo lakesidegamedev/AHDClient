@@ -485,6 +485,20 @@ final class NativeNavController: NSObject {
     return true
   }
 
+  /// A game link that opened the app. Signed-out players land on the launcher.
+  /// False means the webview is not ready yet.
+  func openLink(_ path: String) -> Bool {
+    guard let webView, let current = webView.url, current.absoluteString != "about:blank" else { return false }
+    model.close()
+    guard !(BriefingStore.session() ?? "").isEmpty else {
+      if let url = URL(string: Self.launcher) { webView.load(URLRequest(url: url)) }
+      return true
+    }
+    // The link names the live site, so it opens there even from the sandbox.
+    if let url = URL(string: Self.site + path) { webView.load(URLRequest(url: url)) }
+    return true
+  }
+
   /// A row in a sheet or the status: a game page, never anything off the site.
   private func openGamePath(_ path: String) {
     guard let webView, let safe = BriefingStore.gamePath(path), let url = URL(string: siteOrigin() + safe) else { return }

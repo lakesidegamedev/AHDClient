@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Make sure the App ID has Push Notifications enabled before signing.
+"""Make sure the App ID has Push Notifications and Associated Domains enabled before signing.
 
 Automatic signing only puts aps-environment in the App Store profile when the
 App ID has the capability. Without it iOS rejects registerForRemoteNotifications
-on every device. Idempotent. Prints the capability state only; never the team,
+on every device. The same holds for the associated-domains entitlement (game
+links opening the app): without the capability the signed export fails because
+the profile cannot carry the entitlement. Idempotent. Prints the capability state only; never the team,
 key or signing identity.
 
 Env: APPLE_API_ISSUER, APPLE_API_KEY, APPLE_API_KEY_PATH (the .p8 file).
@@ -24,6 +26,10 @@ import jwt
 
 BUNDLE_ID = "net.lakesidegames.ahdclient"
 API = "https://api.appstoreconnect.apple.com/v1"
+REQUIRED = [
+    ("PUSH_NOTIFICATIONS", "Push Notifications"),
+    ("ASSOCIATED_DOMAINS", "Associated Domains"),
+]
 
 
 def token() -> str:
@@ -67,19 +73,19 @@ def main() -> int:
     capabilities = call("GET", f"/bundleIds/{bundle}/bundleIdCapabilities", auth)["data"]
     kinds = sorted(item["attributes"]["capabilityType"] for item in capabilities)
     print(f"{BUNDLE_ID} capabilities: {', '.join(kinds) or 'none'}")
-    if "PUSH_NOTIFICATIONS" in kinds:
-        print("PASS: Push Notifications already enabled")
-        return 0
-    call("POST", "/bundleIdCapabilities", auth, {
-        "data": {
-            "type": "bundleIdCapabilities",
-            "attributes": {"capabilityType": "PUSH_NOTIFICATIONS"},
-            "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle}}},
-        }
-    })
-    print("FIXED: Push Notifications enabled on the App ID; signing will issue a new profile")
+    for kind, label in REQUIRED:
+        if kind in kinds:
+            print(f"PASS: {label} already enabled")
+            continue
+        call("POST", "/bundleIdCapabilities", auth, {
+            "data": {
+                "type": "bundleIdCapabilities",
+                "attributes": {"capabilityType": kind},
+                "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle}}},
+            }
+        })
+        print(f"FIXED: {label} enabled on the App ID; signing will issue a new profile")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

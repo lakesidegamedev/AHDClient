@@ -11,7 +11,7 @@ mkdir -p "$out" build-harness/DockHarness.app
 sdk=$(xcrun --sdk iphonesimulator --show-sdk-path)
 xcrun swiftc -parse-as-library -swift-version 5 -target arm64-apple-ios15.0-simulator -sdk "$sdk" \
   -o build-harness/DockHarness.app/DockHarness \
-  "$src/BriefingStore.swift" "$src/NativeNav.swift" "$src/NativeQuickActions.swift" "$src/NativeLoad.swift" "$src/NativeAlerts.swift" "$src"/NativeDock*.swift "$src/FoundationModelBridge.swift" "$src"/NativeAsk*.swift \
+  "$src/BriefingStore.swift" "$src/NativeNav.swift" "$src/NativeQuickActions.swift" "$src/NativeLinks.swift" "$src/NativeLoad.swift" "$src/NativeAlerts.swift" "$src"/NativeDock*.swift "$src/FoundationModelBridge.swift" "$src"/NativeAsk*.swift \
   .github/ios-dock-harness/HarnessApp.swift 2>&1 | grep -E "error|warning: unre" ; test -x build-harness/DockHarness.app/DockHarness || { echo "harness build failed"; exit 1; }
 cp .github/ios-dock-harness/Info.plist build-harness/DockHarness.app/Info.plist
 codesign --force -s - build-harness/DockHarness.app
