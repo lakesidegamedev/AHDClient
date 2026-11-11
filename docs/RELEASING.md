@@ -177,6 +177,26 @@ Play requires the bundle, sideload testers take the APK. `versionCode` is
 derived by Tauri from the version (`major*1000000 + minor*1000 + patch`), so
 every release bump is also a Play version bump.
 
+### Android update manifest
+
+Direct-download players (installs not made by Google Play) learn about a new
+build from `https://ops.lakesidegames.net/downloads/AHDClient-android-latest.json`:
+
+```json
+{ "versionCode": 2011000, "versionName": "2.11.0", "pageUrl": "https://ops.lakesidegames.net/downloads/" }
+```
+
+The `android` job writes it with `scripts/generate-android-manifest.mjs` and
+includes it in the `ahdclient-android` artifact next to the APK. When mirroring
+the APK to the downloads host, publish the APK first and the manifest last, the
+same order as the desktop `latest.json`, so no player is pointed at a build
+that is not there yet. `versionCode` comes from the `tauri.conf.json` version
+(`major*1000000 + minor*1000 + patch`), exactly as the APK gets it. The app
+fetches the manifest at most once a day, shows a row in More and a one-time
+notice that opens `pageUrl` in the browser, and never downloads or installs
+anything itself. The app only accepts an https `pageUrl` on
+`ops.lakesidegames.net`.
+
 ## iOS
 
 iOS builds run only on macOS, so the `mobile bundles` workflow does them on

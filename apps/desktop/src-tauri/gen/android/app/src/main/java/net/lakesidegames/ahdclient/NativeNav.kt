@@ -389,6 +389,7 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
         link.app == AppAction.BRIEFING -> { pendingTopLevel = null; webView.loadUrl("$LAUNCHER?screen=briefing") }
         link.app == AppAction.INBOX -> loadTopLevel("$site/notifications")
         link.app == AppAction.ALERTS -> NativeAlerts.showManager(activity)
+        link.app == AppAction.UPDATE -> AppUpdate.available(activity)?.let { AppUpdate.openPage(activity, it) }
         link.app == AppAction.ASK -> net.lakesidegames.briefing.NativeAskController.present()
         link.app == AppAction.LAUNCHER -> { pendingTopLevel = null; webView.loadUrl(LAUNCHER) }
         // Wiki, Discord, Patreon, support mail: outside the game WebView, never loaded in it.
@@ -609,7 +610,8 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
   private fun applyModel() {
     if (previewing) return
     val live = accountLive()
-    val next = (if (live) gameModelNow() else null)?.withApp(live) ?: DockModel.fallback(live)
+    val update = AppUpdate.available(activity)?.versionName
+    val next = (if (live) gameModelNow() else null)?.withApp(live, update) ?: DockModel.fallback(live, update)
     appliedModel = next
     dock.setModel(next)
     // The tab list can change under the page: pick the matching tab again.

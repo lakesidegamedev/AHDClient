@@ -88,6 +88,7 @@ class MainActivity : TauriActivity() {
     super.onResume()
     CompanionSafety.run("widget deep link") { openWidgetPage() }
     CompanionSafety.run("tab bar resume") { nav?.resume() }
+    AppUpdate.checkIfDue(this)
     refreshWidgetsSafely()
   }
 

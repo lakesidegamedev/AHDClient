@@ -78,7 +78,7 @@ describe("Android mobile dock (2.10.0)", () => {
       ["dock_briefing", "dock_inbox", "dock_alerts", "dock_ask", "dock_launcher"].map(string));
     expect(order.every((index) => index > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(model).toContain("val sections = listOf(appSection(signedIn)) + game");
+    expect(model).toContain("val sections = listOf(appSection(signedIn, update)) + game");
     expect(nav).toContain("NativeAskController.present()");
     expect(nav).toContain("dock.setInboxBadge(");
     expect(dock).toContain('"99+"');
@@ -103,7 +103,7 @@ describe("Android mobile dock (2.10.0)", () => {
     expect(store).toContain("status == 401 || status == 403");
     expect(store).toContain("Outcome.FAILED");
     expect(nav).toContain("DockModelStore.refresh(context, key)");
-    expect(nav).toContain("DockModel.fallback(live)");
+    expect(nav).toContain("DockModel.fallback(live, update)");
   });
 
   it("refreshes status on foreground, tab return, finished turns and a timer that never beats a minute", () => {
