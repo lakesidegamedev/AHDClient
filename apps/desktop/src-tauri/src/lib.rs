@@ -22,9 +22,13 @@ mod desktop;
 #[cfg(desktop)]
 mod desktop_alerts;
 #[cfg(desktop)]
+mod downloads;
+#[cfg(desktop)]
 mod world_archive;
 #[cfg(desktop)]
 mod game_versions;
+#[cfg(desktop)]
+mod hosting;
 #[cfg(mobile)]
 mod mobile;
 #[cfg(desktop)]

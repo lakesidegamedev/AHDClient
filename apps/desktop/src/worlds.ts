@@ -51,6 +51,8 @@ export interface GameInfo {
   port: number | null;
   slot: string | null;
   url: string | null;
+  /** Address for friends on the same network, only while hosting. */
+  lanUrl?: string | null;
 }
 
 export interface LinkedAccount {
