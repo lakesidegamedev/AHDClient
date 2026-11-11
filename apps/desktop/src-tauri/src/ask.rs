@@ -365,10 +365,21 @@ pub(crate) fn ask_dock_origin(monitor_width: u32, monitor_height: u32, scale: f6
 }
 
 /// Logical-pixel form of [`ask_dock_origin`] for
-/// `WebviewWindowBuilder::position`, which takes logical coordinates.
-pub(crate) fn ask_dock_logical(monitor_width: u32, monitor_height: u32, scale: f64) -> (f64, f64) {
+/// `WebviewWindowBuilder::position`, which takes logical coordinates. The
+/// monitor's own top-left (physical pixels, can be negative on a second
+/// screen) is added so the panel lands on that monitor, not the primary one.
+pub(crate) fn ask_dock_logical_on(
+  monitor_x: i32,
+  monitor_y: i32,
+  monitor_width: u32,
+  monitor_height: u32,
+  scale: f64,
+) -> (f64, f64) {
   let (x, y) = ask_dock_origin(monitor_width, monitor_height, scale);
-  (f64::from(x) / scale, f64::from(y) / scale)
+  (
+    (f64::from(monitor_x) + f64::from(x)) / scale,
+    (f64::from(monitor_y) + f64::from(y)) / scale,
+  )
 }
 
 /// Open the native Ask panel, or resume it in place. A signed-in player
@@ -447,9 +458,15 @@ fn open_ask_ui(app: &AppHandle) -> Result<(), String> {
       }
     });
 
-  if let Ok(Some(monitor)) = app.primary_monitor() {
+  // Dock on the screen the game is on; fall back to the primary one.
+  let monitor = app
+    .get_webview_window("main")
+    .and_then(|main| main.current_monitor().ok().flatten())
+    .or_else(|| app.primary_monitor().ok().flatten());
+  if let Some(monitor) = monitor {
     let size = monitor.size();
-    let (x, y) = ask_dock_logical(size.width, size.height, monitor.scale_factor());
+    let pos = monitor.position();
+    let (x, y) = ask_dock_logical_on(pos.x, pos.y, size.width, size.height, monitor.scale_factor());
     builder = builder.position(x, y);
   } else {
     builder = builder.center();
@@ -557,7 +574,7 @@ impl SseParser {
 
 #[cfg(test)]
 mod tests {
-  use super::{ask_api_allowed, ask_dock_origin, ask_login_url, is_ask_session_cookie_name, SseParser};
+  use super::{ask_api_allowed, ask_dock_logical_on, ask_dock_origin, ask_login_url, is_ask_session_cookie_name, SseParser};
 
   #[test]
   fn ask_panel_docks_against_the_right_edge() {
@@ -568,6 +585,16 @@ mod tests {
     // A monitor narrower than the panel clamps to the left edge instead of
     // wrapping around.
     assert_eq!(ask_dock_origin(320, 480, 1.0), (0, 0));
+  }
+
+  #[test]
+  fn ask_panel_follows_the_monitor_the_game_is_on() {
+    // A second screen to the right of a 1920 wide primary.
+    assert_eq!(ask_dock_logical_on(1920, 0, 1920, 1080, 1.0), (3388.0, 140.0));
+    // A screen to the left has a negative origin.
+    assert_eq!(ask_dock_logical_on(-1920, 0, 1920, 1080, 1.0), (-452.0, 140.0));
+    // Hidpi: the result is logical, so it divides by the scale.
+    assert_eq!(ask_dock_logical_on(3840, 0, 3840, 2160, 2.0), (3388.0, 140.0));
   }
 
   #[test]

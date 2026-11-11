@@ -335,6 +335,20 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     }
   }, []);
 
+  // Ctrl or Cmd plus K opens Ask from the launcher too (the game has its own
+  // copy of this shortcut, and the native menu carries the accelerator).
+  useEffect(() => {
+    if (mobile) return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k" && !event.repeat) {
+        event.preventDefault();
+        void ask.open().catch(fail);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     if (mobile) return;
     void refreshWorlds();

@@ -469,6 +469,7 @@ export const DE: Record<keyof typeof EN, string> = {
   "app.pickEra": "Wähle zuerst ein Zeitalter.",
   "app.sandboxOffline": "Verbinde dich mit dem Internet, um den Sandbox-Zugang zu prüfen.",
   "app.askTitle": "Stelle Fragen zum Spiel. Öffnet sich neben dem Client und meldet dich mit deinem Spielkonto an.",
+  "ask.answerReady": "Antwort bereit",
   "app.ask": "Fragen",
   "app.diagnosticsFailed": "Die Meldung konnte nicht gesendet werden. Nutze stattdessen Problem melden in den Einstellungen.",
   "app.linkTitle": "Verknüpfe dein Spielkonto",

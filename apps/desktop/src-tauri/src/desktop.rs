@@ -24,15 +24,23 @@ use crate::{help_destination, is_frame_resource, is_online_navigation_allowed, l
 const SETTINGS_SHORTCUT_SCRIPT: &str = r#"
 document.addEventListener('keydown', function (event) {
   // Escape belongs to the game (it closes the game's own dialogs). Settings
-  // is Ctrl or Cmd plus comma; the native menu carries the same accelerator.
+  // is Ctrl or Cmd plus comma and Ask is Ctrl or Cmd plus K; the native menu carries the same accelerator.
   if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === ',' && !event.repeat) {
     event.preventDefault();
     window.location.href = 'ahdclient://settings';
+  } else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key === 'k' || event.key === 'K') && !event.repeat) {
+    event.preventDefault();
+    window.location.href = 'ahdclient://ask';
   }
 }, true);
 "#;
 
 fn handle_settings_shortcut(app: &AppHandle, url: &Url) -> bool {
+  if url.scheme() == "ahdclient" && url.host_str() == Some("ask") {
+    let ask_app = app.clone();
+    tauri::async_runtime::spawn(async move { let _ = crate::ask::open_ask_window(ask_app).await; });
+    return true;
+  }
   if url.scheme() != "ahdclient" || url.host_str() != Some("settings") { return false; }
   let _ = app.emit("client:settings", ());
   if let Some(main) = app.get_webview_window("main") {

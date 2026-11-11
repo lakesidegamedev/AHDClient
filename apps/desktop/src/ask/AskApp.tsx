@@ -36,6 +36,8 @@ import {
 } from "./consent.js";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "../worlds.js";
+import { translate } from "../i18n.js";
+import { readSettings } from "../settings.js";
 import { Md } from "./markdown.js";
 import "./ask.css";
 
@@ -114,6 +116,10 @@ export function AskApp(): JSX.Element {
   // below revalidates it in the background. No cookies or tokens here,
   // only the quota numbers and the account they belong to.
   const [cachedFirst] = useState(loadCachedAskSession);
+  // Screen readers hear one short "Answer ready" per finished answer; the
+  // streaming text itself is never announced token by token.
+  const [announcement, setAnnouncement] = useState("");
+  const streamingIds = useRef<Set<string>>(new Set());
   const [phase, setPhase] = useState<Phase>(() =>
     cachedFirst?.usage ?? cachedFirst?.tier ? "ready" : "checking",
   );
@@ -125,6 +131,23 @@ export function AskApp(): JSX.Element {
   const [convs, setConvs] = useState<AskConversation[]>([]);
   const [convId, setConvId] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
+
+  useEffect(() => {
+    const seen = streamingIds.current;
+    for (const m of msgs) {
+      if (m.role === "user") continue;
+      if (m.streaming) {
+        seen.add(m.id);
+      } else if (seen.has(m.id)) {
+        seen.delete(m.id);
+        if (m.text && !m.error && !m.stopped) {
+          // Clear first so the same words twice in a row are announced again.
+          setAnnouncement("");
+          window.setTimeout(() => setAnnouncement(translate(readSettings().language, "ask.answerReady")), 50);
+        }
+      }
+    }
+  }, [msgs]);
   const [input, setInput] = useState("");
   const [activeReq, setActiveReq] = useState<string | null>(null);
   const [fuLeft, setFuLeft] = useState<number | null>(null);
@@ -652,9 +675,14 @@ export function AskApp(): JSX.Element {
         </div>
       ) : null}
 
+      <div className="av-sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       <div
         className="av-thread"
         ref={scrollRef}
+        role="log"
+        aria-label="Conversation"
+        aria-live="off"
+        aria-busy={msgs.some((m) => m.role !== "user" && m.streaming) ? "true" : "false"}
         onScroll={(event) => {
           const node = event.currentTarget;
           stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
