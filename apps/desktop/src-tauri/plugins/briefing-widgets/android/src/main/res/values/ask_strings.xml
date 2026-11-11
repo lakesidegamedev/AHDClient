@@ -32,6 +32,7 @@
     <string name="ask_status_stopping">Stopping</string>
     <string name="ask_status_recovering">Getting the rest of the answer</string>
     <string name="ask_status_writing">Writing</string>
+    <string name="ask_answer_ready">Answer ready</string>
     <string name="ask_snack_helpful">Thanks. Marked as helpful.</string>
     <string name="ask_snack_reported">Thanks. This answer was reported for review.</string>
     <string name="ask_snack_rating_failed">Your rating was not saved. %1$s</string>

@@ -32,6 +32,7 @@
     <string name="ask_status_stopping">Wird gestoppt</string>
     <string name="ask_status_recovering">Rest der Antwort wird geholt</string>
     <string name="ask_status_writing">Schreibt</string>
+    <string name="ask_answer_ready">Antwort ist fertig</string>
     <string name="ask_snack_helpful">Danke. Als hilfreich markiert.</string>
     <string name="ask_snack_reported">Danke. Diese Antwort wurde zur Prüfung gemeldet.</string>
     <string name="ask_snack_rating_failed">Deine Bewertung wurde nicht gespeichert. %1$s</string>
