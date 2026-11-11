@@ -32,6 +32,12 @@ describe("WorldsScreen private hosting", () => {
         onHost={onHost}
         onDelete={vi.fn()}
         onSaves={vi.fn()}
+        onRename={vi.fn()}
+        onExport={vi.fn()}
+        onImport={vi.fn()}
+        onTidy={vi.fn()}
+        sizes={{}}
+        notice={null}
         onBack={vi.fn()}
       />,
     );
@@ -60,6 +66,7 @@ describe("WorldsScreen private hosting", () => {
         onHost={vi.fn()}
         onDelete={vi.fn()}
         onSaves={onSaves}
+        onRename={vi.fn()} onExport={vi.fn()} onImport={vi.fn()} onTidy={vi.fn()} sizes={{}} notice={null} 
         onBack={vi.fn()}
       />,
     );
@@ -85,6 +92,12 @@ describe("WorldsScreen Classic tag", () => {
         onHost={vi.fn()}
         onDelete={vi.fn()}
         onSaves={vi.fn()}
+        onRename={vi.fn()}
+        onExport={vi.fn()}
+        onImport={vi.fn()}
+        onTidy={vi.fn()}
+        sizes={{}}
+        notice={null}
         onBack={vi.fn()}
       />,
     );
@@ -97,10 +110,81 @@ describe("WorldsScreen in German", () => {
   it("shows German copy when the language is German", () => {
     render(
       <LanguageProvider language="de">
-        <WorldsScreen worlds={[]} runningSlot={null} busy={false} error={null} onPlay={vi.fn()} onHost={vi.fn()} onDelete={vi.fn()} onSaves={vi.fn()} onBack={vi.fn()} />
+        <WorldsScreen worlds={[]} runningSlot={null} busy={false} error={null} onPlay={vi.fn()} onHost={vi.fn()} onDelete={vi.fn()} onSaves={vi.fn()} onRename={vi.fn()} onExport={vi.fn()} onImport={vi.fn()} onTidy={vi.fn()} sizes={{}} notice={null} onBack={vi.fn()} />
       </LanguageProvider>,
     );
     expect(screen.getByRole("heading", { name: "Deine Welten" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Zurück/ })).toBeTruthy();
+  });
+});
+
+describe("WorldsScreen managing worlds", () => {
+  const world = {
+    slot: "cold-war",
+    name: "Cold War",
+    preset: "1953-default",
+    createdAt: "2026-09-14T00:00:00Z",
+    lastPlayedAt: "2026-09-14T00:00:00Z",
+    turn: 1,
+    character: null,
+    classic: true,
+  };
+  const base = {
+    worlds: [world],
+    runningSlot: null,
+    busy: false,
+    error: null,
+    onPlay: vi.fn(),
+    onHost: vi.fn(),
+    onDelete: vi.fn(),
+    onSaves: vi.fn(),
+    onTidy: vi.fn(),
+    onBack: vi.fn(),
+    notice: null,
+  };
+
+  it("shows size on disk and exports, imports and clears autosaves", async () => {
+    const onExport = vi.fn();
+    const onImport = vi.fn();
+    const onTidy = vi.fn();
+    render(
+      <LanguageProvider language="en">
+        <WorldsScreen {...base} onRename={vi.fn()} onExport={onExport} onImport={onImport} onTidy={onTidy} sizes={{ "cold-war": 5 * 1024 * 1024 }} />
+      </LanguageProvider>,
+    );
+    expect(screen.getByText(/5\.0 MB/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(onExport).toHaveBeenCalledWith("cold-war");
+    await userEvent.click(screen.getByRole("button", { name: "Import world" }));
+    expect(onImport).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Clear old autosaves" }));
+    expect(onTidy).toHaveBeenCalledWith("cold-war");
+  });
+
+  it("renames a world in place and closes on success", async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LanguageProvider language="en">
+        <WorldsScreen {...base} onRename={onRename} onExport={vi.fn()} onImport={vi.fn()} sizes={{}} />
+      </LanguageProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = screen.getByLabelText("World name");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Berlin Crisis");
+    await userEvent.click(screen.getByRole("button", { name: "Save name" }));
+    expect(onRename).toHaveBeenCalledWith("cold-war", "Berlin Crisis");
+    await vi.waitFor(() => expect(screen.queryByLabelText("World name")).toBeNull());
+  });
+
+  it("will not export, rename or clear a running world", () => {
+    render(
+      <LanguageProvider language="en">
+        <WorldsScreen {...base} runningSlot="cold-war" onRename={vi.fn()} onExport={vi.fn()} onImport={vi.fn()} sizes={{}} />
+      </LanguageProvider>,
+    );
+    for (const name of ["Rename", "Export", "Clear old autosaves"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 });

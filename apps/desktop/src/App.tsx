@@ -11,7 +11,7 @@ import { WorldsimScreen } from "./screens/WorldsimScreen.js";
 import { defaultSetupOptions } from "./screens/setupOptions.js";
 import type { SetupOptions } from "./screens/setupOptions.js";
 import { PlayingScreen } from "./screens/PlayingScreen.js";
-import { CLASSIC_REQUIRED, ask, classicGame, eraById, game, online, slugForWorld, uniqueWorldName, worldSaves, worlds } from "./worlds.js";
+import { AUTOSAVES_KEPT, CLASSIC_REQUIRED, ask, classicGame, eraById, game, online, slugForWorld, uniqueWorldName, worldSaves, worlds } from "./worlds.js";
 import type { Era } from "./worlds.js";
 import type {
   ClassicInfo,
@@ -194,6 +194,8 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   /** Slot whose saves dialog is open, if any. */
   const [savesFor, setSavesFor] = useState<string | null>(null);
+  const [worldSizes, setWorldSizes] = useState<Record<string, number>>({});
+  const [worldNotice, setWorldNotice] = useState<string | null>(null);
   /** Set while a save is being loaded, so the next boot can report how it went. */
   const loadingSave = useRef(false);
   /**
@@ -734,6 +736,74 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     }
   };
 
+  const refreshSizes = useCallback(async () => {
+    try {
+      setWorldSizes(Object.fromEntries((await worlds.sizes()).map((entry) => [entry.slot, entry.sizeBytes])));
+    } catch {
+      // Sizes are a nicety; the list works without them.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mobile || screen !== "worlds") return;
+    setWorldNotice(null);
+    void refreshSizes();
+  }, [screen, refreshSizes]);
+
+  const reportWorldError = (e: unknown) => {
+    setWorldNotice(null);
+    setError(e instanceof Error ? e.message : String(e));
+  };
+
+  const handleRename = async (slot: string, name: string) => {
+    try {
+      await worlds.rename(slot, name);
+      setError(null);
+      await refreshWorlds();
+    } catch (e) {
+      reportWorldError(e);
+      throw e;
+    }
+  };
+
+  const handleExport = async (slot: string) => {
+    try {
+      const path = await worlds.exportTo(slot, t("worlds.exportDialog"));
+      setError(null);
+      if (path) {
+        const name = allWorlds.find((world) => world.slot === slot)?.name ?? slot;
+        setWorldNotice(t("worlds.exported", { name, path }));
+      }
+    } catch (e) {
+      reportWorldError(e);
+    }
+  };
+
+  const handleImport = async () => {
+    try {
+      const added = await worlds.importFrom(t("worlds.importDialog"));
+      setError(null);
+      if (added) {
+        setWorldNotice(t("worlds.imported", { name: added.name }));
+        await refreshWorlds();
+        void refreshSizes();
+      }
+    } catch (e) {
+      reportWorldError(e);
+    }
+  };
+
+  const handleTidy = async (slot: string) => {
+    try {
+      const count = await worlds.tidyAutosaves(slot, AUTOSAVES_KEPT);
+      setError(null);
+      setWorldNotice(count > 0 ? t("worlds.tidied", { count, keep: AUTOSAVES_KEPT }) : t("worlds.tidiedNone"));
+      void refreshSizes();
+    } catch (e) {
+      reportWorldError(e);
+    }
+  };
+
   /**
    * Load a save into a world: stop it if it is running, queue the load, then
    * start it again. The start applies the load before the game opens, so the
@@ -1142,6 +1212,12 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         onHost={handleHost}
         onDelete={handleDelete}
         onSaves={setSavesFor}
+        onRename={handleRename}
+        onExport={(slot) => void handleExport(slot)}
+        onImport={() => void handleImport()}
+        onTidy={(slot) => void handleTidy(slot)}
+        sizes={worldSizes}
+        notice={worldNotice}
         onBack={() => setScreen("launcher")}
       />,
     );

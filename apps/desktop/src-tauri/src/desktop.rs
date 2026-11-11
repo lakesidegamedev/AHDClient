@@ -231,6 +231,163 @@ pub(crate) fn delete_world(app: AppHandle, game: State<'_, Game>, slot: String) 
 }
 
 // ---------------------------------------------------------------------------
+// Managing worlds: rename, size, export, import, old autosaves
+// ---------------------------------------------------------------------------
+
+fn slot_is_running(game: &State<'_, Game>, slot: &str) -> Result<bool, String> {
+  Ok(game.0.lock().map_err(|_| "game state poisoned")?.slot.as_deref() == Some(slot))
+}
+
+fn clean_name(name: &str) -> Result<String, String> {
+  let name: String = name.split_whitespace().collect::<Vec<_>>().join(" ");
+  if name.is_empty() {
+    return Err("Give the world a name.".into());
+  }
+  if name.chars().count() > 60 {
+    return Err("That name is too long. Use 60 characters or fewer.".into());
+  }
+  Ok(name)
+}
+
+#[tauri::command]
+pub(crate) fn rename_world(app: AppHandle, game: State<'_, Game>, slot: String, name: String) -> Result<WorldMeta, String> {
+  if slot_is_running(&game, &slot)? {
+    return Err("Stop the world before renaming it.".into());
+  }
+  let dir = world_dir(&app, &slot)?;
+  let mut meta = read_meta(&dir).ok_or_else(|| format!("no world at {slot:?}"))?;
+  meta.name = clean_name(&name)?;
+  write_meta(&dir, &meta)?;
+  Ok(meta)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorldSize {
+  slot: String,
+  size_bytes: u64,
+}
+
+/// Disk use per world. Walks the folders, so the screen asks for it after it
+/// has drawn rather than with the list.
+#[tauri::command]
+pub(crate) async fn world_sizes(app: AppHandle) -> Result<Vec<WorldSize>, String> {
+  let root = worlds_dir(&app)?;
+  tauri::async_runtime::spawn_blocking(move || {
+    fs::read_dir(&root)
+      .map(|entries| {
+        entries
+          .flatten()
+          .filter(|e| e.path().join("world.json").is_file())
+          .filter_map(|e| Some(WorldSize { slot: e.file_name().into_string().ok()?, size_bytes: crate::world_archive::dir_size(&e.path()) }))
+          .collect()
+      })
+      .map_err(|e| e.to_string())
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
+/// Ask where to save, then pack the world. Returns the file written, or None
+/// when the player cancelled the dialog.
+#[tauri::command]
+pub(crate) async fn export_world(app: AppHandle, game: State<'_, Game>, slot: String, title: String) -> Result<Option<String>, String> {
+  use tauri_plugin_dialog::DialogExt;
+  if slot_is_running(&game, &slot)? {
+    return Err("Stop the world before exporting it.".into());
+  }
+  let dir = world_dir(&app, &slot)?;
+  let mut meta = read_meta(&dir).ok_or_else(|| format!("no world at {slot:?}"))?;
+  meta.classic = game_versions::world_is_classic(meta.game_version.as_deref(), meta.classic);
+  let meta_json = serde_json::to_vec_pretty(&meta).map_err(|e| e.to_string())?;
+  let suggested = format!("{slot}.ahdworld");
+  let picked = {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+      app.dialog().file().set_title(&title).set_file_name(&suggested).add_filter("AHD world", &["ahdworld"]).blocking_save_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+  };
+  let Some(picked) = picked else { return Ok(None) };
+  let mut dest = picked.into_path().map_err(|e| e.to_string())?;
+  if dest.extension().is_none() {
+    dest.set_extension("ahdworld");
+  }
+  let out = dest.clone();
+  tauri::async_runtime::spawn_blocking(move || crate::world_archive::export_world(&dir, &out, &meta_json))
+    .await
+    .map_err(|e| e.to_string())??;
+  Ok(Some(dest.display().to_string()))
+}
+
+/// Unpack an archive as a new world. The version stamp and Classic pin travel
+/// with the file; an existing world is never touched.
+fn import_into(root: &std::path::Path, archive: &std::path::Path) -> Result<WorldMeta, String> {
+  let staging = root.join(format!(".import-{}-{}", std::process::id(), now_iso().replace(':', "")));
+  fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+  let result = (|| -> Result<WorldMeta, String> {
+    let raw = crate::world_archive::unpack_world(archive, &staging)?;
+    let mut meta: WorldMeta = serde_json::from_slice(&raw).map_err(|_| "That file is not an AHD world.".to_string())?;
+    let _ = fs::remove_file(staging.join(RESTORE_MARKER));
+    let _ = fs::remove_file(staging.join(".ahdclient.lock"));
+    let base = if valid_slot(&meta.slot) { meta.slot.clone() } else { "imported-world".to_string() };
+    meta.slot = crate::world_archive::free_slot(root, &base);
+    meta.classic = game_versions::world_is_classic(meta.game_version.as_deref(), meta.classic);
+    write_meta(&staging, &meta)?;
+    fs::rename(&staging, root.join(&meta.slot)).map_err(|e| e.to_string())?;
+    Ok(meta)
+  })();
+  if result.is_err() {
+    let _ = fs::remove_dir_all(&staging);
+  }
+  result
+}
+
+/// Ask for a world file and add it as a new world. None when cancelled.
+#[tauri::command]
+pub(crate) async fn import_world(app: AppHandle, title: String) -> Result<Option<WorldMeta>, String> {
+  use tauri_plugin_dialog::DialogExt;
+  let root = worlds_dir(&app)?;
+  let picked = {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+      app.dialog().file().set_title(&title).add_filter("AHD world", &["ahdworld"]).blocking_pick_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+  };
+  let Some(picked) = picked else { return Ok(None) };
+  let path = picked.into_path().map_err(|e| e.to_string())?;
+  tauri::async_runtime::spawn_blocking(move || import_into(&root, &path))
+    .await
+    .map_err(|e| e.to_string())?
+    .map(Some)
+}
+
+/// Delete all but the newest `keep` autosaves. Manual and safety saves are
+/// never touched. Returns how many were removed.
+fn tidy_autosaves_in(world: &std::path::Path, keep: usize) -> Result<usize, String> {
+  let mut removed = 0;
+  for save in list_saves_in(world).into_iter().filter(|s| s.kind == "auto").skip(keep) {
+    match delete_save_in(world, &save.id) {
+      Ok(()) => removed += 1,
+      Err(e) if e.contains("about to be loaded") => {}
+      Err(e) => return Err(e),
+    }
+  }
+  Ok(removed)
+}
+
+#[tauri::command]
+pub(crate) fn delete_old_autosaves(app: AppHandle, game: State<'_, Game>, slot: String, keep: usize) -> Result<usize, String> {
+  if slot_is_running(&game, &slot)? {
+    return Err("Stop the world before clearing its autosaves.".into());
+  }
+  tidy_autosaves_in(&world_dir(&app, &slot)?, keep.min(50))
+}
+
+// ---------------------------------------------------------------------------
 // Save slots
 //
 // The game writes saves into `<world>/saves/<id>/` (a `save.json` the list
@@ -1343,6 +1500,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_fs::init())
+    // Used from Rust only (world export and import pick files here); no webview is granted dialog access.
+    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_process::init())
@@ -1409,6 +1568,11 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       create_world,
       touch_world,
       delete_world,
+      rename_world,
+      world_sizes,
+      export_world,
+      import_world,
+      delete_old_autosaves,
       list_world_saves,
       delete_world_save,
       request_world_save_load,
@@ -1468,7 +1632,7 @@ pub(crate) fn on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-  use super::{stamped, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
+  use super::{stamped, clean_name, import_into, read_meta, tidy_autosaves_in, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
 
   #[test]
@@ -1640,5 +1804,57 @@ mod tests {
     assert_eq!(out.game_version.as_deref(), Some("1.20.1"));
     assert!(stamped(meta(Some("1.19.0"), true), Some("1.19.0"), false).classic);
     assert_eq!(stamped(meta(Some("1.9.0"), false), Some("1.10.0"), false).game_version.as_deref(), Some("1.10.0"));
+  }
+  #[test]
+  fn names_are_trimmed_and_bounded() {
+    assert_eq!(clean_name("  Cold   War  ").unwrap(), "Cold War");
+    assert!(clean_name("   ").is_err());
+    assert!(clean_name(&"x".repeat(61)).is_err());
+  }
+
+  #[test]
+  fn autosave_tidy_keeps_the_newest_and_every_other_kind() {
+    let world = scratch_world("tidy");
+    let ids = ["20261101T100000Z-aaaaaa", "20261101T110000Z-bbbbbb", "20261101T120000Z-cccccc", "20261101T130000Z-dddddd"];
+    for (i, id) in ids.iter().enumerate() {
+      write_save(&world, id, &format!("2026-11-01T1{i}:00:00.000Z"), i as i64);
+    }
+    // The oldest save is a manual one: never removed.
+    for id in &ids[1..] {
+      let path = world.join("saves").join(id).join("save.json");
+      std::fs::write(&path, std::fs::read_to_string(&path).unwrap().replace("\"manual\"", "\"auto\"")).unwrap();
+    }
+    assert_eq!(tidy_autosaves_in(&world, 1).unwrap(), 2);
+    let left: Vec<String> = list_saves_in(&world).into_iter().map(|s| s.id).collect();
+    assert_eq!(left, vec![ids[3].to_string(), ids[0].to_string()]);
+    let _ = std::fs::remove_dir_all(world);
+  }
+
+  #[test]
+  fn an_imported_classic_world_stays_classic_and_never_overwrites() {
+    let root = scratch_world("import");
+    let source = root.join("source");
+    std::fs::create_dir_all(source.join("db")).unwrap();
+    std::fs::write(source.join("db/data"), b"d").unwrap();
+    let mut original = meta(Some("1.8.3"), true);
+    original.slot = "cold-war".into();
+    original.name = "Cold War".into();
+    std::fs::write(source.join("world.json"), serde_json::to_vec(&original).unwrap()).unwrap();
+    let file = root.join("cold-war.ahdworld");
+    crate::world_archive::export_world(&source, &file, &serde_json::to_vec(&original).unwrap()).unwrap();
+
+    let worlds = root.join("worlds");
+    std::fs::create_dir_all(&worlds).unwrap();
+    let first = import_into(&worlds, &file).unwrap();
+    assert_eq!(first.slot, "cold-war");
+    assert!(first.classic);
+    assert_eq!(first.game_version.as_deref(), Some("1.8.3"));
+    let second = import_into(&worlds, &file).unwrap();
+    assert_eq!(second.slot, "cold-war-2");
+    assert_eq!(read_meta(&worlds.join("cold-war")).unwrap(), first);
+    assert!(worlds.join("cold-war-2/db/data").is_file());
+    // No staging folders are left behind.
+    assert_eq!(std::fs::read_dir(&worlds).unwrap().count(), 2);
+    let _ = std::fs::remove_dir_all(root);
   }
 }

@@ -297,7 +297,18 @@ export const worlds = {
       character: character ?? null,
     }),
   remove: (slot: string) => invoke<void>("delete_world", { slot }),
+  rename: (slot: string, name: string) => invoke<WorldMeta>("rename_world", { slot, name }),
+  sizes: () => invoke<{ slot: string; sizeBytes: number }[]>("world_sizes"),
+  /** Path written, or null when the player closed the file dialog. */
+  exportTo: (slot: string, title: string) => invoke<string | null>("export_world", { slot, title }),
+  /** The new world, or null when the player closed the file dialog. */
+  importFrom: (title: string) => invoke<WorldMeta | null>("import_world", { title }),
+  /** How many autosaves were removed. */
+  tidyAutosaves: (slot: string, keep: number) => invoke<number>("delete_old_autosaves", { slot, keep }),
 };
+
+/** Autosaves kept when the player clears old ones. */
+export const AUTOSAVES_KEPT = 3;
 
 /**
  * Saves read from disk, so they work with the world stopped. Creating a save
