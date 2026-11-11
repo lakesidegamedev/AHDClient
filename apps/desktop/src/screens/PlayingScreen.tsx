@@ -7,7 +7,7 @@ interface Props {
   lines: string[];
   hosted: boolean;
   port: number | null;
-  lanUrl?: string | null;
+  lanUrl?: string | null | undefined;
   onResume: () => void;
   onStop: () => void;
 }
