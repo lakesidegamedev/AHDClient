@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useT, type TranslationKey } from "./i18n.js";
+
+const TEST_RESULTS = ["sent", "not_registered", "signed_out", "rate_limited", "permission_denied", "retry", "invalid", "error"];
 
 interface PushStatus {
   enabled: boolean;
@@ -16,19 +19,8 @@ interface Props {
   onOpenedPage?: () => void;
 }
 
-/** What each test verdict means for the player. */
-const TEST_RESULT: Record<string, string> = {
-  sent: "Sent. It should appear within a few seconds. If it does not, check that notifications are allowed for the app in your device settings.",
-  not_registered: "This device is not connected for alerts yet. Wait a minute after turning them on, then try again.",
-  signed_out: "Sign in to multiplayer first, then try again.",
-  rate_limited: "Too many tests in a row. Try again in a minute.",
-  permission_denied: "Notifications are blocked for AHDClient in your system settings.",
-  retry: "The alert service did not answer. Try again shortly.",
-  invalid: "This device's alert connection expired. Turn alerts off and on again.",
-  error: "Could not send a test alert. Try again shortly.",
-};
-
 export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element {
+  const t = useT();
   const [status, setStatus] = useState<PushStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +35,7 @@ export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element
       try {
         const next = await invoke<PushStatus>("get_push_status");
         if (active) setStatus(next);
-      } catch { if (active) setError("Could not read notification settings."); }
+      } catch { if (active) setError(t("push.readError")); }
       finally { pending = false; }
     }
     void refresh();
@@ -54,46 +46,42 @@ export function PushControl({ mobile = true, onOpenedPage }: Props): JSX.Element
   async function toggle() {
     setBusy(true); setError("");
     try { setStatus(await invoke<PushStatus>("configure_push", { enabled: !status?.enabled })); }
-    catch { setError("Could not change notification settings. Please try again."); }
+    catch { setError(t("push.changeError")); }
     finally { setBusy(false); }
   }
   async function sendTest() {
     setTesting(true); setTestResult("");
     try {
       const { result } = await invoke<{ result: string }>("send_test_push");
-      setTestResult(TEST_RESULT[result] ?? TEST_RESULT.error!);
-    } catch { setTestResult(TEST_RESULT.error!); }
+      setTestResult(t(`push.test.${TEST_RESULTS.includes(result) ? result : "error"}` as TranslationKey));
+    } catch { setTestResult(t("push.test.error")); }
     finally { setTesting(false); }
   }
   async function chooseTypes() {
     setError("");
     try { await invoke("open_game_page", { path: "/settings" }); onOpenedPage?.(); }
-    catch { setError("Could not open the game settings. Sign in to multiplayer and try again."); }
+    catch { setError(t("push.openError")); }
   }
-  const label = mobile ? "Push notifications" : "Desktop alerts";
-  const summary = mobile
-    ? "Elections, legislation, party, treasury and corporation alerts from your inbox, even when the app is closed."
-    : "Elections, legislation, party, treasury and corporation alerts from your inbox, as system notifications while AHDClient is open.";
-  const detail = mobile
-    ? "Each alert shows its title, category and message, and tapping it opens the page it is about. To hide alert text while your phone is locked, change notification previews in your phone's settings."
-    : "Each alert shows its title, category and message. Alerts stay quiet while you are looking at the live game, and routine turn income stays in the inbox.";
+  const label = t(mobile ? "push.mobileLabel" : "push.desktopLabel");
+  const summary = t(mobile ? "push.mobileSummary" : "push.desktopSummary");
+  const detail = t(mobile ? "push.mobileDetail" : "push.desktopDetail");
   return <div className="client-push-control">
     <div className="client-support-control">
       <div><strong>{label}</strong><small>{summary}</small></div>
       <button type="button" onClick={() => void toggle()} disabled={busy || !status || (!status.available && !status.enabled)}
-        aria-pressed={status?.enabled ?? false}>{busy ? "Updating..." : status?.enabled ? "Turn off" : "Turn on"}</button>
+        aria-pressed={status?.enabled ?? false}>{busy ? t("push.updating") : status?.enabled ? t("push.turnOff") : t("push.turnOn")}</button>
     </div>
-    <p role="status" className="client-push-status">{error || status?.message || "Checking notification settings..."}</p>
+    <p role="status" className="client-push-status">{error || status?.message || t("push.checking")}</p>
     {status?.enabled && (
       <div className="client-support-control">
-        <div><strong>Test alert</strong><small>{testResult || (mobile ? "Send one alert to this phone to check that alerts arrive." : "Show one alert to check how they look on this computer.")}</small></div>
-        <button type="button" onClick={() => void sendTest()} disabled={testing}>{testing ? "Sending..." : "Send test"}</button>
+        <div><strong>{t("push.testTitle")}</strong><small>{testResult || t(mobile ? "push.testMobile" : "push.testDesktop")}</small></div>
+        <button type="button" onClick={() => void sendTest()} disabled={testing}>{testing ? t("push.sending") : t("push.sendTest")}</button>
       </div>
     )}
     <p className="client-push-status">{detail}</p>
     <div className="client-support-control">
-      <div><strong>Alert types</strong><small>Mute the kinds of alerts you do not want under Game in the site settings. Mutes and snoozes apply to {mobile ? "push" : "desktop"} alerts too.</small></div>
-      <button type="button" onClick={() => void chooseTypes()}>Choose</button>
+      <div><strong>{t("push.typesTitle")}</strong><small>{t(mobile ? "push.typesDetailMobile" : "push.typesDetailDesktop")}</small></div>
+      <button type="button" onClick={() => void chooseTypes()}>{t("push.choose")}</button>
     </div>
   </div>;
 }

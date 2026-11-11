@@ -10,6 +10,11 @@
   "permissions": [
     "allow-get-tray-settings",
     "allow-set-keep-in-tray",
+    "allow-get-autostart",
+    "allow-set-autostart",
+    "allow-data-folder-info",
+    "allow-open-data-folder",
+    "allow-reset-native-settings",
     "allow-get-push-status",
     "allow-configure-push",
     "allow-send-test-push",

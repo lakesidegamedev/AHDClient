@@ -126,6 +126,11 @@ pub(crate) fn setup(app: &AppHandle) {
   }
 }
 
+/// Back to the default: closing the window quits.
+pub(crate) fn reset(app: &AppHandle) {
+  if let Some(path) = file(app) { let _ = std::fs::remove_file(path); }
+}
+
 #[tauri::command]
 pub(crate) fn get_tray_settings(app: AppHandle) -> serde_json::Value {
   serde_json::json!({ "available": available(&app), "keepInTray": read(&app).keep_in_tray == Some(true) })

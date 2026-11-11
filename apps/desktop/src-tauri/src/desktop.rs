@@ -125,7 +125,7 @@ fn valid_slot(slot: &str) -> bool {
     && slot.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn worlds_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn worlds_dir(app: &AppHandle) -> Result<PathBuf, String> {
   let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("worlds");
   fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
   Ok(dir)
@@ -906,7 +906,7 @@ fn next_zoom(current: f64, direction: &str) -> Result<f64, String> {
   Ok(((next.clamp(ZOOM_MIN, ZOOM_MAX)) * 10.0).round() / 10.0)
 }
 
-fn zoom_file(app: &AppHandle) -> Option<PathBuf> {
+pub(crate) fn zoom_file(app: &AppHandle) -> Option<PathBuf> {
   app.path().app_config_dir().ok().map(|dir| dir.join("game-zoom.json"))
 }
 
@@ -1348,6 +1348,8 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
+    // Start-on-sign-in is off until the player turns it on in Settings.
+    .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
     .manage(crate::desktop_alerts::AlertState::default())
     .manage(crate::tray::TrayState::default())
     .setup(|app| {
@@ -1367,6 +1369,11 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
       crate::desktop_alerts::send_test_push,
       crate::tray::get_tray_settings,
       crate::tray::set_keep_in_tray,
+      crate::preferences::get_autostart,
+      crate::preferences::set_autostart,
+      crate::preferences::data_folder_info,
+      crate::preferences::open_data_folder,
+      crate::preferences::reset_native_settings,
       crate::briefing::get_briefing,
       crate::briefing::open_briefing_page,
       crate::briefing::open_game_page,

@@ -28,6 +28,7 @@ import {
   flushStatistics,
   setStatisticsConsent,
 } from "./statisticsDelivery.js";
+import { LanguageProvider, type ClientLanguage } from "./i18n.js";
 import { SettingsMenu } from "./SettingsMenu.js";
 import { applySettings, readSettings, syncOpenGameOnStart, writeSettings } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
@@ -95,7 +96,17 @@ function rememberAccountNotice(): void {
   }
 }
 
+/** Holds the language for every screen below it (read from `useT`), fed by the settings inside. */
 export function App(): JSX.Element {
+  const [language, setLanguage] = useState<ClientLanguage>(() => readSettings().language);
+  return (
+    <LanguageProvider language={language}>
+      <AppShell onLanguage={setLanguage} />
+    </LanguageProvider>
+  );
+}
+
+function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => void }): JSX.Element {
   // The in-game menu's Briefing item returns to the launcher with
   // ?screen=briefing (mobile.rs). Consumed once so a reload lands home.
   const [screen, setScreen] = useState<Screen>(() => {
@@ -200,6 +211,9 @@ export function App(): JSX.Element {
   const [accountNotice, setAccountNotice] = useState(
     () => !accountNoticeSeen(),
   );
+  useEffect(() => {
+    onLanguage(settings.language);
+  }, [settings.language]);
   useEffect(() => {
     applySettings(settings);
     if (mobile) {

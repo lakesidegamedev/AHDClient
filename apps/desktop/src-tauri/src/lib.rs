@@ -32,6 +32,8 @@ mod briefing;
 mod launch;
 mod links;
 #[cfg(desktop)]
+mod preferences;
+#[cfg(desktop)]
 mod tray;
 mod native_auth;
 mod webview_cookies;

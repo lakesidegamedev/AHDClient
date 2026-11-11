@@ -10,6 +10,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Interface size (Settings). The game strip stays a fixed 48 px because the
+   native game view sits right under it, so it undoes the zoom. */
+html[data-ui-scale] body { zoom: var(--ui-scale); }
+html[data-ui-scale] .client-game-toolbar { zoom: calc(1 / var(--ui-scale)); }
+
 h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; }
 h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
 

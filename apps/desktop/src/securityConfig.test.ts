@@ -314,6 +314,11 @@ describe("desktop security configuration", () => {
       "game-zoom",
       "get-tray-settings",
       "set-keep-in-tray",
+      "get-autostart",
+      "set-autostart",
+      "data-folder-info",
+      "open-data-folder",
+      "reset-native-settings",
     ]) {
       expect(identifiers).toContain(`allow-${command}`);
       expect(

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { gameRuntime } from "./capabilities.js";
 import { gameVersions } from "./worlds.js";
 import type { GameVersion } from "./worlds.js";
-import type { ClientLanguage } from "./i18n.js";
+import { useT } from "./i18n.js";
 
 function formatSize(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) return "";
@@ -31,8 +31,8 @@ export function GameVersionLine(): JSX.Element | null {
 }
 
 /** Settings, Singleplayer: choose which game version singleplayer runs. Nothing changes until the player picks. */
-export function GameVersionSetting({ language = "en" }: { language?: ClientLanguage }): JSX.Element {
-  const de = language === "de";
+export function GameVersionSetting(): JSX.Element {
+  const t = useT();
   const active = useActiveGameVersion();
   const [versions, setVersions] = useState<GameVersion[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,7 +42,7 @@ export function GameVersionSetting({ language = "en" }: { language?: ClientLangu
       setVersions(await gameVersions.list());
     } catch {
       setVersions([]);
-      setMessage(de ? "Versionsliste nicht verfügbar. Prüfe deine Internetverbindung." : "Could not check for other versions. Check your connection.");
+      setMessage(t("gameVersion.listError"));
     }
   };
   useEffect(() => { void refresh(); }, []);
@@ -51,15 +51,15 @@ export function GameVersionSetting({ language = "en" }: { language?: ClientLangu
   const bundledLabel = active && selectedVersion === "bundled" ? active : null;
   const choose = async (version: string) => {
     setBusy(true);
-    setMessage(version === "bundled" ? "" : de ? `Spiel ${version} wird vorbereitet…` : `Getting game ${version} ready…`);
+    setMessage(version === "bundled" ? "" : t("gameVersion.preparing", { version }));
     try {
       const target = versions?.find((item) => item.version === version);
       if (version !== "bundled" && !target?.installed) await gameVersions.install(version);
       await gameVersions.select(version === "bundled" ? null : version);
       await refresh();
       setMessage(version === "bundled"
-        ? (de ? "Das mitgelieferte Spiel wird verwendet." : "Using the game that came with the app.")
-        : (de ? `Spiel ${version} wird beim nächsten Start verwendet.` : `Game ${version} will be used the next time you start a world.`));
+        ? t("gameVersion.usingBundled")
+        : t("gameVersion.usingVersion", { version }));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally { setBusy(false); }
@@ -68,26 +68,24 @@ export function GameVersionSetting({ language = "en" }: { language?: ClientLangu
   return (
     <label className="client-settings-row">
       <span>
-        <strong>{de ? "Spielversion" : "Game version"}</strong>
+        <strong>{t("gameVersion.label")}</strong>
         <small>
-          {de
-            ? "Neuere Versionen bringen neue Funktionen und Korrekturen. Das mitgelieferte Spiel passt zu dieser App. Deine gespeicherten Welten werden beim Wechsel nicht gelöscht."
-            : "Newer versions add features and fixes. The game that came with the app always matches this app. Switching never deletes your saved worlds."}
+          {t("gameVersion.detail")}
         </small>
         {message && <small role="status">{message}</small>}
       </span>
       <select
-        aria-label={de ? "Einzelspieler-Spielversion" : "Singleplayer game version"}
+        aria-label={t("gameVersion.aria")}
         value={selectedVersion}
         disabled={busy || versions === null}
         onChange={(event) => void choose(event.target.value)}
       >
         <option value="bundled">
-          {de ? "Mitgeliefert" : "Included with the app"}{bundledLabel ? ` (${bundledLabel})` : ""}
+          {t("gameVersion.bundled")}{bundledLabel ? ` (${bundledLabel})` : ""}
         </option>
         {(versions ?? []).filter((version) => version.version !== active || version.selected).map((version) => {
           const size = formatSize(version.sizeBytes);
-          const suffix = version.installed ? "" : ` · ${de ? "Download" : "download"}${size ? ` ${size}` : ""}`;
+          const suffix = version.installed ? "" : ` · ${t("gameVersion.download")}${size ? ` ${size}` : ""}`;
           return <option key={version.version} value={version.version}>{version.version}{suffix}</option>;
         })}
       </select>

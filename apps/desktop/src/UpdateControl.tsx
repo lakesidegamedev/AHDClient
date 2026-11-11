@@ -8,60 +8,62 @@ import {
   subscribeUpdater,
   type UpdaterSnapshot,
 } from "./updater.js";
+import { useT, type Translator } from "./i18n.js";
 import { online } from "./worlds.js";
 
-function messageFor(state: UpdaterSnapshot): string {
+function messageFor(state: UpdaterSnapshot, t: Translator): string {
   switch (state.kind) {
     case "current":
-      return "AHDClient is up to date.";
+      return t("update.current");
     case "available": {
       const size = formatUpdateSize(state.size);
-      return `AHDClient ${state.version} is available${size ? ` (${size})` : ""}. Nothing is downloaded until you choose.`;
+      return t("update.available", { version: state.version, size: size ? ` (${size})` : "" });
     }
     case "package":
-      return `AHDClient ${state.version} is available. This copy was installed from a package, so get the new package from the download page.`;
+      return t("update.package", { version: state.version });
     case "downloading":
       return state.total
-        ? `Downloading AHDClient ${state.version} (${Math.min(100, Math.round((state.received / state.total) * 100))}%).`
-        : `Downloading AHDClient ${state.version} in the background.`;
+        ? t("update.downloadingPercent", { version: state.version, percent: Math.min(100, Math.round((state.received / state.total) * 100)) })
+        : t("update.downloading", { version: state.version });
     case "ready":
-      return `AHDClient ${state.version} is downloaded. Restart to install it.`;
+      return t("update.ready", { version: state.version });
     case "installing":
-      return "Installing the downloaded update.";
+      return t("update.installing");
     case "error":
       return state.message;
     case "checking":
-      return "Looking for a new version.";
+      return t("update.checking");
     default:
-      return "Check whether a new version is out.";
+      return t("update.idle");
   }
 }
 
 export function UpdateControl(): JSX.Element {
+  const t = useT();
   const [state, setState] = useState<UpdaterSnapshot>(getUpdaterSnapshot);
   useEffect(() => subscribeUpdater(() => setState(getUpdaterSnapshot())), []);
 
   const busy = state.kind === "checking" || state.kind === "downloading" || state.kind === "installing";
   const label =
     state.kind === "available"
-      ? "Download update"
+      ? t("update.btnDownload")
       : state.kind === "package"
-        ? "Open download page"
+        ? t("update.btnPackage")
         : state.kind === "ready"
-      ? "Restart to update"
-      : state.kind === "checking"
-        ? "Checking…"
-        : state.kind === "downloading"
-          ? "Downloading…"
-          : state.kind === "installing"
-            ? "Installing…"
-            : "Check for updates";
+          ? t("update.btnRestart")
+          : state.kind === "checking"
+            ? t("update.btnChecking")
+            : state.kind === "downloading"
+              ? t("update.btnDownloading")
+              : state.kind === "installing"
+                ? t("update.btnInstalling")
+                : t("update.btnCheck");
 
   return (
     <section className="client-update-control" aria-live="polite">
       <div>
-        <strong>Desktop updates</strong>
-        <small>{messageFor(state)}</small>
+        <strong>{t("update.title")}</strong>
+        <small>{messageFor(state, t)}</small>
       </div>
       <button
         type="button"

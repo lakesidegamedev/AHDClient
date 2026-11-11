@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SettingsMenu } from "./SettingsMenu.js";
 import { DEFAULT_SETTINGS } from "./settings.js";
 
@@ -87,5 +87,41 @@ describe("SettingsMenu", () => {
     );
     fireEvent.click(screen.getByRole("switch", { name: /Separate gameplay window/ }));
     expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_SETTINGS, separateWindow: true });
+  });
+
+  it("offers interface size, start on sign-in, storage and reset on desktop only", () => {
+    const { unmount } = render(
+      <SettingsMenu open settings={DEFAULT_SETTINGS} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    expect(screen.getByText("Interface size")).toBeTruthy();
+    expect(screen.getByText("Start when I sign in")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Storage" })).toBeTruthy();
+    expect(screen.getByText("Reset settings")).toBeTruthy();
+    unmount();
+    render(
+      <SettingsMenu mobile open settings={DEFAULT_SETTINGS} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    expect(screen.queryByText("Interface size")).toBeNull();
+    expect(screen.queryByText("Start when I sign in")).toBeNull();
+  });
+
+  it("reset asks first, then restores defaults", async () => {
+    const onChange = vi.fn();
+    render(
+      <SettingsMenu open settings={{ ...DEFAULT_SETTINGS, uiScale: 125 }} onChange={onChange} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Yes, reset" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls[0]![0].uiScale).toBe(100);
+  });
+
+  it("speaks German in the new rows", () => {
+    render(
+      <SettingsMenu open settings={{ ...DEFAULT_SETTINGS, language: "de" }} onChange={vi.fn()} onClose={vi.fn()} onReportIssue={vi.fn()} onOpenDiagnostics={vi.fn()} />,
+    );
+    expect(screen.getByText("Beim Anmelden starten")).toBeTruthy();
+    expect(screen.getByText("Oberflächengröße")).toBeTruthy();
   });
 });

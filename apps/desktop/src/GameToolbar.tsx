@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { game } from "./worlds.js";
+import { useT, type TranslationKey, type Translator } from "./i18n.js";
 import { UpdateChip } from "./UpdateChip.js";
 import { useDialog } from "./useDialog.js";
 import type { BatchDigest, SingleplayerStatus, TurnBatch } from "./worlds.js";
@@ -56,34 +57,35 @@ const BATCH_POLL_MAX_FAILURES = 5;
 
 const signed = (value: number) => `${value >= 0 ? "+" : ""}${value.toLocaleString()}`;
 
-const CATEGORY_LABELS: Record<string, string> = {
-  crisis: "Crises",
-  legislation: "Legislation",
-  election: "Elections",
-  party: "Party",
-  standing: "Standing",
-  treasury: "Money and business",
-  system: "Other",
+const CATEGORY_KEYS: Record<string, TranslationKey> = {
+  crisis: "toolbar.catCrisis",
+  legislation: "toolbar.catLegislation",
+  election: "toolbar.catElection",
+  party: "toolbar.catParty",
+  standing: "toolbar.catStanding",
+  treasury: "toolbar.catTreasury",
+  system: "toolbar.catSystem",
 };
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+const turnsLabel = (count: number, t: Translator) => t(count === 1 ? "toolbar.turnOne" : "toolbar.turnMany", { count });
 
 /** One calm line for the toolbar: what the batch did and, if it ended early, why. */
-function batchLine(batch: TurnBatch): string {
-  const played = `Played ${batch.completed} of ${plural(batch.requested, "turn")}`;
+function batchLine(batch: TurnBatch, t: Translator): string {
+  const played = t("toolbar.played", { done: batch.completed, total: turnsLabel(batch.requested, t) });
   return batch.stop && batch.stop.kind !== "requested" ? `${played}. ${batch.stop.message}` : `${played}.`;
 }
 
 /** The batch digest as a dialog, so it is never trapped inside the 48 px strip or hidden under the game view. */
 function BatchDigestDialog({ batch, onClose, onDismiss }: { batch: TurnBatch; onClose: () => void; onDismiss: () => void }): JSX.Element {
+  const t = useT();
   const digest: BatchDigest | null = batch.digest;
   const dialogRef = useRef<HTMLElement>(null);
   useDialog(dialogRef, onClose);
   return (
     <div className="client-settings-backdrop" role="presentation">
       <section ref={dialogRef} className="client-diagnostic-dialog client-toolbar-digest" role="dialog" aria-modal="true" aria-labelledby="turn-summary-title">
-        <h2 id="turn-summary-title">Turn summary</h2>
-        <p><b>{batchLine(batch)}</b></p>
+        <h2 id="turn-summary-title">{t("toolbar.summaryTitle")}</h2>
+        <p><b>{batchLine(batch, t)}</b></p>
         {batch.stop && batch.stop.details.length > 0 && (
           <ul>
             {batch.stop.details.map((detail) => <li key={detail}>{detail}</li>)}
@@ -92,24 +94,24 @@ function BatchDigestDialog({ batch, onClose, onDismiss }: { batch: TurnBatch; on
         {digest && (
           <>
             <p>
-              Turns {digest.startTurn ?? "?"} to {digest.endTurn ?? "?"}. Campaign funds {signed(digest.funds.delta)}, actions {signed(digest.actions.delta)}.
+              {t("toolbar.turnsRange", { start: digest.startTurn ?? "?", end: digest.endTurn ?? "?", funds: signed(digest.funds.delta), actions: signed(digest.actions.delta) })}
             </p>
             {(digest.officesWon.length > 0 || digest.officesLost.length > 0) && (
               <p>
-                {digest.officesWon.length > 0 && <>Won: {digest.officesWon.join(", ")}. </>}
-                {digest.officesLost.length > 0 && <>Lost: {digest.officesLost.join(", ")}.</>}
+                {digest.officesWon.length > 0 && <>{t("toolbar.won", { list: digest.officesWon.join(", ") })} </>}
+                {digest.officesLost.length > 0 && <>{t("toolbar.lost", { list: digest.officesLost.join(", ") })}</>}
               </p>
             )}
             {digest.inbox.total > 0 && (
               <>
                 <p>
-                  Inbox: {plural(digest.inbox.total, "new item")}
-                  {digest.inbox.actionRequired > 0 ? `, ${digest.inbox.actionRequired} waiting for you` : ""}.
+                  {digest.inbox.total === 1 ? t("toolbar.inboxOne") : t("toolbar.inboxMany", { count: digest.inbox.total })}
+                  {digest.inbox.actionRequired > 0 ? t("toolbar.inboxWaiting", { count: digest.inbox.actionRequired }) : ""}.
                 </p>
                 <ul>
                   {digest.inbox.groups.map((group) => (
                     <li key={group.category}>
-                      {CATEGORY_LABELS[group.category] ?? group.category}: {group.count}
+                      {CATEGORY_KEYS[group.category] ? t(CATEGORY_KEYS[group.category]!) : group.category}: {group.count}
                       {group.titles.length > 0 ? ` (${group.titles.join("; ")})` : ""}
                     </li>
                   ))}
@@ -118,17 +120,17 @@ function BatchDigestDialog({ batch, onClose, onDismiss }: { batch: TurnBatch; on
             )}
             {digest.worldEvents.length > 0 && (
               <>
-                <p>In the world:</p>
+                <p>{t("toolbar.inWorld")}</p>
                 <ul>
-                  {digest.worldEvents.map((event) => <li key={`${event.turn}-${event.title}`}>Turn {event.turn}: {event.title}</li>)}
+                  {digest.worldEvents.map((event) => <li key={`${event.turn}-${event.title}`}>{t("toolbar.worldEvent", { turn: event.turn, title: event.title })}</li>)}
                 </ul>
               </>
             )}
           </>
         )}
         <div>
-          <button className="secondary" type="button" onClick={onDismiss}>Dismiss</button>
-          <button type="button" onClick={onClose}>Close</button>
+          <button className="secondary" type="button" onClick={onDismiss}>{t("toolbar.dismiss")}</button>
+          <button type="button" onClick={onClose}>{t("common.close")}</button>
         </div>
       </section>
     </div>
@@ -156,6 +158,7 @@ export function GameToolbar({
   onTurnAdvanced,
   onDialogOpenChange,
 }: Props): JSX.Element {
+  const t = useT();
   const [turnState, setTurnState] = useState<TurnState | null>(null);
   const [availability, setAvailability] = useState<"open" | "sealed" | null>(null);
   const [endingTurn, setEndingTurn] = useState(false);
@@ -311,8 +314,8 @@ export function GameToolbar({
       const result = worldsim ? await game.advanceWorldsim() : await game.advanceTurn();
       const briefing = result.briefing;
       setTurnBriefing(briefing
-        ? `Turn ${result.turn}: funds ${signed(briefing.fundsDelta)}, actions ${signed(briefing.actionsDelta)}`
-        : `Turn ${result.turn} complete`);
+        ? t("toolbar.turnBriefing", { turn: result.turn, funds: signed(briefing.fundsDelta), actions: signed(briefing.actionsDelta) })
+        : t("toolbar.turnDone", { turn: result.turn }));
       onTurnAdvanced?.(result.turn);
       lastTurn.current = result.turn;
       await refreshTurn();
@@ -356,24 +359,24 @@ export function GameToolbar({
   }, []);
 
   const endTurnTitle = endingTurn
-    ? "The turn is running"
+    ? t("toolbar.turnRunning")
     : paused
-      ? "Resume the world to advance the turn"
+      ? t("toolbar.resumeToAdvance")
       : turnState == null
-        ? "Checking for your character"
+        ? t("toolbar.checkingCharacter")
         : !worldsim && !turnState.hasCharacter
-          ? "Create a character in the game to enable End turn"
+          ? t("toolbar.needCharacter")
           : !worldsim && batchCount > 1
-            ? `Advance the world by ${batchCount} turns, stopping early if something needs you`
-            : "Advance the world by one turn";
+            ? t("toolbar.advanceMany", { count: batchCount })
+            : t("toolbar.advanceOne");
   const batchTurnNumber = batch && batchRunning ? Math.min(batch.completed + 1, batch.requested) : null;
   const headOfState = turnState?.mode === "head-of-state";
 
   return (
-    <nav className="client-game-toolbar" aria-label="Client controls">
+    <nav className="client-game-toolbar" aria-label={t("toolbar.aria")}>
       <button type="button" className="client-toolbar-quiet" onClick={onLauncher}>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12" /></svg>
-        Launcher
+        {t("toolbar.launcher")}
       </button>
       <button
         type="button"
@@ -383,18 +386,18 @@ export function GameToolbar({
         onClick={() => void endTurn()}
       >
         {endingTurn ? <span className="client-toolbar-spinner" aria-hidden="true" /> : <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m5 5 10 7L5 19ZM19 5v14" /></svg>}
-        {endingTurn ? "Running turn" : batchCount > 1 && !worldsim ? `End ${batchCount} turns` : "End turn"}
+        {endingTurn ? t("toolbar.runningTurn") : batchCount > 1 && !worldsim ? t("toolbar.endMany", { count: batchCount }) : t("toolbar.endTurn")}
       </button>
       {!worldsim && (
         <select
           className="client-toolbar-count"
-          aria-label="Turns to play"
+          aria-label={t("toolbar.turnsToPlay")}
           value={batchCount}
           disabled={endingTurn}
           onChange={(event) => setBatchCount(Number(event.target.value))}
         >
           {BATCH_TURN_CHOICES.map((count) => (
-            <option key={count} value={count}>{plural(count, "turn")}</option>
+            <option key={count} value={count}>{turnsLabel(count, t)}</option>
           ))}
         </select>
       )}
@@ -402,33 +405,33 @@ export function GameToolbar({
         type="button"
         className="client-toolbar-quiet client-toolbar-ask"
         onClick={onOpenAsk}
-        title="Ask questions about the game. Opens beside play and signs you in with your game account."
-        aria-label="Ask about the game"
+        title={t("toolbar.askTitle")}
+        aria-label={t("toolbar.askAria")}
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
-        Ask
+        {t("toolbar.ask")}
       </button>
       <strong title={worldName}>{worldName}</strong>
       {onOpenUpdates && <UpdateChip onClick={onOpenUpdates} />}
       {endingTurn && (
-        <span className="client-toolbar-progress" role="status" aria-label="Running turn">
+        <span className="client-toolbar-progress" role="status" aria-label={t("toolbar.runningTurn")}>
           <span className="client-toolbar-spinner" aria-hidden="true" />
           <span>
-            <b>Simulating</b>
+            <b>{t("toolbar.simulating")}</b>
             <small className="client-toolbar-turn">
-              {batchTurnNumber != null && batch ? `Turn ${batchTurnNumber} of ${batch.requested}` : `Turn ${turnState?.turn ?? ""}`}
+              {batchTurnNumber != null && batch ? t("toolbar.turnOfBatch", { turn: batchTurnNumber, total: batch.requested }) : t("toolbar.turnNow", { turn: turnState?.turn ?? "" })}
             </small>
           </span>
         </span>
       )}
       {batchRunning && (
         <button type="button" className="client-toolbar-quiet" disabled={batch?.stopRequested} onClick={() => void stopBatch()}>
-          {batch?.stopRequested ? "Stopping" : "Stop after this turn"}
+          {batch?.stopRequested ? t("toolbar.stopping") : t("toolbar.stopAfter")}
         </button>
       )}
-      {batch && !batchRunning && <small className="client-toolbar-briefing" role="status" title={batchLine(batch)}>{batchLine(batch)}</small>}
+      {batch && !batchRunning && <small className="client-toolbar-briefing" role="status" title={batchLine(batch, t)}>{batchLine(batch, t)}</small>}
       {batch && !batchRunning && (
-        <button type="button" className="client-toolbar-quiet" onClick={() => setSummaryOpen(true)}>Summary</button>
+        <button type="button" className="client-toolbar-quiet" onClick={() => setSummaryOpen(true)}>{t("toolbar.summary")}</button>
       )}
       {batch && !batchRunning && summaryOpen && (
         <BatchDigestDialog batch={batch} onClose={() => setSummaryOpen(false)} onDismiss={() => { setSummaryOpen(false); setBatch(null); }} />
@@ -437,19 +440,19 @@ export function GameToolbar({
       {headOfState && (
         <small
           className="client-toolbar-mode"
-          title="Permanent head of state. You entered as head of state and remain head of state; this mode is in beta."
+          title={t("toolbar.headOfStateTitle")}
         >
-          Head of state <span className="client-beta">Beta</span>
+          {t("toolbar.headOfState")} <span className="client-beta">{t("toolbar.beta")}</span>
         </small>
       )}
       {paused && (
-        <small title="Paused: the current turn finishes, the next one waits until you resume.">
-          Paused
+        <small title={t("toolbar.pausedTitle")}>
+          {t("toolbar.paused")}
         </small>
       )}
       {worldsim && onViewStats && (
         <button type="button" className="client-toolbar-quiet" onClick={onViewStats}>
-          World statistics
+          {t("toolbar.worldStats")}
         </button>
       )}
       {turnError && (
@@ -458,10 +461,10 @@ export function GameToolbar({
         </span>
       )}
       <details className="client-toolbar-overflow" onToggle={(event) => setMenuOpen(event.currentTarget.open)}>
-        <summary aria-label={menuOpen ? "Close actions" : "More actions"}>{menuOpen ? "×" : "···"}</summary>
+        <summary aria-label={menuOpen ? t("toolbar.closeActions") : t("toolbar.moreActions")}>{menuOpen ? "×" : "···"}</summary>
         <div role="menu">
           <button role="menuitem" type="button" className="client-toolbar-ask-menu" onClick={onOpenAsk}>
-            Ask about the game
+            {t("toolbar.askMenu")}
           </button>
           <button
             role="menuitem"
@@ -469,24 +472,24 @@ export function GameToolbar({
             disabled={availability == null || pauseBusy}
             title={
               paused
-                ? "Resume the world so turns can advance again."
-                : "Pause the world. The current turn finishes; the next one waits until you resume."
+                ? t("toolbar.resumeTitle")
+                : t("toolbar.pauseTitle")
             }
             onClick={() => void togglePause()}
           >
-            {pauseBusy ? "Working" : paused ? "Resume world" : "Pause world"}
+            {pauseBusy ? t("toolbar.working") : paused ? t("toolbar.resumeWorld") : t("toolbar.pauseWorld")}
           </button>
           <button
             role="menuitem"
             type="button"
             disabled={endingTurn}
-            title={endingTurn ? "Saves are available when the turn finishes." : "Save the world, or go back to an earlier save."}
+            title={endingTurn ? t("toolbar.savesBusy") : t("toolbar.savesTitle")}
             onClick={onOpenSaves}
           >
-            Saves
+            {t("saves.title")}
           </button>
           <button role="menuitem" type="button" onClick={onSaveAndStop}>
-            Save and stop
+            {t("toolbar.saveStop")}
           </button>
         </div>
       </details>
