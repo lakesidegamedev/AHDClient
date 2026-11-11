@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { allowedAvatarUrl, initialsFor } from "./avatar.js";
+import { useT } from "./i18n.js";
 
 interface Props {
   checked: boolean;
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function AccountControl({ checked, linked, displayName, avatarUrl, supporter, onLink, onProfile, onManage, onSignOut, signingOut = false }: Props): JSX.Element {
+  const t = useT();
   const menu = useRef<HTMLDetailsElement>(null);
   // A menu closes when the player taps or clicks anywhere else, like every
   // native menu; a bare <details> stayed open until its own summary was hit.
@@ -51,15 +53,15 @@ export function AccountControl({ checked, linked, displayName, avatarUrl, suppor
           ) : (
             <span className="client-account-avatar" aria-hidden="true">{initialsFor(displayName)}</span>
           )}
-          <span className="client-account-name">{displayName || "Profile"}</span>
+          <span className="client-account-name">{displayName || t("account.profile")}</span>
           <span aria-hidden="true">⌄</span>
         </summary>
         <div role="menu">
-          <p><strong>{displayName || "Game account"}</strong><small>{supporter ? "Supporter" : "Player"}</small></p>
-          <button role="menuitem" type="button" onClick={choose(onProfile)}>View profile</button>
-          <button role="menuitem" type="button" onClick={choose(onManage)}>Manage game account</button>
+          <p><strong>{displayName || t("account.gameAccount")}</strong><small>{supporter ? t("account.supporter") : t("account.player")}</small></p>
+          <button role="menuitem" type="button" onClick={choose(onProfile)}>{t("account.viewProfile")}</button>
+          <button role="menuitem" type="button" onClick={choose(onManage)}>{t("account.manage")}</button>
           <button role="menuitem" type="button" onClick={onSignOut} disabled={signingOut}>
-            {signingOut ? "Signing out..." : "Sign out"}
+            {signingOut ? t("account.signingOut") : t("account.signOut")}
           </button>
         </div>
       </details>
@@ -67,7 +69,7 @@ export function AccountControl({ checked, linked, displayName, avatarUrl, suppor
   }
   return (
     <button className="client-account-control" type="button" disabled={!checked} onClick={onLink}>
-      {!checked ? "Account" : "Link account"}
+      {!checked ? t("account.label") : t("common.linkAccount")}
     </button>
   );
 }

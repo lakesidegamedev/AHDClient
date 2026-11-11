@@ -3,6 +3,7 @@ import { useDialog } from "./useDialog.js";
 import { listen } from "@tauri-apps/api/event";
 import { classicGame } from "./worlds.js";
 import type { ClassicInfo } from "./worlds.js";
+import { useT } from "./i18n.js";
 
 export function formatDownloadSize(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) return "";
@@ -20,6 +21,7 @@ interface Props {
 
 /** One-time download of the Classic game: size, progress, cancel. */
 export function ClassicDownload({ info, worldName, onDone, onClose }: Props): JSX.Element {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [percent, setPercent] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -52,20 +54,18 @@ export function ClassicDownload({ info, worldName, onDone, onClose }: Props): JS
 
   const size = formatDownloadSize(info.sizeBytes);
   return (
-    <aside ref={dialogRef} className="launcher-error" role="dialog" aria-modal="true" aria-label="Classic game download">
+    <aside ref={dialogRef} className="launcher-error" role="dialog" aria-modal="true" aria-label={t("classic.aria")}>
       <span>
-        {worldName
-          ? `${worldName} was made before game 1.20 and stays on the Classic game. `
-          : "Classic eras are played on the game as it was before 1.20. "}
-        It is a one-time download{size ? ` of ${size}` : ""}. Your other worlds are not affected.
+        {worldName ? t("classic.forWorld", { name: worldName }) : t("classic.forEras")}{" "}
+        {size ? t("classic.downloadSized", { size }) : t("classic.download")} {t("classic.othersSafe")}
       </span>
-      {busy && <progress max={100} value={percent ?? undefined} aria-label="Download progress" />}
+      {busy && <progress max={100} value={percent ?? undefined} aria-label={t("classic.progress")} />}
       {message && <span role="status">{message}</span>}
       <button type="button" disabled={busy || !info.version} onClick={() => void start()}>
-        {busy ? (percent === null ? "Downloading…" : `Downloading ${percent}%`) : "Download"}
+        {busy ? (percent === null ? t("classic.downloading") : t("classic.downloadingPercent", { percent })) : t("classic.button")}
       </button>
       <button type="button" onClick={() => { if (busy) void classicGame.cancel().catch(() => undefined); else onClose(); }}>
-        {busy ? "Cancel" : "Not now"}
+        {busy ? t("common.cancel") : t("classic.notNow")}
       </button>
     </aside>
   );

@@ -3,6 +3,7 @@ import { ERAS } from "../worlds.js";
 import { ERA_PHOTOS } from "../launcher/eraPhotos.js";
 import ahdLogo from "../assets/ahd-logo.png";
 import { bootStep, formatElapsed } from "./bootStep.js";
+import { useT, type TranslationKey } from "../i18n.js";
 
 interface Props {
   title: string;
@@ -21,16 +22,16 @@ interface Props {
   onBack?: () => void;
 }
 
-const TIPS = [
-  "Build political capital before proposing contentious legislation. A failed vote can cost more than waiting one turn.",
-  "Check inflation alongside growth. A booming economy can still punish households and weaken approval.",
-  "State and regional politics can diverge sharply from national polling. Local organization matters.",
-  "Corporations create jobs and tax revenue, but concentrated market power can become a political liability.",
-  "High leverage amplifies both growth and losses. Review liquidity before expanding through debt.",
-  "Coalition partners have their own priorities. Keep enough common ground to survive confidence votes.",
-  "Energy shortages travel through production chains. Strategic reserves buy time, not a permanent solution.",
-  "Your cabinet is more than decoration. Strong appointments improve the government’s ability to deliver policy.",
-  "Read the election calendar before spending campaign resources. Timing can matter as much as total spending.",
+const TIPS: readonly TranslationKey[] = [
+  "boot.tip1",
+  "boot.tip2",
+  "boot.tip3",
+  "boot.tip4",
+  "boot.tip5",
+  "boot.tip6",
+  "boot.tip7",
+  "boot.tip8",
+  "boot.tip9",
 ];
 
 /** Shown while the local server (and on first run, MongoDB) comes up. */
@@ -44,6 +45,7 @@ export function BootScreen({
   onRetry,
   onBack,
 }: Props): JSX.Element {
+  const t = useT();
   const [slide, setSlide] = useState(0);
   const [cardVisible, setCardVisible] = useState(true);
   useEffect(() => {
@@ -76,7 +78,7 @@ export function BootScreen({
     highestProgress.current = Math.max(highestProgress.current, Math.min(100, Math.max(0, liveProgress.progress)));
   }
   const progress = highestProgress.current;
-  const step = liveProgress ? { label: liveProgress.label, detail: liveProgress.detail } : (bootStep(lines) ?? { label: "Starting the local game", detail: "Loading the server and database" });
+  const step = liveProgress ? { label: liveProgress.label, detail: liveProgress.detail } : (bootStep(lines, t) ?? { label: t("boot.startingLocal"), detail: t("boot.startingLocalText") });
   // A failed start ends with the game's own output after a first line. Players
   // see the first line; the rest is behind Details.
   const [failureHeadline, ...failureRest] = (failure?.message ?? "").split("\n");
@@ -102,10 +104,10 @@ export function BootScreen({
           {failure ? (
             <div className="boot-failure" role="alert">
               <strong>{failureHeadline}</strong>
-              <span>Your world is kept. You can try again or go back.</span>
+              <span>{t("boot.failureText")}</span>
               {failureDetails && (
                 <details className="screen-details">
-                  <summary>Details</summary>
+                  <summary>{t("common.details")}</summary>
                   <pre className="screen-log">{failureDetails}</pre>
                 </details>
               )}
@@ -116,23 +118,20 @@ export function BootScreen({
                 <strong>{step.label}</strong>
                 <span>{step.detail}</span>
                 {liveProgress?.stalled && (
-                  <em>
-                    Still waiting. The last setup step has not reported progress
-                    for 30 seconds.
-                  </em>
+                  <em>{t("boot.stalled")}</em>
                 )}
               </div>
               <div
                 className={`boot-progress${liveProgress ? "" : " indeterminate"}`}
                 role="progressbar"
-                aria-label="Building world"
+                aria-label={t("boot.progressLabel")}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 {...(liveProgress ? { "aria-valuenow": Math.round(progress) } : {})}
               >
                 <span style={liveProgress ? { width: `${progress}%` } : undefined} />
               </div>
-              <div className="boot-elapsed" aria-label="Time so far">Time so far {formatElapsed(elapsed)}</div>
+              <div className="boot-elapsed" aria-label={t("boot.elapsedLabel")}>{t("boot.elapsed", { time: formatElapsed(elapsed) })}</div>
             </div>
           )}
           <article
@@ -145,11 +144,11 @@ export function BootScreen({
                 {era.label} · {era.subtitle}
               </p>
               <h2>{era.subtitle}</h2>
-              <span className="boot-hint-label">Gameplay hint</span>
-              <p>{TIPS[slide]}</p>
+              <span className="boot-hint-label">{t("boot.hint")}</span>
+              <p>{t(TIPS[slide]!)}</p>
             </div>
           </article>
-          <div className="boot-card-track" aria-label="Loading stories">
+          <div className="boot-card-track" aria-label={t("boot.stories")}>
             {TIPS.map((_tip, index) => (
               <span
                 key={index}
@@ -162,10 +161,10 @@ export function BootScreen({
           </div>
           {showDebug && (
             <details className="screen-details">
-              <summary>Technical startup log</summary>
+              <summary>{t("boot.log")}</summary>
               <pre className="screen-log" aria-live="polite">
                 {lines.length === 0
-                  ? "Starting the game server"
+                  ? t("boot.logEmpty")
                   : lines.join("\n")}
               </pre>
             </details>
@@ -175,11 +174,11 @@ export function BootScreen({
               <>
                 {onRetry && (
                   <button className="launcher-btn launcher-btn-primary" onClick={onRetry}>
-                    Try again
+                    {t("boot.retry")}
                   </button>
                 )}
                 <button className="launcher-btn launcher-btn-secondary" onClick={onBack ?? onCancel}>
-                  Back
+                  {t("common.back")}
                 </button>
               </>
             ) : (
@@ -187,7 +186,7 @@ export function BootScreen({
                 className="launcher-btn launcher-btn-secondary"
                 onClick={onCancel}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             )}
           </div>

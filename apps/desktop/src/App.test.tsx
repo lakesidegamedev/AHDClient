@@ -345,7 +345,7 @@ describe("App singleplayer integration", () => {
     // The refusal lands on the launcher: setup never opens, so there is no
     // entered configuration to discard.
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "not enabled",
+      "not available",
     );
     expect(screen.queryByRole("button", { name: "Create" })).toBeNull();
     expect(mocks.game.start).not.toHaveBeenCalled();
@@ -465,7 +465,7 @@ describe("App singleplayer integration", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Create" }));
     // Access revoked before creation: the form stays mounted with a link CTA.
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "not enabled",
+      "not available",
     );
     expect(screen.getByRole("button", { name: "Create" })).toBeTruthy();
     expect(mocks.game.start).not.toHaveBeenCalled();

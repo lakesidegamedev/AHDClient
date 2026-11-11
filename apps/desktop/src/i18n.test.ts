@@ -30,3 +30,15 @@ describe("client language", () => {
     for (const text of [...Object.values(EN), ...Object.values(DE)]) expect(text).not.toMatch(/[\u2013\u2014]/);
   });
 });
+
+describe("client screens in German", () => {
+  it("has German copy for the screens and dialogs", () => {
+    expect(translate("de", "worlds.title")).toBe("Deine Welten");
+    expect(translate("de", "boot.retry")).toBe("Noch einmal versuchen");
+    expect(translate("de", "worldsim.completed", { n: 3 })).toBe("3 Züge abgeschlossen");
+  });
+
+  it("never shows engine jargon in player copy", () => {
+    for (const text of Object.values(EN)) expect(text).not.toMatch(/\bNPPs?\b/);
+  });
+});

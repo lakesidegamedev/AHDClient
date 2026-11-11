@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { game } from "../worlds.js";
+import { useT } from "../i18n.js";
 
 export interface WorldsimHeadline {
   turn: number;
@@ -19,6 +20,7 @@ interface Props {
 }
 const format = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, notation: "compact" });
 export function WorldsimScreen({ name, onBack, onView, onStop, onTurnCompleted }: Props): JSX.Element {
+  const t = useT();
   const [turns, setTurns] = useState(12);
   const [completed, setCompleted] = useState(0);
   const [running, setRunning] = useState(false);
@@ -52,23 +54,23 @@ export function WorldsimScreen({ name, onBack, onView, onStop, onTurnCompleted }
     finally { if (active.current) { setRunning(false); setStopping(false); } }
   };
   return <main className="launcher-scope screen-scope"><section className="launcher-stage screen-stage">
-    <header className="screen-head"><button className="launcher-btn launcher-btn-secondary" onClick={onBack} disabled={running}>Launcher</button>
-      <h1>Worldsim <span className="client-beta">Beta</span></h1></header>
+    <header className="screen-head"><button className="launcher-btn launcher-btn-secondary" onClick={onBack} disabled={running}>{t("worldsim.launcher")}</button>
+      <h1>{t("launcher.worldsim")} <span className="client-beta">Beta</span></h1></header>
     <div className="launcher-console screen-console">
-      <h2>{name}</h2><p className="launcher-caption">A world run entirely by NPPs. No player character is created.</p>
+      <h2>{name}</h2><p className="launcher-caption">{t("worldsim.intro")}</p>
       {error && <p role="alert">{error}</p>}
-      <label className="screen-field">Turns to simulate<input type="number" min={1} max={1000} step={1} value={turns} disabled={running} onChange={(e) => setTurns(e.target.valueAsNumber)} /></label>
+      <label className="screen-field">{t("worldsim.turns")}<input type="number" min={1} max={1000} step={1} value={turns} disabled={running} onChange={(e) => setTurns(e.target.valueAsNumber)} /></label>
       <div className="launcher-actions">
-        <button className="launcher-btn launcher-btn-primary" disabled={running || !Number.isInteger(turns) || turns < 1 || turns > 1000} onClick={() => void run()}>Run simulation</button>
-        {running && <button className="launcher-btn launcher-btn-secondary" disabled={stopping} onClick={() => { cancel.current = true; setStopping(true); }}>Stop after this turn</button>}
-        <button className="launcher-btn launcher-btn-secondary" disabled={running} onClick={onView}>View all world</button>
-        <button className="launcher-btn launcher-btn-secondary" disabled={running} onClick={() => void onStop()}>Save and stop</button>
+        <button className="launcher-btn launcher-btn-primary" disabled={running || !Number.isInteger(turns) || turns < 1 || turns > 1000} onClick={() => void run()}>{t("worldsim.run")}</button>
+        {running && <button className="launcher-btn launcher-btn-secondary" disabled={stopping} onClick={() => { cancel.current = true; setStopping(true); }}>{t("worldsim.stopAfter")}</button>}
+        <button className="launcher-btn launcher-btn-secondary" disabled={running} onClick={onView}>{t("worldsim.view")}</button>
+        <button className="launcher-btn launcher-btn-secondary" disabled={running} onClick={() => void onStop()}>{t("toolbar.saveStop")}</button>
       </div>
-      <p role="status">{stopping ? "Finishing the current turn" : running ? "Simulating" : "Ready"}{completed > 0 ? ` · ${completed} turns completed` : ""}</p>
+      <p role="status">{stopping ? t("worldsim.finishing") : running ? t("worldsim.simulating") : t("worldsim.ready")}{completed > 0 ? ` · ${t("worldsim.completed", { n: completed })}` : ""}</p>
       {headline && <dl className="worldsim-stats">{([
-        ["Turn", headline.turn], ["NPPs", headline.nppCount], ["Offices held by NPPs (%)", headline.nppHeldPct * 100],
-        ["Effective party count", headline.effectivePartyCount], ["Active crises", headline.activeCrises],
-        ["Inflation index", headline.inflationIndex], ["NPP wealth", headline.totalWealth],
+        [t("worldsim.statTurn"), headline.turn], [t("worldsim.statPoliticians"), headline.nppCount], [t("worldsim.statOffices"), headline.nppHeldPct * 100],
+        [t("worldsim.statParties"), headline.effectivePartyCount], [t("worldsim.statCrises"), headline.activeCrises],
+        [t("worldsim.statInflation"), headline.inflationIndex], [t("worldsim.statWealth"), headline.totalWealth],
       ] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{format.format(value)}</dd></div>)}</dl>}
     </div></section></main>;
 }

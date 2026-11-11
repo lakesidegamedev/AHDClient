@@ -28,7 +28,7 @@ import {
   flushStatistics,
   setStatisticsConsent,
 } from "./statisticsDelivery.js";
-import { LanguageProvider, type ClientLanguage } from "./i18n.js";
+import { LanguageProvider, useT, type ClientLanguage } from "./i18n.js";
 import { SettingsMenu } from "./SettingsMenu.js";
 import { applySettings, readSettings, syncOpenGameOnStart, writeSettings } from "./settings.js";
 import type { ClientSettings } from "./settings.js";
@@ -107,6 +107,9 @@ export function App(): JSX.Element {
 }
 
 function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => void }): JSX.Element {
+  const t = useT();
+  const tRef = useRef(t);
+  tRef.current = t;
   // The in-game menu's Briefing item returns to the launcher with
   // ?screen=briefing (mobile.rs). Consumed once so a reload lands home.
   const [screen, setScreen] = useState<Screen>(() => {
@@ -245,7 +248,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     try {
       writeSettings(next);
     } catch {
-      setError("Settings could not be saved on this device.");
+      setError(t("app.settingsNotSaved"));
     }
   };
   const checkAccount = useCallback(async () => {
@@ -286,10 +289,10 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     result: { linked: boolean; offline: boolean },
   ): string => {
     if (result.offline)
-      return "Singleplayer needs an entitled account. Connect once to validate access.";
+      return t("app.entitlementOffline");
     return result.linked
-      ? "Singleplayer access is not enabled for this account."
-      : "Link an entitled game account to use singleplayer.";
+      ? t("app.entitlementOff")
+      : t("app.entitlementLink");
   };
   useEffect(() => {
     void checkAccount();
@@ -354,7 +357,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         if (current === "playing" || current === "worldsim") {
           // The world stopped by itself: offer a restart instead of a dead end.
           setEmbedded(false);
-          setCrash({ slot, message: describeExit(event.payload.line) });
+          setCrash({ slot, message: describeExit(event.payload.line, tRef.current) });
           setScreen("launcher");
         }
         // While booting, the start itself reports the failure with a retry.
@@ -432,7 +435,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     setBootFailure(null);
     setLog([]);
     setBootProgress(null);
-    setBootTitle(fresh ? "Building the world" : "Starting the world");
+    setBootTitle(fresh ? t("boot.building") : t("app.startingWorld"));
     setScreen("booting");
     try {
       const started = await game.start(slot, hosted);
@@ -442,7 +445,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         setLog((lines) =>
           [
             ...lines,
-            "Seeding countries, parties, markets and the electorate",
+            t("app.seedingLog"),
           ].slice(-LOG_LINES),
         );
         let polling = true;
@@ -463,9 +466,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
                 if (nextProgress.stalled) {
                   polling = false;
                   rejectStalledSetup?.(
-                    new Error(
-                      "World setup stopped making progress. The game was closed safely. Try again, or send a report.",
-                    ),
+                    new Error(t("app.setupStalled")),
                   );
                 }
               }
@@ -490,9 +491,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
       if (!status.hasWorld) {
         const saved = allWorlds.find((world) => world.slot === slot);
         if (!saved?.setup)
-          throw new Error(
-            "This world did not finish setup. Start a new game to create it.",
-          );
+          throw new Error(t("app.setupIncomplete"));
         await game.setup(saved.preset, saved.setup);
         status = await game.singleplayerStatus();
       }
@@ -570,7 +569,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     setScreen("launcher");
     setDiagnosticIncident({
       reason: "cancelled",
-      message: "The local game was cancelled while it was loading.",
+      message: t("app.cancelledLoading"),
       lines: diagnosticLines,
     });
   };
@@ -652,7 +651,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         return;
       }
       const era = eraById(eraId);
-      if (!era) return fail(new Error("Pick an era first."));
+      if (!era) return fail(new Error(t("app.pickEra")));
       setPendingWorldsim(false);
       setPendingClassic(false);
       await startWorld(
@@ -684,7 +683,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
     }
     setSetupError(null);
     const era = eraById(pendingEra ?? "");
-    if (!era) return fail(new Error("Pick an era first."));
+    if (!era) return fail(new Error(t("app.pickEra")));
     await startWorld(era, name, displayName, setup, pendingClassic);
   };
 
@@ -816,7 +815,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
           return online.open(target, settings.separateWindow).then(showOnline);
         })
         .catch(() =>
-          setError("Connect to the internet to check sandbox access."),
+          setError(t("app.sandboxOffline")),
         );
       return;
     }
@@ -867,14 +866,14 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
       className="client-settings-trigger"
       type="button"
       onClick={() => void ask.open().catch(fail)}
-      title="Ask questions about the game. Opens beside the client and signs you in with your game account."
+      title={t("app.askTitle")}
     >
-      Ask
+      {t("app.ask")}
     </button>
   );
   const briefingControl = (
     <button className="client-settings-trigger" type="button" onClick={() => setScreen("briefing")}>
-      Briefing
+      {t("app.briefing")}
     </button>
   );
   const settingsControl = (
@@ -883,7 +882,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
       type="button"
       onClick={() => setSettingsOpen(true)}
     >
-      Settings
+      {t("settings.title")}
     </button>
   );
   const accountControl = (
@@ -937,7 +936,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
           diagnosticIncident.message,
           diagnosticIncident.lines,
         ).then(() => setDiagnosticIncident(null)).catch(() => {
-          setError("Diagnostics could not be sent. Use Report issue in Settings instead.");
+          setError(t("app.diagnosticsFailed"));
         }).finally(() => setSendingDiagnostics(false));
       }}
     />
@@ -1047,15 +1046,15 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         <main>
           <nav className="client-game-toolbar" aria-label="Client controls">
             <button onClick={() => void returnToLauncher().catch(fail)}>
-              Launcher
+              {t("worldsim.launcher")}
             </button>
             <strong>
               {screen === "linking"
-                ? "Link your game account"
+                ? t("app.linkTitle")
                 : "A House Divided"}
             </strong>
-            <button title="Multiplayer briefing in picture-in-picture" onClick={() => void briefing.popOut().catch(fail)}>PiP</button>
-            <button onClick={() => setSettingsOpen(true)}>Settings</button>
+            <button title={t("app.pipTitle")} onClick={() => void briefing.popOut().catch(fail)}>PiP</button>
+            <button onClick={() => setSettingsOpen(true)}>{t("settings.title")}</button>
           </nav>
         </main>
         {settingsMenu}
@@ -1068,17 +1067,15 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
   if (screen === "linking") {
     return withSettings(
       <main className="launcher-scope screen-scope">
-        <h1>Link your game account</h1>
-        <p>
-          Complete sign-in in the game window. Your session stays in the app.
-        </p>
+        <h1>{t("app.linkTitle")}</h1>
+        <p>{t("app.linkText")}</p>
         <button
           onClick={() => {
             afterLink.current = null;
             setScreen("launcher");
           }}
         >
-          Back to launcher
+          {t("app.backLauncher")}
         </button>
       </main>,
     );
@@ -1117,7 +1114,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
       <WorldsimScreen
         name={
           allWorlds.find((world) => world.slot === info.slot)?.name ??
-          "World simulation"
+          t("app.worldSimulation")
         }
         onBack={() => setScreen("launcher")}
         onStop={handleStop}
@@ -1191,18 +1188,15 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
       <UpdateNotice enabled={!mobile} />
       {!mobile && accountChecked && accountNotice && !account && (
         <aside className="client-account-notice">
-          <span>
-            Link an entitled game account to use Singleplayer and Worldsim.
-            After validation, access works offline for a limited period.
-          </span>
-          <button onClick={linkAccount}>Link account</button>
+          <span>{t("app.accountNotice")}</span>
+          <button onClick={linkAccount}>{t("common.linkAccount")}</button>
           <button
             onClick={() => {
               setAccountNotice(false);
               rememberAccountNotice();
             }}
           >
-            Later
+            {t("common.later")}
           </button>
         </aside>
       )}

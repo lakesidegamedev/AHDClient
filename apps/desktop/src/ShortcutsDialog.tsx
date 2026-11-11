@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useDialog } from "./useDialog.js";
+import { useT, type TranslationKey } from "./i18n.js";
 import "./settings.css";
 
 interface Props {
@@ -10,21 +11,22 @@ const MAC = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform ?
 const MOD = MAC ? "Cmd" : "Ctrl";
 
 /** What each shortcut does. The native Game menu carries the same keys. */
-export const SHORTCUTS: ReadonlyArray<{ keys: string; does: string }> = [
-  { keys: `${MOD}+K`, does: "Ask about the game" },
-  { keys: `${MOD}+E`, does: "End turn" },
-  { keys: `${MOD}+,`, does: "Open settings" },
-  { keys: `${MOD}+R`, does: "Reload the game page" },
-  { keys: MAC ? "Cmd+[" : "Alt+Left", does: "Back" },
-  { keys: MAC ? "Cmd+]" : "Alt+Right", does: "Forward" },
-  { keys: `${MOD}+ +`, does: "Zoom in" },
-  { keys: `${MOD}+ -`, does: "Zoom out" },
-  { keys: `${MOD}+0`, does: "Actual size" },
-  { keys: MAC ? "Ctrl+Cmd+F" : "F11", does: "Full screen" },
-  { keys: "Esc", does: "Close a window that is open" },
+export const SHORTCUTS: ReadonlyArray<{ keys: string; does: TranslationKey }> = [
+  { keys: `${MOD}+K`, does: "shortcuts.ask" },
+  { keys: `${MOD}+E`, does: "shortcuts.endTurn" },
+  { keys: `${MOD}+,`, does: "shortcuts.settings" },
+  { keys: `${MOD}+R`, does: "shortcuts.reload" },
+  { keys: MAC ? "Cmd+[" : "Alt+Left", does: "shortcuts.back" },
+  { keys: MAC ? "Cmd+]" : "Alt+Right", does: "shortcuts.forward" },
+  { keys: `${MOD}+ +`, does: "shortcuts.zoomIn" },
+  { keys: `${MOD}+ -`, does: "shortcuts.zoomOut" },
+  { keys: `${MOD}+0`, does: "shortcuts.actualSize" },
+  { keys: MAC ? "Ctrl+Cmd+F" : "F11", does: "shortcuts.fullScreen" },
+  { keys: "Esc", does: "shortcuts.closeWindow" },
 ];
 
 export function ShortcutsDialog({ onClose }: Props): JSX.Element {
+  const t = useT();
   const dialogRef = useRef<HTMLElement>(null);
   useDialog(dialogRef, onClose);
   return (
@@ -39,17 +41,17 @@ export function ShortcutsDialog({ onClose }: Props): JSX.Element {
       >
         <header>
           <div>
-            <span className="client-settings-kicker">Desktop</span>
-            <h2 id="client-shortcuts-title">Keyboard shortcuts</h2>
+            <span className="client-settings-kicker">{t("shortcuts.kicker")}</span>
+            <h2 id="client-shortcuts-title">{t("shortcuts.title")}</h2>
           </div>
-          <button className="client-settings-close" type="button" aria-label="Close keyboard shortcuts" onClick={onClose}>
+          <button className="client-settings-close" type="button" aria-label={t("shortcuts.close")} onClick={onClose}>
             ×
           </button>
         </header>
         <dl className="client-shortcuts">
           {SHORTCUTS.map((row) => (
             <div key={row.keys}>
-              <dt>{row.does}</dt>
+              <dt>{t(row.does)}</dt>
               <dd><kbd>{row.keys}</kbd></dd>
             </div>
           ))}
