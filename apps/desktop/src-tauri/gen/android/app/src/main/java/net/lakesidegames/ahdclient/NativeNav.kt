@@ -295,6 +295,20 @@ class NativeNav(private val activity: MainActivity, private val webView: WebView
     ViewCompat.requestApplyInsets(webView)
   }
 
+  /** The window changed size: rotation, split screen, folding. */
+  fun windowChanged() { dock.onWindowChanged() }
+
+  /** A hardware keyboard shortcut. Returns whether it was handled. */
+  fun shortcut(action: DockShortcuts.Action): Boolean {
+    if (dock.parent == null || previewing) return false
+    return when (action) {
+      is DockShortcuts.Action.Tab -> dock.pressTab(action.index)
+      DockShortcuts.Action.Ask -> { net.lakesidegames.briefing.NativeAskController.present(); true }
+      DockShortcuts.Action.Reload -> { webView.reload(); true }
+      DockShortcuts.Action.Back -> if (webView.canGoBack()) { webView.goBack(); true } else false
+    }
+  }
+
   /** Called from the WebView's insets listener; returns the dock's collapsed height. */
   fun layout(left: Int, top: Int, right: Int, bottom: Int, keyboard: Boolean): Int {
     if (dock.parent == null) return 0

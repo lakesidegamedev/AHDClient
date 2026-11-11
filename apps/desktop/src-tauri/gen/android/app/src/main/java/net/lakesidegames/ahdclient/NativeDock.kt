@@ -114,6 +114,8 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
   /** The menu sheet that is (or was last) open, or null for the status sheet. */
   private var menuId: String? = null
   private var stripAllowed = false
+  /** A short window (phone in landscape): no strip, the turn timer is the first row of More. */
+  private var compact = false
   private var progress = 0f
   private var targetExpanded = false
   private var spring: SpringAnimation? = null
@@ -181,7 +183,9 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     panel.setPadding(left, 0, right, bottom)
     // The window's own width, which also holds in split screen; the display's until first layout.
     val available = if (width > 0) width else resources.displayMetrics.widthPixels
-    val width = min(available, dp(MAX_WIDTH_DP))
+    // Tablets and unfolded foldables: the dock follows the page's full width instead of floating mid-screen.
+    val wide = DockShortcuts.isWide(resources.configuration.screenWidthDp)
+    val width = if (wide) available else min(available, dp(MAX_WIDTH_DP))
     (panel.layoutParams as LayoutParams).let { if (it.width != width) { it.width = width; panel.layoutParams = it } }
     val inner = max(0, width - left - right)
     val exact = MeasureSpec.makeMeasureSpec(inner, MeasureSpec.EXACTLY)
@@ -228,16 +232,36 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     applyStripVisibility()
   }
 
+  /** Re-reads the window size; called when it changes (rotation, split screen, folding). */
+  fun onWindowChanged() {
+    val nowCompact = DockShortcuts.isCompactHeight(resources.configuration.screenHeightDp)
+    if (nowCompact != compact) {
+      compact = nowCompact
+      if (menuId != null) bindSheet(animate = false)
+      applyStripVisibility()
+    } else {
+      post { fit(lastLeft, lastTop, lastRight, lastBottom, lastKeyboard) }
+    }
+  }
+
+  /** Ctrl+1 to Ctrl+5: acts like tapping the tab at [index]. */
+  fun pressTab(index: Int): Boolean {
+    val tab = model.tabs.getOrNull(index) ?: return false
+    tabRow.activate(tab)
+    return true
+  }
+
   fun setStatus(next: DockStatus?) {
     val previous = status
     status = next
     strip.bind(next, previous != null && !reducedMotion())
-    if (menuId == null) bindSheet(animate = previous != null && !reducedMotion())
+    if (menuId == null || compact) bindSheet(animate = menuId == null && previous != null && !reducedMotion())
     applyStripVisibility()
     updateTickText()
   }
 
   fun resume() {
+    onWindowChanged()
     if (running) return
     running = true
     handler.post(ticker)
@@ -306,14 +330,14 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
     val tab = model.tab(id)
     val menu = tab?.sheet?.let { model.sheets[it] }
     if (id != null && menu != null) {
-      sheet.bindMenu(menu, tab.label, inboxUnread)
+      sheet.bindMenu(menu, tab.label, inboxUnread, if (compact) status else null)
     } else {
       sheet.bindStatus(status, animate)
     }
   }
 
   private fun applyStripVisibility() {
-    val show = stripAllowed && status?.hasStrip == true
+    val show = stripAllowed && !compact && status?.hasStrip == true
     val wanted = if (show) View.VISIBLE else View.GONE
     if (strip.visibility != wanted) strip.visibility = wanted
     if (!show && targetExpanded && menuId == null) closeSheet(animate = false)
@@ -567,8 +591,12 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       apply(next?.turnTitle.orEmpty(), null, specs.map { Entry.Row(it) }, animate)
     }
 
-    fun bindMenu(menu: DockSheet, tabLabel: String, unread: Int) {
+    fun bindMenu(menu: DockSheet, tabLabel: String, unread: Int, compactStatus: DockStatus? = null) {
       val entries = ArrayList<Entry>()
+      // Short windows have no strip: the turn timer leads the More sheet instead.
+      if (compactStatus != null && menu.sections.any { section -> section.links.any { it.app != null } }) {
+        statusSpecs(compactStatus).firstOrNull { it.key == "turn" }?.let { entries.add(Entry.Row(it)) }
+      }
       menu.sections.forEachIndexed { sectionIndex, section ->
         if (section.title.isNotEmpty()) entries.add(Entry.Heading("section-$sectionIndex-${section.id}", section.title))
         section.links.forEachIndexed { linkIndex, link ->
@@ -1061,10 +1089,12 @@ class NativeDock(context: Context, private val listener: Listener) : FrameLayout
       requestLayout()
     }
 
-    private fun tapped(tab: DockTab, view: View) {
+    fun activate(tab: DockTab) = tapped(tab, null)
+
+    private fun tapped(tab: DockTab, view: View?) {
       val again = selected == tab.id
       // A light tick only when the tab actually changes.
-      if (!again && open != tab.id) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+      if (!again && open != tab.id) view?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
       if (tab.sheet != null) {
         toggleMenu(tab.id)
         return

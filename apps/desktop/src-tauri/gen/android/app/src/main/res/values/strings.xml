@@ -194,4 +194,9 @@
     <string name="widget_preview_holding">$104.9K</string>
     <string name="widget_updated_at">updated %1$s</string>
     <string name="widget_brand">AHD</string>
+    <string name="shortcuts_group">Navigation</string>
+    <string name="shortcut_tab">Go to tab %1$d</string>
+    <string name="shortcut_ask">Ask AHD</string>
+    <string name="shortcut_reload">Reload page</string>
+    <string name="shortcut_back">Go back</string>
 </resources>

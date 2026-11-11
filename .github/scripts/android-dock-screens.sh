@@ -201,6 +201,22 @@ preview more
 shot 11-more-large-font
 a shell settings put system font_scale 1.0
 a shell cmd uimode night no >/dev/null 2>&1
+# Landscape: under 480 dp tall the status strip goes and the turn timer leads the More sheet.
+a shell settings put system accelerometer_rotation 0
+a shell settings put system user_rotation 1
+sleep 3
+preview collapsed
+shot 16-landscape-collapsed
+dump
+check "landscape dock keeps the tabs" has "Company"
+check "landscape dock hides the status strip" absent "Status."
+preview more
+shot 17-landscape-more
+dump
+check "landscape More leads with the next turn" has "Next turn"
+a shell settings put system user_rotation 0
+a shell settings put system accelerometer_rotation 1
+sleep 3
 # The widget picker samples, normal and large font (what a player sees under Widgets).
 a shell am start -W -n "$pkg/.MainActivity" -a android.intent.action.VIEW -d "ahdclient://widgets" >/dev/null
 sleep 4
