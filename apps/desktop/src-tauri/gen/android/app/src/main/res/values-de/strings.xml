@@ -173,6 +173,7 @@
     <string name="widget_section_of">%1$s · %2$d von %3$d</string>
     <string name="widget_chart">Letzter Verlauf</string>
     <string name="widget_change_legend">Grün und Rot: Änderung pro Zug</string>
+    <string name="shortcut_inbox">Posteingang</string>
     <string name="shortcut_profile">Profil</string>
     <string name="shortcut_election">Meine Wahl</string>
     <string name="shortcut_corporation">Mein Unternehmen</string>

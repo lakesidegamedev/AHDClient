@@ -309,3 +309,35 @@ describe("Android loading bar and cannot-reach screen", () => {
     expect(chrome).toContain("source.bottomMargin");
   });
 });
+
+describe("Android game links and shortcuts (2.11, A7)", () => {
+  const manifest = read("../src-tauri/gen/android/app/src/main/AndroidManifest.xml");
+  const filters = manifest.split("<intent-filter").slice(1).map((f) => f.split("</intent-filter>")[0] ?? "");
+  const links = filters.find((f) => f.includes('android:pathPrefix="/elections"')) ?? "";
+
+  it("claims only game page sections as verified links, never sign-in or the API", () => {
+    expect(links).toContain('android:autoVerify="true"');
+    expect(links).toContain('android:host="ahousedividedgame.com"');
+    expect(links).not.toContain("sandbox.");
+    const prefixes = [...links.matchAll(/android:pathPrefix="([^"]+)"/g)].map((m) => m[1]);
+    expect(prefixes.length).toBeGreaterThan(5);
+    for (const bad of ["/api", "/login", "/auth", "/register", "/logout", "/"]) expect(prefixes).not.toContain(bad);
+    const kotlin = android("AppLinks.kt");
+    for (const prefix of prefixes) expect(kotlin).toContain(`"${(prefix ?? "").slice(1)}"`);
+  });
+
+  it("sends a linked page through the existing loader and keeps signed-out players on the launcher", () => {
+    const main = android("MainActivity.kt");
+    expect(main).toContain("AppLinks.pathFor(");
+    expect(main).toContain("BriefingWidgets.identity() == null");
+  });
+
+  it("has Inbox and Ask shortcuts with their own icons and German labels", () => {
+    const shortcuts = read(`${resources}/xml/briefing_shortcuts.xml`);
+    expect(shortcuts).toContain('android:icon="@drawable/ic_shortcut_inbox"');
+    expect(shortcuts).toContain('android:icon="@drawable/ic_shortcut_ask"');
+    expect(shortcuts).toContain("ahdclient://inbox");
+    expect(shortcuts).toContain("ahdclient://ask");
+    expect(read(`${resources}/values-de/strings.xml`)).toContain('name="shortcut_inbox"');
+  });
+});

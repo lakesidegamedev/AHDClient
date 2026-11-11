@@ -38,6 +38,30 @@
                 <data android:host="sandbox.ahousedividedgame.com" />
                 <data android:path="/api/auth/discord/callback" />
             </intent-filter>
+            <!-- Shared game links open here instead of the browser. Page sections
+                 only: never /api, /login, /auth, /register or /logout, so every
+                 sign-in stays in the browser. Kept in step with AppLinks.SECTIONS. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="ahousedividedgame.com" />
+                <data android:host="www.ahousedividedgame.com" />
+                <data android:pathPrefix="/elections" />
+                <data android:pathPrefix="/corporation" />
+                <data android:pathPrefix="/corporations" />
+                <data android:pathPrefix="/state" />
+                <data android:pathPrefix="/country" />
+                <data android:pathPrefix="/profile" />
+                <data android:pathPrefix="/notifications" />
+                <data android:pathPrefix="/congress" />
+                <data android:pathPrefix="/parties" />
+                <data android:pathPrefix="/stockmarket" />
+                <data android:pathPrefix="/news" />
+                <data android:pathPrefix="/politician" />
+                <data android:pathPrefix="/character" />
+            </intent-filter>
         </activity>
 
         <receiver android:name=".OverviewWidget" android:label="@string/widget_name_overview" android:exported="false">
