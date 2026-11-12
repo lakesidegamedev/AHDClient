@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.11.0] - 2026-11-12
+
+Phones and tablets
+- The app opens straight into the game when you are signed in, on the page you were last on. Alert taps and game links still go where they point.
+- A thin loading bar, and a "Cannot reach the game" screen with Retry when the connection drops.
+- Alerts: the app asks once, after you sign in, whether you want alerts for votes, offers and attacks. The app icon shows your unread inbox count, alerts get an "Open inbox" button, and More has an Alerts row.
+- New: "Remind me when a new turn starts" in the Alerts sheet. It is off until you turn it on.
+- Game links from Discord or email open the app on that page. Sign in and account pages stay in the browser.
+- iPhone: native pull to refresh, small vibrations on the status panel and new turns, outside links open in a Safari sheet, and a compact bar in landscape. Long press the icon for Inbox, Actions, Ask and Briefing.
+- iPad: widgets, including extra large Overview and Stocks, hover effects, and the keyboard no longer covers the bar in windowed modes.
+- Android: Back moves within a section, then leaves. Your page survives a text size change. The app and widgets are in English and German and follow the game's language. Widgets have previews, sensible sizes and show the time they updated. Landscape and tablet layouts, keyboard shortcuts on tablets and Chromebooks, a themed icon, and icon shortcuts for Inbox and Ask. If you installed outside Google Play, the app tells you when an update is out.
+- Widgets use a plain sans font and show the full AHD mark.
+
+Desktop
+- Escape no longer opens Settings over the game. Settings is Ctrl or Cmd plus comma.
+- A Game menu: Reload, Back, Forward, Zoom (remembered), Full screen, Ask (Ctrl or Cmd plus K), End turn, Print and a list of shortcuts.
+- Opening the app again brings the open window forward, and game links open the app.
+- Updates ask first, show what is new, check every 6 hours and can install on their own if you choose. Linux package installs link to the new package instead.
+- A tray icon, and a setting to keep running in the tray when you close the window so alerts keep arriving. Off by default.
+- New: "Remind me when a new turn starts" and quiet hours under Notifications, both off by default. The app icon shows your unread count on Mac and Linux.
+- Closing the window while a world runs saves it first. If several turns are running, it asks first.
+- Settings: start when you sign in, interface size, disk used by worlds, open the data folder, and reset settings.
+- Your worlds: rename, see their size, export to a file and import one, and clear old autosaves.
+- Singleplayer: Quick start from the era card, a boot screen that shows what it is doing, a retry screen if setup fails, and a dialog with Restart world, Report or Back if a world stops.
+- Singleplayer follows the game version it runs. The Game version choice now lives in Settings, shows the real version and stays as you set it.
+- Classic eras: a one time download of the earlier game for worlds made before this version. Those worlds always open on Classic.
+- Hosting a world for friends shows your real network address with a Copy button.
+- Images and files the game offers save to your Downloads folder.
+- Keyboard and screen reader support in every dialog, and Reduce Motion is respected.
+- One look across the launcher, game bar, Ask and briefing, and the app is in German throughout.
+
 ## [2.10.0] - 2026-11-02
 
 - iPhone, iPad and Android: a new bottom bar. It has the game's own tabs (your company, your state, your nation, Actions and More) with the game's pixel icons, and the status bar is built into it: time to the next turn, your funds and what they changed by, and your actions, all on one line.
