@@ -245,11 +245,25 @@ pub struct ClassicInfo {
 }
 
 pub fn classic_info(app: &AppHandle) -> ClassicInfo {
-  if let Some(version) = newest_classic(installed_classic(app).iter().map(String::as_str)) {
-    return ClassicInfo { version: Some(version), installed: true, size_bytes: None };
+  let installed = newest_classic(installed_classic(app).iter().map(String::as_str));
+  let published = fetch_releases(app, false).ok().map(|releases| classic_from_releases(&releases, target_name().ok()));
+  pick_classic(installed, published)
+}
+
+/// Prefer a newer published Classic over an older installed one, so a world
+/// stamped with a newer Classic can get the runtime it needs. Offline, the
+/// installed one stands.
+fn pick_classic(installed: Option<String>, published: Option<ClassicInfo>) -> ClassicInfo {
+  let installed_info = installed.clone().map(|version| ClassicInfo { version: Some(version), installed: true, size_bytes: None });
+  match (installed_info, published) {
+    (Some(have), Some(offer)) => {
+      let newer = offer.version.as_deref().and_then(parse_version) > have.version.as_deref().and_then(parse_version);
+      if newer { offer } else { have }
+    }
+    (Some(have), None) => have,
+    (None, Some(offer)) => offer,
+    (None, None) => ClassicInfo::default(),
   }
-  let Ok(releases) = fetch_releases(app, false) else { return ClassicInfo::default(); };
-  classic_from_releases(&releases, target_name().ok())
 }
 
 fn classic_from_releases(releases: &[Release], target: Option<&str>) -> ClassicInfo {
@@ -400,7 +414,7 @@ pub fn select(app: &AppHandle, version: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use super::{cache_is_fresh, choose_runtime, classic_from_releases, is_classic_version, world_is_classic, Asset, Release, Runtime, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
+  use super::{cache_is_fresh, choose_runtime, classic_from_releases, pick_classic, ClassicInfo, is_classic_version, world_is_classic, Asset, Release, Runtime, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
   use std::fs;
 
   fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -516,6 +530,16 @@ mod tests {
     assert!(choose_runtime(true, None, &[], None).is_err());
     // An app whose own game is still pre-1.20 can open Classic worlds itself.
     assert_eq!(choose_runtime(true, Some("1.19.0"), &[], None), Ok(Runtime::Current));
+  }
+
+  #[test]
+  fn a_newer_published_classic_beats_an_older_installed_one() {
+    let offer = |v: &str| Some(ClassicInfo { version: Some(v.into()), installed: false, size_bytes: Some(1) });
+    assert_eq!(pick_classic(Some("1.8.3".into()), offer("1.19.0")).version.as_deref(), Some("1.19.0"));
+    assert!(!pick_classic(Some("1.8.3".into()), offer("1.19.0")).installed);
+    assert!(pick_classic(Some("1.19.0".into()), offer("1.19.0")).installed);
+    assert!(pick_classic(Some("1.8.3".into()), None).installed);
+    assert_eq!(pick_classic(None, None), ClassicInfo::default());
   }
 
   #[test]
