@@ -28,6 +28,7 @@ describe("prepare-game payload allowlist", () => {
     expect(shouldKeepStagedGamePath("server.js")).toBe(true);
     expect(shouldKeepStagedGamePath("launch.mjs")).toBe(true);
     expect(shouldKeepStagedGamePath("build-provenance.json")).toBe(true);
+    expect(shouldKeepStagedGamePath("singleplayer-capabilities.json")).toBe(true);
     expect(shouldKeepStagedGamePath(".next/static/app.js")).toBe(true);
     expect(shouldKeepStagedGamePath("node_modules/mongodb-438b504308ffa4be/index.js")).toBe(true);
     expect(shouldKeepStagedGamePath("src/data/npp-images.json")).toBe(true);

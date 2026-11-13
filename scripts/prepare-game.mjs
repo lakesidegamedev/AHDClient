@@ -217,6 +217,9 @@ const STAGED_TOP_FILES = new Set([
   "README.txt",
   "LICENSE.md",
   "AHD_BUILD.json",
+  // What the runtime can seed and accept. Without it the app falls back to its
+  // own era table and offers eras the bundled game refuses.
+  "singleplayer-capabilities.json",
   BUILD_PROVENANCE_FILE,
 ]);
 const STAGED_TOP_DIRS = new Set([".next", "public", "node_modules"]);
@@ -404,6 +407,9 @@ export async function stageGame(gameDir, triple, { skipBuild = false, destinatio
   );
   pruneStagedGame(staging);
   assertStagedGame(staging, triple);
+  if (existsSync(path.join(dist, "singleplayer-capabilities.json")) && !existsSync(path.join(staging, "singleplayer-capabilities.json"))) {
+    throw new Error("staging dropped singleplayer-capabilities.json; the app would offer eras the game refuses");
+  }
   mkdirSync(path.dirname(dest), { recursive: true });
   rmSync(dest, { recursive: true, force: true });
   renameSync(staging, dest);
