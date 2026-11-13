@@ -1485,7 +1485,11 @@ pub(crate) async fn list_game_versions(app: AppHandle) -> Result<Vec<game_versio
 pub(crate) async fn game_capabilities(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
   tauri::async_runtime::spawn_blocking(move || {
     let dir = game_versions::game_dir(&app)?;
-    Ok(game_versions::read_capabilities(&dir))
+    // No manifest: say which version is running, so the client only offers
+    // what that version accepts (autonomy v6 needs 1.16 or later).
+    Ok(game_versions::read_capabilities(&dir).or_else(|| {
+      game_versions::current_version(&app).map(|version| serde_json::json!({ "legacy": true, "gameVersion": version }))
+    }))
   }).await.map_err(|_| "Game capabilities check failed.".to_string())?
 }
 

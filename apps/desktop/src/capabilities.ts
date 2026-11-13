@@ -44,14 +44,31 @@ export interface Capabilities {
   diagnostic: string | null;
 }
 
+/** Autonomy v6 arrived in game 1.16.0. Older runtimes reject it at world start. */
+const V6_SINCE: [number, number, number] = [1, 16, 0];
+
+/** Unknown version: true (the app's own game). Unreadable version: false. */
+function supportsV6(gameVersion: string | null): boolean {
+  if (gameVersion === null) return true;
+  const parts = gameVersion.trim().replace(/^v/, "").split(".").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) return false;
+  const [major, minor, patch] = parts as [number, number, number];
+  const [wantMajor, wantMinor, wantPatch] = V6_SINCE;
+  if (major !== wantMajor) return major > wantMajor;
+  if (minor !== wantMinor) return minor > wantMinor;
+  return patch >= wantPatch;
+}
+
 /**
  * The older style: runtimes that ship no manifest. Built from the client's own
- * era table and feature list, so behaviour for them is unchanged.
+ * era table and feature list. Autonomy tops out at v5 unless the runtime is
+ * known to be 1.16 or later, since an older game rejects v6 outright.
  */
-export function legacyCapabilities(diagnostic: string | null = null): Capabilities {
+export function legacyCapabilities(diagnostic: string | null = null, gameVersion: string | null = null): Capabilities {
+  const v6 = supportsV6(gameVersion);
   return {
     source: "legacy",
-    gameVersion: null,
+    gameVersion,
     rulesVersion: null,
     defaultPreset: ERAS[0]?.preset ?? "",
     presets: ERAS.map((era) => ({
@@ -64,8 +81,8 @@ export function legacyCapabilities(diagnostic: string | null = null): Capabiliti
     })),
     modes: ["normal", "head-of-state", "worldsim"],
     difficulties: ["easy", "normal", "hard"],
-    autonomyLevels: ["off", "v0", "v1", "v2", "v3", "v4", "v5", "v6"],
-    defaultAutonomyLevel: "v6",
+    autonomyLevels: ["off", "v0", "v1", "v2", "v3", "v4", "v5", ...(v6 ? ["v6"] : [])],
+    defaultAutonomyLevel: v6 ? "v6" : "v5",
     featureFlags: FEATURE_OPTIONS.map((option) => ({
       key: option.key,
       label: option.label,
@@ -151,10 +168,20 @@ function parseManifest(raw: Record<string, unknown>): Capabilities | null {
 export function resolveCapabilities(manifest: unknown): Capabilities {
   if (manifest === null || manifest === undefined) return legacyCapabilities();
   if (!isRecord(manifest)) return legacyCapabilities("capabilities manifest is not an object");
+  // No manifest, but the app said which game version is running.
+  if (manifest.legacy === true) return legacyCapabilities(null, typeof manifest.gameVersion === "string" ? manifest.gameVersion : null);
   if (manifest.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
     return legacyCapabilities(`unsupported capabilities schema ${String(manifest.schemaVersion)}`);
   }
   return parseManifest(manifest) ?? legacyCapabilities("capabilities manifest is malformed");
+}
+
+/**
+ * Setup for a world headed to a downloaded Classic runtime, which ships no
+ * manifest. Offers v6 only when that runtime is known to be 1.16 or later.
+ */
+export function classicCapabilities(version: string | null): Capabilities {
+  return legacyCapabilities(null, version ?? "unknown");
 }
 
 export interface BundledGameInfo {

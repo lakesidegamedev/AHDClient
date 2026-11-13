@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { legacyCapabilities, resolveCapabilities } from "./capabilities.js";
+import { classicCapabilities, legacyCapabilities, resolveCapabilities } from "./capabilities.js";
 import { ERAS } from "./worlds.js";
 import { FEATURE_OPTIONS } from "./screens/featureOptions.js";
 import real120 from "./fixtures/singleplayer-capabilities-1.20.json";
@@ -81,5 +81,26 @@ describe("the manifest a real 1.20 game build writes", () => {
     expect(seedable.map((p) => p.preset)).toEqual(["2027-default"]);
     expect(seedable[0]!.playerCountries.map((c) => c.id)).toEqual(["US"]);
     expect(caps.featureFlags).toHaveLength(10);
+  });
+});
+
+describe("runtimes older than autonomy v6", () => {
+  it("never offers v6 to a pre-1.16 runtime that ships no manifest", () => {
+    const old = resolveCapabilities({ legacy: true, gameVersion: "1.8.3" });
+    expect(old.autonomyLevels).not.toContain("v6");
+    expect(old.defaultAutonomyLevel).toBe("v5");
+    expect(old.gameVersion).toBe("1.8.3");
+  });
+
+  it("keeps v6 for a 1.16+ runtime that ships no manifest", () => {
+    const current = resolveCapabilities({ legacy: true, gameVersion: "1.19.0" });
+    expect(current.autonomyLevels).toContain("v6");
+    expect(current.defaultAutonomyLevel).toBe("v6");
+  });
+
+  it("offers a Classic world v6 only when its runtime is known to take it", () => {
+    expect(classicCapabilities("1.8.3").defaultAutonomyLevel).toBe("v5");
+    expect(classicCapabilities(null).defaultAutonomyLevel).toBe("v5");
+    expect(classicCapabilities("1.19.0").defaultAutonomyLevel).toBe("v6");
   });
 });

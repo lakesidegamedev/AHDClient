@@ -89,13 +89,24 @@ pub const CLASSIC_REQUIRED: &str = "classic-required:";
 /// starts, so a newer runtime can never open it by accident.
 pub fn choose_runtime(world_classic: bool, current: Option<&str>, installed_classic: &[String], pinned: Option<&str>) -> Result<Runtime, String> {
   if !world_classic { return Ok(Runtime::Current); }
+  // The world was made by the runtime that would start now: keep using it. An
+  // older downloaded runtime must not take over a world the app's own game made.
+  if let (Some(pinned), Some(current)) = (pinned, current) {
+    if is_classic_version(current) && parse_version(pinned).is_some() && parse_version(pinned) == parse_version(current) {
+      return Ok(Runtime::Current);
+    }
+  }
   if let Some(version) = pinned.filter(|v| installed_classic.iter().any(|i| i == v)) {
     return Ok(Runtime::Classic(version.to_string()));
   }
-  if let Some(version) = newest_classic(installed_classic.iter().map(String::as_str)) {
+  // Never open a world on a runtime older than the one that made it: an older
+  // game cannot read what a newer one wrote, or rejects its setup outright.
+  let floor = pinned.and_then(parse_version);
+  let fits = |v: &str| floor.is_none_or(|floor| parse_version(v).is_some_and(|v| v >= floor));
+  if let Some(version) = newest_classic(installed_classic.iter().map(String::as_str).filter(|v| fits(v))) {
     return Ok(Runtime::Classic(version));
   }
-  if current.is_some_and(is_classic_version) { return Ok(Runtime::Current); }
+  if current.is_some_and(|c| is_classic_version(c) && fits(c)) { return Ok(Runtime::Current); }
   Err(format!("{CLASSIC_REQUIRED} This world was made with an earlier game version. Download the Classic game to open it."))
 }
 
@@ -234,11 +245,25 @@ pub struct ClassicInfo {
 }
 
 pub fn classic_info(app: &AppHandle) -> ClassicInfo {
-  if let Some(version) = newest_classic(installed_classic(app).iter().map(String::as_str)) {
-    return ClassicInfo { version: Some(version), installed: true, size_bytes: None };
+  let installed = newest_classic(installed_classic(app).iter().map(String::as_str));
+  let published = fetch_releases(app, false).ok().map(|releases| classic_from_releases(&releases, target_name().ok()));
+  pick_classic(installed, published)
+}
+
+/// Prefer a newer published Classic over an older installed one, so a world
+/// stamped with a newer Classic can get the runtime it needs. Offline, the
+/// installed one stands.
+fn pick_classic(installed: Option<String>, published: Option<ClassicInfo>) -> ClassicInfo {
+  let installed_info = installed.clone().map(|version| ClassicInfo { version: Some(version), installed: true, size_bytes: None });
+  match (installed_info, published) {
+    (Some(have), Some(offer)) => {
+      let newer = offer.version.as_deref().and_then(parse_version) > have.version.as_deref().and_then(parse_version);
+      if newer { offer } else { have }
+    }
+    (Some(have), None) => have,
+    (None, Some(offer)) => offer,
+    (None, None) => ClassicInfo::default(),
   }
-  let Ok(releases) = fetch_releases(app, false) else { return ClassicInfo::default(); };
-  classic_from_releases(&releases, target_name().ok())
 }
 
 fn classic_from_releases(releases: &[Release], target: Option<&str>) -> ClassicInfo {
@@ -389,7 +414,7 @@ pub fn select(app: &AppHandle, version: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use super::{cache_is_fresh, choose_runtime, classic_from_releases, is_classic_version, world_is_classic, Asset, Release, Runtime, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
+  use super::{cache_is_fresh, choose_runtime, classic_from_releases, pick_classic, ClassicInfo, is_classic_version, world_is_classic, Asset, Release, Runtime, newest_opened_version, parse_version, read_build_info, read_capabilities, target_name_for, valid_version};
   use std::fs;
 
   fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -505,6 +530,29 @@ mod tests {
     assert!(choose_runtime(true, None, &[], None).is_err());
     // An app whose own game is still pre-1.20 can open Classic worlds itself.
     assert_eq!(choose_runtime(true, Some("1.19.0"), &[], None), Ok(Runtime::Current));
+  }
+
+  #[test]
+  fn a_newer_published_classic_beats_an_older_installed_one() {
+    let offer = |v: &str| Some(ClassicInfo { version: Some(v.into()), installed: false, size_bytes: Some(1) });
+    assert_eq!(pick_classic(Some("1.8.3".into()), offer("1.19.0")).version.as_deref(), Some("1.19.0"));
+    assert!(!pick_classic(Some("1.8.3".into()), offer("1.19.0")).installed);
+    assert!(pick_classic(Some("1.19.0".into()), offer("1.19.0")).installed);
+    assert!(pick_classic(Some("1.8.3".into()), None).installed);
+    assert_eq!(pick_classic(None, None), ClassicInfo::default());
+  }
+
+  #[test]
+  fn a_world_made_by_the_app_game_never_opens_on_an_older_download() {
+    // 2.11.0: a new world stamped with the bundled 1.19.0 started on a
+    // downloaded 1.8.3, which rejects autonomy v6.
+    let have = installed(&["1.8.3"]);
+    assert_eq!(choose_runtime(true, Some("1.19.0"), &have, Some("1.19.0")), Ok(Runtime::Current));
+    assert_eq!(choose_runtime(true, Some("1.20.0"), &have, Some("1.19.0")).unwrap_err().starts_with("classic-required:"), true);
+    // A world made on 1.8.3 still opens on 1.8.3.
+    assert_eq!(choose_runtime(true, Some("1.19.0"), &have, Some("1.8.3")), Ok(Runtime::Classic("1.8.3".into())));
+    // A newer installed Classic may open an older world.
+    assert_eq!(choose_runtime(true, Some("1.20.0"), &installed(&["1.8.3", "1.19.2"]), Some("1.19.0")), Ok(Runtime::Classic("1.19.2".into())));
   }
 
   #[test]

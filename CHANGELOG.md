@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.1] - 2026-11-13
+
+Desktop
+- Singleplayer: new worlds start again. A world made by the app's own game now always opens on that game, never on an older downloaded version, which refused the default NPP setting with an "Invalid option" error.
+- Singleplayer never offers an NPP setting the running game version cannot take.
+- The bundled game is now the current live version, with the 2027 world fixes and the free weekend access.
+
 ## [2.11.0] - 2026-11-12
 
 Phones and tablets
