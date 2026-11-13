@@ -117,6 +117,27 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
           NEXT_TELEMETRY_DISABLED: "1"
         run: node scripts/prepare-game.mjs --target ${{ matrix.target }} --game-dir vendor/AHDGame
+      # The bundled game must start a fresh 2027 world, process turns, save,
+      # stop and reopen on this OS before it ships. Intel macOS is built on an
+      # Apple Silicon runner, so its game is proven by the arm64 job.
+      - name: Smoke the bundled singleplayer game
+        if: matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        env:
+          AHD_SMOKE_TIMINGS: ${{ github.workspace }}/smoke-timings.json
+        # Run the game's own smoke against the exact staged bytes the app ships.
+        run: |
+          rm -rf vendor/AHDGame/dist/singleplayer
+          cp -R apps/desktop/src-tauri/resources/game vendor/AHDGame/dist/singleplayer
+          node vendor/AHDGame/scripts/singleplayer/smoke.mjs
+          rm -rf vendor/AHDGame/dist/singleplayer
+      - name: Upload smoke timings
+        if: always() && matrix.target != 'x86_64-apple-darwin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-timings-${{ matrix.artifact }}
+          path: smoke-timings.json
+          if-no-files-found: ignore
       - name: Verify Windows Node entry paths
         if: matrix.platform == 'windows-latest'
         run: |
