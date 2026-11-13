@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { Launcher } from "./launcher/Launcher.js";
-import { gameRuntime, legacyCapabilities } from "./capabilities.js";
+import { classicCapabilities, gameRuntime, legacyCapabilities } from "./capabilities.js";
 import { ClassicDownload, formatDownloadSize } from "./ClassicDownload.js";
 import type { Capabilities } from "./capabilities.js";
 import { NewWorldScreen } from "./screens/NewWorldScreen.js";
@@ -1174,7 +1174,7 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         <NewWorldScreen
           language={settings.language}
           era={era}
-          capabilities={pendingClassic ? legacyCapabilities() : capabilities}
+          capabilities={pendingClassic ? classicCapabilities(classic?.version ?? null) : capabilities}
           initialWorldsim={pendingWorldsim}
           shareStatistics={settings.shareStatistics}
           onStatisticsChange={(shareStatistics) =>
