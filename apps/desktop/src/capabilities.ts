@@ -52,8 +52,11 @@ function supportsV6(gameVersion: string | null): boolean {
   if (gameVersion === null) return true;
   const parts = gameVersion.trim().replace(/^v/, "").split(".").map(Number);
   if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n))) return false;
-  for (let i = 0; i < 3; i++) if (parts[i] !== V6_SINCE[i]) return parts[i] > V6_SINCE[i];
-  return true;
+  const [major, minor, patch] = parts as [number, number, number];
+  const [wantMajor, wantMinor, wantPatch] = V6_SINCE;
+  if (major !== wantMajor) return major > wantMajor;
+  if (minor !== wantMinor) return minor > wantMinor;
+  return patch >= wantPatch;
 }
 
 /**
