@@ -489,6 +489,7 @@ export const EN = {
   "app.settingsNotSaved": "Settings could not be saved on this device.",
   "app.entitlementOffline": "Singleplayer needs a linked game account. Connect to the internet once so it can be checked.",
   "app.entitlementOff": "Singleplayer is not available for this account.",
+  "app.linkMaintenance": "Singleplayer needs your game account linked once, and the online site is closed for maintenance, so linking is unavailable right now. Your local worlds are not affected. Try linking again after maintenance ends.",
   "app.entitlementLink": "Link a game account that includes Singleplayer to use it.",
   "app.startingWorld": "Starting the world",
   "app.seedingLog": "Setting up countries, parties, markets and the electorate",

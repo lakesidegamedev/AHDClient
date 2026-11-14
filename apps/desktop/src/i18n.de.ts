@@ -483,6 +483,7 @@ export const DE: Record<keyof typeof EN, string> = {
   "app.settingsNotSaved": "Die Einstellungen konnten auf diesem Gerät nicht gespeichert werden.",
   "app.entitlementOffline": "Für den Einzelspieler brauchst du ein verknüpftes Spielkonto. Verbinde dich einmal mit dem Internet, damit es geprüft werden kann.",
   "app.entitlementOff": "Der Einzelspieler ist für dieses Konto nicht freigeschaltet.",
+  "app.linkMaintenance": "Einzelspieler braucht einmalig ein verknüpftes Spielkonto. Die Online-Seite ist wegen Wartung geschlossen, daher ist die Verknüpfung gerade nicht möglich. Deine lokalen Welten sind nicht betroffen. Versuche es nach der Wartung erneut.",
   "app.entitlementLink": "Verknüpfe ein Spielkonto mit Einzelspieler, um ihn zu nutzen.",
   "app.startingWorld": "Die Welt startet",
   "app.seedingLog": "Länder, Parteien, Märkte und Wähler werden eingerichtet",
