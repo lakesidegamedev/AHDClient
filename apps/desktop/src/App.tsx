@@ -379,6 +379,16 @@ function AppShell({ onLanguage }: { onLanguage: (language: ClientLanguage) => vo
         // While booting, the start itself reports the failure with a retry.
         void refreshWorlds();
       }),
+      // The online site redirected the account link page to its maintenance
+      // screen. Never show that page as if single-player had failed: drop
+      // back to the launcher with a local explanation.
+      listen("account-link:maintenance", () => {
+        afterLink.current = null;
+        void game.closeEmbedded().catch(() => {});
+        setEmbedded(false);
+        setScreen("launcher");
+        setError(t("app.linkMaintenance"));
+      }),
       listen("game:window-closed", () => {
         void recordProgress();
       }),

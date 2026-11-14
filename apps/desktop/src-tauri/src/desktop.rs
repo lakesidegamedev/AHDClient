@@ -967,7 +967,17 @@ pub(crate) async fn submit_statistics(app: AppHandle, consent: State<'_, Statist
 pub(crate) async fn link_account(app: AppHandle, separate_window: Option<bool>) -> Result<(), String> {
   let url: Url = format!("{ONLINE_URL}/client/link").parse().map_err(|_| "invalid account URL")?;
   if separate_window.unwrap_or(false) { open_online_url(app, url).await }
-  else { open_embedded(&app, url, None) }
+  else { open_embedded_view(&app, url, None, true) }
+}
+
+/// True when an online view is being sent to the live site's maintenance
+/// screen. The account link view refuses that page and tells the launcher
+/// instead: single-player runs locally, so the online down-window must never
+/// look like the local game failing.
+fn is_online_maintenance_page(url: &Url) -> bool {
+  url.scheme() == "https"
+    && matches!(url.host_str(), Some(crate::ONLINE_HOST) | Some("www.ahousedividedgame.com"))
+    && url.path().trim_end_matches('/') == "/maintenance"
 }
 
 // ---------------------------------------------------------------------------
@@ -1256,6 +1266,10 @@ fn download_handler(app: AppHandle, local_port: Option<u16>) -> impl Fn(tauri::W
 }
 
 fn open_embedded(app: &AppHandle, url: Url, local_port: Option<u16>) -> Result<(), String> {
+  open_embedded_view(app, url, local_port, false)
+}
+
+fn open_embedded_view(app: &AppHandle, url: Url, local_port: Option<u16>, account_link: bool) -> Result<(), String> {
   close_embedded(app);
   let window = app.get_window("main").ok_or("launcher window is missing")?;
   let size = window.inner_size().map_err(|e| e.to_string())?
@@ -1270,6 +1284,10 @@ fn open_embedded(app: &AppHandle, url: Url, local_port: Option<u16>) -> Result<(
     .on_navigation(move |url| {
       if handle_settings_shortcut(&nav_app, url) { return false; }
       if is_frame_resource(url) { return true; }
+      if account_link && is_online_maintenance_page(url) {
+        let _ = nav_app.emit("account-link:maintenance", ());
+        return false;
+      }
       let allowed = match local_port {
         Some(port) => is_local_game_url(url, port),
         None => is_online_navigation_allowed(url),
@@ -1704,7 +1722,7 @@ pub(crate) fn on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-  use super::{stamped, clean_name, import_into, read_meta, tidy_autosaves_in, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
+  use super::{is_online_maintenance_page, stamped, clean_name, import_into, read_meta, tidy_autosaves_in, WorldMeta, acquire_world_lease, delete_save_in, is_local_game_url, list_saves_in, queue_load_in, refresh_target, valid_save_id, valid_slot, EMBEDDED_LABELS};
   use tauri::Url;
 
   #[test]
@@ -1724,6 +1742,16 @@ mod tests {
     assert_eq!(super::install_kind(true, false), "package");
     assert_eq!(super::install_kind(true, true), "self-updating");
     assert_eq!(super::install_kind(false, false), "self-updating");
+  }
+
+  #[test]
+  fn account_link_view_recognizes_only_the_online_maintenance_page() {
+    for page in ["https://ahousedividedgame.com/maintenance", "https://www.ahousedividedgame.com/maintenance/", "https://ahousedividedgame.com/maintenance?from=%2Fclient%2Flink"] {
+      assert!(is_online_maintenance_page(&page.parse().unwrap()), "{page}");
+    }
+    for page in ["https://ahousedividedgame.com/client/link", "https://ahousedividedgame.com/login", "https://ahousedividedgame.com/maintenance-notes", "http://ahousedividedgame.com/maintenance", "http://127.0.0.1:3111/maintenance", "https://example.com/maintenance"] {
+      assert!(!is_online_maintenance_page(&page.parse().unwrap()), "{page}");
+    }
   }
 
   #[test]
