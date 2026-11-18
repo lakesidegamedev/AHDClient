@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.11.2] - 2026-11-18
+
+<!-- Coverage: v2.11.1 (56ff69ba9e0d6af4edad97fd72c22d6728d59312) through 074a2805033b5f6cccd1142340483eb138c96494 -->
+
+### Player notes
+
+- Ask follows your device's light or dark appearance and gives answers more room to read. Open it again to pick up your draft or see the answer that was still writing.
+- The launcher and Settings use simpler artwork and effects to make menus and scrolling smoother.
+- Desktop singleplayer shows a brief notice if account linking hits online maintenance, so you can return to your local game.
+
+### Developer notes
+
+- AHDClient #214 keeps the desktop Ask window alive across dismissals and retains iOS reply tasks. It routes immediate responses by request ID and preserves partial replies if the stream drops. Desktop uses native window appearance events, iOS resolves the presenting scene's appearance, and Android keeps the same conversation during a Material theme change.
+- AHDClient #214 removes continuous launcher rendering and costly Settings effects. The targeted Chromium scrolling probe measured 16.7 to 16.8 ms at the 95th percentile across desktop and phone-sized viewports. Device and gameplay timing remain separate checks.
+- AHDClient #213 handles the account-link maintenance route as a launcher notice during singleplayer linking.
+- AHDClient #212 permits an explicitly selected ad-hoc macOS signature for manual builds.
+- The 2.11.2 TestFlight submission uses the iOS-only dispatch option on the mobile bundle workflow.
+
 ## [2.11.1] - 2026-11-13
 
 Desktop

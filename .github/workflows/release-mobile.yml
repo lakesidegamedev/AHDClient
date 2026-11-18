@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      ios_only:
+        description: Build only iOS for a TestFlight dispatch
+        required: false
+        default: false
+        type: boolean
       ios_runner:
         description: macOS image for the iOS job (Intel only if it has Xcode 26)
         required: false
@@ -38,6 +43,7 @@ concurrency:
 
 jobs:
   android:
+    if: ${{ !inputs.ios_only }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
