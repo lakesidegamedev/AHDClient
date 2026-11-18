@@ -539,68 +539,51 @@ private struct NativeAskEmptyState: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 30) {
-      VStack(spacing: 14) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(LinearGradient(colors: [NativeAskTint.color, NativeAskTint.color.opacity(0.78)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 68, height: 68)
-            .shadow(color: NativeAskTint.color.opacity(0.25), radius: 12, y: 6)
-          Image(systemName: "building.columns.fill")
-            .font(.system(size: 30, weight: .semibold))
-            .foregroundColor(.white)
-        }
-        .accessibilityHidden(true)
-        Text("What would you like to know?")
-          .font(.system(.title2, design: .serif).weight(.semibold))
-          .multilineTextAlignment(.center)
+    VStack(alignment: .leading, spacing: 21) {
+      VStack(alignment: .leading, spacing: 7) {
+        Text("Ask about the game")
+          .font(.title2.weight(.semibold))
           .accessibilityAddTraits(.isHeader)
         Text(model.provider == .server
-          ? "Rules, your character, elections and markets. Answers can read the live game and include charts and maps."
+          ? "Look up a rule, plan your next move, or catch up on the latest turn."
           : "Answers are written privately on this \(NativeAskModel.deviceName) from the game's guides.")
           .font(.subheadline)
           .foregroundColor(.secondary)
-          .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
-          .frame(maxWidth: 420)
       }
-      .frame(maxWidth: .infinity)
-      .padding(.top, 24)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 26)
 
-      VStack(alignment: .leading, spacing: 8) {
-        Text("TRY ASKING")
-          .font(.caption.weight(.semibold))
-          .foregroundColor(.secondary)
-          .padding(.leading, 4)
-        VStack(spacing: 0) {
-          ForEach(Array(starters.enumerated()), id: \.offset) { item in
-            if item.offset > 0 { Divider().padding(.leading, 52) }
-            Button { model.send(item.element.1) } label: {
-              HStack(spacing: 14) {
-                Image(systemName: item.element.0)
-                  .font(.body)
-                  .foregroundColor(NativeAskTint.color)
-                  .frame(width: 24)
-                Text(item.element.1)
-                  .font(.subheadline)
-                  .foregroundColor(.primary)
-                  .multilineTextAlignment(.leading)
-                  .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Image(systemName: "arrow.up.circle")
-                  .foregroundColor(Color(.tertiaryLabel))
-              }
-              .padding(.horizontal, 14)
-              .padding(.vertical, 13)
-              .contentShape(Rectangle())
+      VStack(spacing: 0) {
+        Divider()
+        ForEach(Array(starters.enumerated()), id: \.offset) { item in
+          Button { model.draft = item.element.1 } label: {
+            HStack(spacing: 14) {
+              Image(systemName: item.element.0)
+                .font(.body)
+                .foregroundColor(NativeAskTint.color)
+                .frame(width: 24)
+              Text(item.element.1)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+              Spacer(minLength: 8)
+              Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .disabled(!model.canAsk)
-            .accessibilityHint(Text("Sends this question"))
+            .padding(.trailing, 2)
+            .padding(.vertical, 13)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
           }
+          .buttonStyle(.plain)
+          .disabled(!model.canAsk)
+          .accessibilityHint(Text("Fills the question field"))
+          Divider()
         }
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
       }
     }
   }
@@ -707,11 +690,11 @@ private struct NativeAskTurnView: View {
         }
         Text(turn.question)
           .font(.body)
-          .foregroundColor(.white)
+          .foregroundColor(.primary)
           .fixedSize(horizontal: false, vertical: true)
           .padding(.horizontal, 15)
           .padding(.vertical, 10)
-          .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(NativeAskTint.color))
+          .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemFill)))
           .textSelection(.enabled)
       }
     }

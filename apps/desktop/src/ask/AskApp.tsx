@@ -657,13 +657,7 @@ export function AskApp(): JSX.Element {
   return (
     <div className="askview">
       <header className="av-head">
-        <div className="av-heading">
-          <span className="av-mark" aria-hidden="true">✦</span>
-          <div>
-            <h1 className="av-brand">{threadTitle}</h1>
-            <p className="av-muted">{writing ? "Writing · safe to close" : "A House Divided"}</p>
-          </div>
-        </div>
+        <h1 className="av-brand" title={threadTitle}>{threadTitle}</h1>
         <div className="av-head-actions">
           {usage ? (
             <button
@@ -755,13 +749,12 @@ export function AskApp(): JSX.Element {
       >
         {threadLoading ? <p className="av-muted">Opening chat…</p> : msgs.length === 0 ? (
           <section className="av-welcome">
-            <span className="av-mark" aria-hidden="true">✦</span>
-            <h2>What would you like to know?</h2>
-            <p className="av-muted">Get help with the rules, your character, or what’s happening in the world.</p>
-            <div className="av-starters">
+            <h2>Ask about the game</h2>
+            <p className="av-muted">Look up a rule, plan your next move, or catch up on the latest turn.</p>
+            <div className="av-starters" aria-label="Suggested questions">
               {STARTERS.map((question) => (
                 <button key={question} type="button" onClick={() => { setInput(question); composerRef.current?.focus(); }} disabled={checking}>
-                  {question}<span aria-hidden="true">↗</span>
+                  {question}<span aria-hidden="true">›</span>
                 </button>
               ))}
             </div>
@@ -781,22 +774,7 @@ export function AskApp(): JSX.Element {
       {notice ? <p className="av-error" role="alert">{notice}</p> : null}
 
       <footer className="av-composer">
-        <label className="av-live">
-          <input
-            type="checkbox"
-            checked={useMcp}
-            onChange={(event) => {
-              const checked = event.target.checked;
-              setUseMcp(checked);
-              try {
-                localStorage.setItem(LIVE_KEY, checked ? "on" : "off");
-              } catch {
-                // Ignore.
-              }
-            }}
-          />
-          <span>Use live game data</span>
-        </label>
+        {writing && <p className="av-writing">Writing · safe to close</p>}
         <div className="av-row">
           <textarea
             ref={composerRef}
@@ -818,13 +796,29 @@ export function AskApp(): JSX.Element {
               ■
             </button>
           ) : (
-            <button type="button" className="av-send" disabled={checking || threadLoading || writing || !consented || !input.trim()} onClick={() => void send(input)}>
-              Ask
+            <button type="button" className="av-send" aria-label="Send question" title="Send question" disabled={checking || threadLoading || writing || !consented || !input.trim()} onClick={() => void send(input)}>
+              <span aria-hidden="true">↑</span>
             </button>
           )}
         </div>
         <div className="av-cost">
-          {costLabel}
+          <label className="av-live">
+            <input
+              type="checkbox"
+              checked={useMcp}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setUseMcp(checked);
+                try {
+                  localStorage.setItem(LIVE_KEY, checked ? "on" : "off");
+                } catch {
+                  // Ignore.
+                }
+              }}
+            />
+            <span>Use live game data</span>
+          </label>
+          <span>{costLabel}</span>
           {consented ? (
             <button type="button" className="av-link" onClick={() => setReviewingConsent(true)}>
               AI providers

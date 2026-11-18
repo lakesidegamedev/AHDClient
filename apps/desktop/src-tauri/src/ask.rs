@@ -449,12 +449,19 @@ pub(crate) async fn open_ask_window(app: AppHandle) -> Result<(), String> {
 /// The native chat UI: a local view, so it renders instantly, works offline
 /// except for the answers themselves, and needs no remote capability.
 fn open_ask_ui(app: &AppHandle) -> Result<(), String> {
+  let dark = app.get_webview_window("main").and_then(|main| main.theme().ok())
+    == Some(tauri::Theme::Dark);
+  let background = if dark {
+    tauri::window::Color(0x18, 0x19, 0x1d, 0xff)
+  } else {
+    tauri::window::Color(0xfb, 0xfa, 0xf8, 0xff)
+  };
   let mut builder = WebviewWindowBuilder::new(app, "ask", WebviewUrl::App("index.html?view=ask".into()))
     .title("A House Divided: Ask")
     .inner_size(ASK_WINDOW_WIDTH, ASK_WINDOW_HEIGHT)
     .min_inner_size(320.0, 480.0)
     .resizable(true)
-    .background_color(tauri::window::Color(0x14, 0x14, 0x1c, 0xff))
+    .background_color(background)
     .on_navigation(|url| {
       (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
         || (matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost"))

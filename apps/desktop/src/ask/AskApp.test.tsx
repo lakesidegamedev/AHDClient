@@ -192,7 +192,7 @@ describe("ask quota updates", () => {
     mocks.askMe.mockReturnValue(refresh.promise);
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "Why did the harvest fail?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
 
     mocks.streamHandler?.({
@@ -217,7 +217,7 @@ describe("ask quota updates", () => {
     mocks.askMe.mockReturnValue(refresh.promise);
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "One more question?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
 
     mocks.streamHandler?.({
@@ -240,7 +240,7 @@ describe("ask screen reader support", () => {
     expect(screen.getByRole("log").getAttribute("aria-live")).toBe("off");
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "Why?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
     expect(screen.getByRole("log").getAttribute("aria-busy")).toBe("true");
     expect(screen.getByRole("status").textContent).toBe("");
@@ -304,7 +304,7 @@ describe("ask AI provider consent", () => {
 
     await waitFor(() => expect((screen.getByLabelText("Ask a question") as HTMLTextAreaElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "How do elections work?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
     await waitFor(() => expect(mocks.streamHandler).not.toBeNull());
 
@@ -329,7 +329,7 @@ it("keeps a draft and an in-flight answer when the native panel is shown again",
   await screen.findByText("Earlier answer");
   const composer = screen.getByLabelText<HTMLTextAreaElement>("Ask a question");
   fireEvent.change(composer, { target: { value: "What should I do about the harvest?" } });
-  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
   await screen.findByRole("button", { name: "Stop" });
   fireEvent.change(composer, { target: { value: "Draft follow-up" } });
   mocks.streamHandler?.({ reqId: mocks.askSend.mock.lastCall?.[3] as string, kind: "delta", data: "Partial answer" });
@@ -358,8 +358,8 @@ it("routes a cached answer that arrives before the native send command returns",
   });
   render(<AskApp />);
   fireEvent.change(await screen.findByLabelText("Ask a question"), { target: { value: "How do action points work?" } });
-  await waitFor(() => expect((screen.getByRole("button", { name: "Ask" }) as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
   await screen.findByText("An instant cached answer.");
   expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
   ipc.resolve();
@@ -370,8 +370,8 @@ it("keeps the part of an answer already received when the stream drops", async (
   render(<AskApp />);
   const composer = await screen.findByLabelText("Ask a question");
   fireEvent.change(composer, { target: { value: "What changed in the latest turn?" } });
-  await waitFor(() => expect((screen.getByRole("button", { name: "Ask" }) as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
   const reqId = mocks.askSend.mock.lastCall?.[3] as string;
   mocks.streamHandler?.({ reqId, kind: "delta", data: "The first part of the answer." });
   await screen.findByText("The first part of the answer.");
