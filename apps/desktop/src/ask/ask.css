@@ -127,7 +127,9 @@ button.av-quota, .av-iconbtn {
 }
 
 button.av-quota { color: var(--av-accent); }
-button.av-quota:hover, .av-iconbtn:hover, .av-head-actions button[aria-expanded="true"] {
+button.av-quota:not(:disabled):hover,
+button.av-iconbtn:not(:disabled):hover,
+.av-head-actions button[aria-expanded="true"] {
   border-color: var(--av-line);
   background: var(--av-shade);
 }
@@ -217,6 +219,8 @@ button.av-quota:hover, .av-iconbtn:hover, .av-head-actions button[aria-expanded=
 .av-welcome .av-mark { width: 45px; height: 45px; font-size: 20px; }
 .av-welcome h2 {
   font: normal 1.85rem/1.12 Georgia, serif;
+  color: var(--av-ink);
+  text-transform: none;
   letter-spacing: -0.03em;
   margin: 13px 0 7px;
 }
@@ -344,7 +348,7 @@ button.av-quota:hover, .av-iconbtn:hover, .av-head-actions button[aria-expanded=
 
 .av-composer { border-top: 1px solid var(--av-line); padding: 10px 16px 12px; background: var(--av-paper-hi); }
 
-.av-live { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--av-ink-soft); margin-bottom: 7px; }
+.av-live { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--av-ink-soft); width: fit-content; margin-bottom: 7px; }
 .av-live input { accent-color: var(--av-accent); }
 
 .av-row { display: flex; gap: 8px; align-items: flex-end; }
