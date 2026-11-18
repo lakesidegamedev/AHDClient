@@ -3,7 +3,7 @@
 .client-account-control:disabled { opacity: .6; cursor: default; }
 .client-account-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #3a3a4a; font-size: 11px; font-weight: 700; }
 img.client-account-avatar { display: block; }
-.client-settings-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: #080a12b8; backdrop-filter: blur(12px); }
+.client-settings-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: #080a12e0; }
 .client-settings-dialog { width: min(640px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: auto; border: 1px solid #555a6e; border-radius: 18px; background: linear-gradient(145deg, #202231, #171822); color: #f5f5fa; box-shadow: 0 28px 90px #000b; }
 .client-diagnostic-dialog { width: min(520px, 100%); padding: 26px; border: 1px solid #555a6e; border-radius: 18px; background: linear-gradient(145deg, #202231, #171822); color: #f5f5fa; box-shadow: 0 28px 90px #000b; }
 .client-diagnostic-dialog h2 { margin: 5px 0 12px; font: 700 27px/1.15 var(--font-ui); }
@@ -77,7 +77,6 @@ html[data-animations="off"] .client-toolbar-end-turn { transition: none; }
 .client-toolbar-overflow > div { position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 240px; padding: 8px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--panel); box-shadow: 0 18px 50px #0009; }
 .client-toolbar-overflow button { display: block; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: #f5f5fa; text-align: left; cursor: pointer; }
 .client-toolbar-overflow button:hover { background: #ffffff0d; }
-html[data-animations="off"] .launcher-nebula { animation: none; }
 .client-account-notice { display: flex; gap: 12px; align-items: center; padding: 72px 24px 12px; background: #242433; color: #e8e8ef; font-size: 14px; }
 .client-account-notice span { flex: 1; }
 .client-account-notice button { padding: 8px 12px; cursor: pointer; }
