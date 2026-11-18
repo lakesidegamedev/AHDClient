@@ -94,7 +94,8 @@
     <string name="ask_photo_attached">Angehängtes Foto</string>
     <string name="ask_remove_photo">Foto entfernen</string>
     <string name="ask_share_subject">Ask: %1$s</string>
-    <string name="ask_intro_title">Frage zu A House Divided</string>
+    <string name="ask_intro_title">Was möchtest du wissen?</string>
+    <string name="ask_writing_safe_to_close">Antwort läuft · Schließen möglich</string>
     <string name="ask_intro_body">Regeln, dein Charakter, Wahlen und Märkte. Die Antworten können den aktuellen Spielstand nutzen.</string>
     <string name="ask_try_asking">Probiere zum Beispiel</string>
     <string name="ask_link_title">Verknüpfe dein Spielkonto</string>

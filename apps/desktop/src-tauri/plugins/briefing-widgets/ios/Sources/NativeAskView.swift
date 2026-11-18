@@ -403,7 +403,7 @@ private struct NativeAskConversationView: View {
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
           if model.loadingConversation {
             NativeAskLoadingThread()
           } else if model.turns.isEmpty {
@@ -552,8 +552,8 @@ private struct NativeAskEmptyState: View {
             .foregroundColor(.white)
         }
         .accessibilityHidden(true)
-        Text("Ask about A House Divided")
-          .font(.title2.weight(.bold))
+        Text("What would you like to know?")
+          .font(.system(.title2, design: .serif).weight(.semibold))
           .multilineTextAlignment(.center)
           .accessibilityAddTraits(.isHeader)
         Text(model.provider == .server
@@ -732,18 +732,18 @@ private struct NativeAskTurnView: View {
 
   @ViewBuilder private var answer: some View {
     switch turn.state {
-    case .streaming, .pending:
+    case .streaming:
       if turn.answer.isEmpty {
         NativeAskSkeleton()
       } else {
         NativeAskAnswerView(text: turn.answer, model: model)
       }
-      NativeAskStatusLine(text: turn.status, lookups: turn.lookups, pending: turn.state == .pending)
+      NativeAskStatusLine(text: turn.status, lookups: turn.lookups)
     case .failed(let message):
       NativeAskErrorCard(message: message, actionTitle: "Try again") { model.retry(turn.id) }
     case .interrupted(let message):
       NativeAskAnswerView(text: turn.answer, model: model)
-      NativeAskErrorCard(message: message, actionTitle: "Retry") { model.retry(turn.id) }
+      NativeAskErrorCard(message: message, actionTitle: "Check and retry") { model.retry(turn.id) }
     case .done, .stopped:
       NativeAskAnswerView(text: turn.answer, model: model)
     }
@@ -757,7 +757,7 @@ private struct NativeAskTurnView: View {
   }
 
   @ViewBuilder private var footer: some View {
-    if turn.state != .streaming && turn.state != .pending && !turn.answer.isEmpty {
+    if turn.state != .streaming && !turn.answer.isEmpty {
       VStack(alignment: .leading, spacing: 8) {
         if turn.chartsUsedUp {
           Label("Charts and maps are used up for today, so this answer comes without them.", systemImage: "chart.bar.xaxis")
@@ -896,15 +896,10 @@ private struct NativeAskTurnView: View {
 private struct NativeAskStatusLine: View {
   let text: String
   let lookups: Int
-  let pending: Bool
 
   var body: some View {
     HStack(spacing: 8) {
-      if pending {
-        Image(systemName: "clock").font(.footnote).foregroundColor(.secondary)
-      } else {
-        ProgressView().controlSize(.small)
-      }
+      ProgressView().controlSize(.small)
       Text(text.isEmpty ? "Thinking" : text)
         .font(.footnote)
         .foregroundColor(.secondary)
@@ -993,6 +988,12 @@ private struct NativeAskComposer: View {
       // Notices sit with the composer so they stay visible wherever the
       // thread is scrolled.
       NativeAskBanners(model: model)
+      if model.sending {
+        Label("Writing · safe to close", systemImage: "ellipsis.bubble")
+          .font(.footnote)
+          .foregroundColor(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
       if !model.draftAttachments.isEmpty {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 12) {
@@ -1030,7 +1031,7 @@ private struct NativeAskComposer: View {
     .padding(.bottom, 10)
     .frame(maxWidth: 760)
     .frame(maxWidth: .infinity)
-    .background(.bar)
+    .background(Color(.secondarySystemBackground))
     .overlay(Divider(), alignment: .top)
     .sheet(isPresented: $pickingPhoto) {
       NativeAskPhotoPicker(limit: max(1, NativeAskModel.maxAttachments - model.draftAttachments.count),

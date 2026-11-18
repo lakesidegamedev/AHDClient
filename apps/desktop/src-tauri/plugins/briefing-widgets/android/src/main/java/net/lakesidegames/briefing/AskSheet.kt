@@ -139,6 +139,8 @@ internal class AskSheet(
     dialog.setOnDismissListener {
       NativeSafety.run("Ask sheet dismissed") {
         session.detach(this)
+        session.showingHistory = false
+        session.reviewingConsent = false
         session.commitPendingDeletes()
         unregisterNetwork()
         host.dismissed(this)
@@ -477,6 +479,7 @@ internal class AskSheet(
       history -> null
       phase == AskPhase.CHECKING -> T.s(R.string.ask_checking)
       phase == AskPhase.SIGNED_OUT -> T.s(R.string.ask_not_linked)
+      session.sending -> T.s(R.string.ask_writing_safe_to_close)
       session.profileName.isNotBlank() -> T.s(R.string.ask_signed_in_as, session.profileName)
       else -> null
     }
@@ -730,12 +733,18 @@ internal class AskSheet(
       return
     }
     val column = ui.vertical().apply { gravity = Gravity.CENTER_HORIZONTAL }
-    column.addView(ui.badge(R.drawable.ask_ic_forum, 64))
-    column.addView(centered(T.s(R.string.ask_intro_title), AskUi.Type.TITLE_LARGE, ui.onSurface).apply {
+    val intro = ui.vertical().apply {
+      gravity = Gravity.CENTER_HORIZONTAL
+      background = ui.rounded(ui.containerLow, 18f, ui.outlineVariant)
+      setPadding(ui.dp(16), ui.dp(20), ui.dp(16), ui.dp(20))
+    }
+    intro.addView(ui.badge(R.drawable.ask_ic_forum, 48))
+    intro.addView(centered(T.s(R.string.ask_intro_title), AskUi.Type.TITLE_LARGE, ui.onSurface).apply {
       ViewCompat.setAccessibilityHeading(this, true)
     }, ui.matchWrap(top = 16))
-    column.addView(centered(T.s(R.string.ask_intro_body),
+    intro.addView(centered(T.s(R.string.ask_intro_body),
       AskUi.Type.BODY_MEDIUM, ui.onSurfaceVariant), ui.matchWrap(top = 8))
+    column.addView(intro, ui.matchWrap())
     column.addView(ui.text(T.s(R.string.ask_try_asking), AskUi.Type.LABEL_LARGE, ui.onSurfaceVariant), ui.matchWrap(top = 28, bottom = 8))
     askStarters().forEach { starter ->
       column.addView(suggestion(starter, R.drawable.ask_ic_arrow_outward) {

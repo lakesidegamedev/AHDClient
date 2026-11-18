@@ -238,8 +238,8 @@ export async function askConversation(id: string): Promise<AskTurn[]> {
   return turns.filter((turn) => typeof turn?.question === "string");
 }
 
-export async function askSend(question: string, convId: string | null, useMcp: boolean): Promise<string> {
-  return invoke<string>("ask_send", { question, convId, useMcp });
+export function askSend(question: string, convId: string | null, useMcp: boolean, reqId: string): Promise<void> {
+  return invoke<void>("ask_send", { question, convId, useMcp, reqId });
 }
 
 export async function askStop(reqId: string): Promise<void> {

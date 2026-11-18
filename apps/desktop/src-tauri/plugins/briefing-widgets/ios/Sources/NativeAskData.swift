@@ -145,9 +145,6 @@ enum NativeAskTurnState: Equatable {
   case interrupted(String)
   /// Nothing usable came back.
   case failed(String)
-  /// The sheet closed mid-answer. The service keeps writing and saves it,
-  /// so it is fetched again when Ask reopens.
-  case pending
 }
 
 struct NativeAskTurn: Identifiable {

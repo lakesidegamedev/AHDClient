@@ -94,7 +94,8 @@
     <string name="ask_photo_attached">Attached photo</string>
     <string name="ask_remove_photo">Remove photo</string>
     <string name="ask_share_subject">Ask: %1$s</string>
-    <string name="ask_intro_title">Ask about A House Divided</string>
+    <string name="ask_intro_title">What would you like to know?</string>
+    <string name="ask_writing_safe_to_close">Writing · safe to close</string>
     <string name="ask_intro_body">Rules, your character, elections and markets. Answers can use the current state of the game.</string>
     <string name="ask_try_asking">Try asking</string>
     <string name="ask_link_title">Link your game account</string>

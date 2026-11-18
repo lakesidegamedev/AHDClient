@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   askConversation,
   askConversations,
@@ -57,6 +57,20 @@ interface Msg {
 
 const CONV_KEY = "ahdclient.ask.conv";
 const LIVE_KEY = "ahdclient.ask.live";
+const STARTERS = [
+  "How do action points work?",
+  "How does a bill become law?",
+  "What changed in the latest turn?",
+];
+
+function rememberThreadId(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(CONV_KEY, id);
+    else localStorage.removeItem(CONV_KEY);
+  } catch {
+    // The thread still works in memory.
+  }
+}
 
 let msgSeq = 0;
 function nextId(prefix: string): string {
@@ -159,6 +173,8 @@ export function AskApp(): JSX.Element {
     }
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [showAllowance, setShowAllowance] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // Outside AI services named by the server, and whether the player agreed
   // to that exact list. Nothing is sent until they have.
@@ -167,10 +183,12 @@ export function AskApp(): JSX.Element {
   const [reviewingConsent, setReviewingConsent] = useState(false);
   const agreedRef = useRef<string | null>(null);
   const activeReqRef = useRef<string | null>(null);
+  const threadChosen = useRef(false);
+  const threadRevision = useRef(0);
+  const probeRevision = useRef(0);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
-
-  activeReqRef.current = activeReq;
 
   const patchAssistant = useCallback((reqId: string, patch: (msg: Msg) => Msg) => {
     setMsgs((prev) => prev.map((msg) => (msg.id === `a-${reqId}` ? patch(msg) : msg)));
@@ -182,14 +200,35 @@ export function AskApp(): JSX.Element {
     setConsented(agreedRef.current === consentSignature(list) || hasAskConsent(list));
   }, []);
 
+  const clearThread = useCallback(() => {
+    threadChosen.current = false;
+    threadRevision.current++;
+    activeReqRef.current = null;
+    setActiveReq(null);
+    setThreadLoading(false);
+    setShowHistory(false);
+    setShowAllowance(false);
+    setNotice(null);
+    setConvs([]);
+    setConvId(null);
+    setFuLeft(null);
+    setMsgs([]);
+    setInput("");
+    rememberThreadId(null);
+  }, []);
+
   const signOut = useCallback(() => {
+    probeRevision.current++;
+    setRefreshing(false);
+    clearThread();
+    setConsented(false);
     accountRef.current = null;
     setUsage(null);
     setTier(null);
     setQuotaStale(false);
     clearCachedAskSession();
     setPhase("signedOut");
-  }, []);
+  }, [clearThread]);
 
   // Display the authoritative snapshot and keep its non-sensitive summary
   // cached for the next instant open. A new username means the account
@@ -197,21 +236,14 @@ export function AskApp(): JSX.Element {
   // from the old account may stay visible while the refresh is in flight.
   const remember = useCallback((nextUsage: AskUsage | null, nextTier: string | null, username: string | null) => {
     if (accountRef.current !== username) {
-      setConvs([]);
-      setConvId(null);
-      setMsgs([]);
-      try {
-        localStorage.removeItem(CONV_KEY);
-      } catch {
-        // Private browsing: the in-memory thread is still cleared above.
-      }
+      clearThread();
       accountRef.current = username;
     }
     setUsage(nextUsage);
     setTier(nextTier);
     setQuotaStale(false);
     saveCachedAskSession({ username, usage: nextUsage, tier: nextTier });
-  }, []);
+  }, [clearThread]);
 
   // Quota arriving on any stream payload (answers, credit notices): show it
   // now; the authoritative refresh after the turn confirms it.
@@ -224,11 +256,14 @@ export function AskApp(): JSX.Element {
   }, []);
 
   const refreshQuota = useCallback(async () => {
+    const revision = probeRevision.current;
     try {
       const me = await askMe();
+      if (revision !== probeRevision.current) return;
       remember(me.usage ?? null, me.entitlement?.label ?? null, usernameOf(me));
       applyProviders(me);
     } catch (error) {
+      if (revision !== probeRevision.current) return;
       if (isSignedOutError(error)) {
         signOut();
         return;
@@ -245,62 +280,73 @@ export function AskApp(): JSX.Element {
   }, [applyProviders, noteUsage, remember, signOut]);
 
   const refreshConvs = useCallback(async () => {
+    const account = accountRef.current;
+    const revision = probeRevision.current;
     try {
       const { conversations, usage: listUsage } = await askConversations();
+      if (revision !== probeRevision.current || account !== accountRef.current) return;
       setConvs(conversations);
       if (listUsage) noteUsage({ usage: listUsage });
     } catch (error) {
-      if (isSignedOutError(error)) signOut();
+      if (revision === probeRevision.current && isSignedOutError(error)) signOut();
       // History is best-effort once the thread is showing.
     }
   }, [noteUsage, signOut]);
 
-  const openThread = useCallback(
-    async (id: string | null) => {
-      setConvId(id);
-      setFuLeft(null);
-      try {
-        if (id) localStorage.setItem(CONV_KEY, id);
-        else localStorage.removeItem(CONV_KEY);
-      } catch {
-        // Private browsing: the thread still works for this session.
+  const openThread = useCallback(async (id: string | null) => {
+    if (activeReqRef.current) return;
+    threadChosen.current = true;
+    const revision = ++threadRevision.current;
+    setConvId(id);
+    setFuLeft(null);
+    setNotice(null);
+    setMsgs([]);
+    setThreadLoading(Boolean(id));
+    rememberThreadId(id);
+    stickRef.current = true;
+    if (!id) return;
+    try {
+      const turns = await askConversation(id);
+      if (revision === threadRevision.current) {
+        setMsgs(turns.flatMap((turn, index) => turnToMsgs(turn, `h${index}`)));
       }
-      if (!id) {
-        setMsgs([]);
-        return;
-      }
-      try {
-        const turns = await askConversation(id);
-        setMsgs(turns.flatMap((turn, i) => turnToMsgs(turn, `h${i}`)));
-      } catch (error) {
+    } catch (error) {
+      if (revision === threadRevision.current) {
         setNotice(error instanceof Error ? error.message : "Could not load that conversation.");
       }
-    },
-    [],
-  );
+    } finally {
+      if (revision === threadRevision.current) setThreadLoading(false);
+    }
+  }, []);
 
-  // Startup probe. The shell is already painted (from cache when there is
-  // one), so this only revalidates in the background and fills in the
-  // thread. It never blocks the panel on /api/me.
+  // Reopening the window revalidates access. History hydrates only on the
+  // first open for this account so it cannot replace a newer local reply.
   const probe = useCallback(async () => {
+    const revision = ++probeRevision.current;
     setRefreshing(true);
     try {
       const me = await askMe();
-      remember(me.usage ?? null, me.entitlement?.label ?? null, usernameOf(me));
+      if (revision !== probeRevision.current) return;
+      const account = usernameOf(me);
+      remember(me.usage ?? null, me.entitlement?.label ?? null, account);
       applyProviders(me);
       const { conversations, usage: listUsage } = await askConversations();
+      if (revision !== probeRevision.current || account !== accountRef.current) return;
       setConvs(conversations);
       if (listUsage) noteUsage({ usage: listUsage });
-      let stored: string | null = null;
-      try {
-        stored = localStorage.getItem(CONV_KEY);
-      } catch {
-        stored = null;
-      }
-      const resume = stored && conversations.some((conv) => conv.id === stored) ? stored : null;
       setPhase("ready");
-      await openThread(resume);
+      if (!threadChosen.current) {
+        let stored: string | null = null;
+        try {
+          stored = localStorage.getItem(CONV_KEY);
+        } catch {
+          // The store may be unavailable.
+        }
+        const resume = stored && conversations.some((conv) => conv.id === stored) ? stored : null;
+        await openThread(resume);
+      }
     } catch (error) {
+      if (revision !== probeRevision.current) return;
       if (isSignedOutError(error)) {
         signOut();
       } else {
@@ -309,7 +355,7 @@ export function AskApp(): JSX.Element {
         setPhase("ready");
       }
     } finally {
-      setRefreshing(false);
+      if (revision === probeRevision.current) setRefreshing(false);
     }
   }, [applyProviders, noteUsage, openThread, remember, signOut]);
 
@@ -322,11 +368,9 @@ export function AskApp(): JSX.Element {
   // sign-out, and account switches land without reopening the panel.
   useEffect(() => {
     const onFocus = () => {
-      setPhase((prev) => {
-        if (prev === "signedOut") void probe();
-        else void refreshQuota();
-        return prev;
-      });
+      if (document.hidden) return;
+      if (phase === "signedOut") void probe();
+      else void refreshQuota();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -334,13 +378,15 @@ export function AskApp(): JSX.Element {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [probe, refreshQuota]);
+  }, [phase, probe, refreshQuota]);
 
   useEffect(() => {
     let alive = true;
     let stop: (() => void) | undefined;
-    void listen<{ ready?: boolean }>("ask-session", () => {
-      if (alive) void probe();
+    void listen<{ ready?: boolean }>("ask-session", (event) => {
+      if (!alive) return;
+      if (event.payload.ready === false) signOut();
+      else void probe();
     }).then((unlisten) => {
       if (!alive) unlisten();
       else stop = unlisten;
@@ -351,14 +397,16 @@ export function AskApp(): JSX.Element {
       alive = false;
       stop?.();
     };
-  }, [probe]);
+  }, [probe, signOut]);
 
   // Answer stream routing. One question at a time: the composer locks while
   // a stream is live, so the ref always names the visible placeholder.
   useEffect(() => {
     let live = true;
+    let unlisten: (() => void) | undefined;
     const finish = () => {
       if (!live) return;
+      activeReqRef.current = null;
       setActiveReq(null);
       void refreshQuota();
       void refreshConvs();
@@ -372,16 +420,8 @@ export function AskApp(): JSX.Element {
           const conv = typeof data.convId === "string" ? data.convId : null;
           if (typeof data.followupsLeft === "number") setFuLeft(data.followupsLeft);
           if (conv) {
-            setConvId((prev) => {
-              if (prev !== conv) {
-                try {
-                  localStorage.setItem(CONV_KEY, conv);
-                } catch {
-                  // Ignore.
-                }
-              }
-              return conv;
-            });
+            rememberThreadId(conv);
+            setConvId(conv);
           }
           break;
         }
@@ -403,11 +443,7 @@ export function AskApp(): JSX.Element {
           const answer = answerOf(data);
           if (answer) {
             if (answer.convId) {
-              try {
-                localStorage.setItem(CONV_KEY, answer.convId);
-              } catch {
-                // Ignore.
-              }
+              rememberThreadId(answer.convId);
               setConvId(answer.convId);
             }
             if (typeof answer.followupsLeft === "number") setFuLeft(answer.followupsLeft);
@@ -434,7 +470,11 @@ export function AskApp(): JSX.Element {
           if (status >= 200 && status < 300) {
             const answer = answerOf(body);
             if (answer) {
-              if (answer.convId) setConvId(answer.convId);
+              if (answer.convId) {
+                rememberThreadId(answer.convId);
+                setConvId(answer.convId);
+              }
+              if (typeof answer.followupsLeft === "number") setFuLeft(answer.followupsLeft);
               if (answer.usage) noteUsage({ usage: answer.usage });
               patchAssistant(event.reqId, (msg) => ({
                 ...msg,
@@ -493,11 +533,12 @@ export function AskApp(): JSX.Element {
           break;
       }
     }).then(
-      () => undefined,
-      () => setNotice("Live answers are unavailable in this window. Reopen the panel and try again."),
+      (stop) => { if (live) unlisten = stop; else stop(); },
+      () => { if (live) setNotice("Live answers are unavailable in this window. Restart the client and try again."); },
     );
     return () => {
       live = false;
+      unlisten?.();
     };
     // finish/refresh closures are stable single-purpose callbacks for this listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -511,12 +552,18 @@ export function AskApp(): JSX.Element {
   const send = useCallback(
     async (raw: string) => {
       const question = raw.trim();
-      if (!question || activeReqRef.current || !consented) return;
+      if (!question || activeReqRef.current || threadLoading || !consented) return;
       setNotice(null);
       const userMsg: Msg = { id: nextId("q"), role: "user", text: question };
-      const reqKey = nextId("rid");
+      // Register the request before invoking Rust. Cached answers can arrive
+      // over the event channel before the invoke promise resolves.
+      const reqId = Array.from(crypto.getRandomValues(new Uint8Array(9)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      threadChosen.current = true;
+      activeReqRef.current = reqId;
+      setActiveReq(reqId);
+      stickRef.current = true;
       const assistant: Msg = {
-        id: `a-${reqKey}`,
+        id: `a-${reqId}`,
         role: "assistant",
         text: "",
         streaming: true,
@@ -525,11 +572,12 @@ export function AskApp(): JSX.Element {
       setMsgs((prev) => [...prev, userMsg, assistant]);
       setInput("");
       try {
-        const reqId = await askSend(question, convId, useMcp);
-        // Re-key the placeholder onto the real request id the stream uses.
-        setMsgs((prev) => prev.map((msg) => (msg.id === assistant.id ? { ...msg, id: `a-${reqId}` } : msg)));
-        setActiveReq(reqId);
+        await askSend(question, convId, useMcp, reqId);
       } catch (error) {
+        if (activeReqRef.current !== reqId) return;
+        activeReqRef.current = null;
+        setActiveReq(null);
+        setInput((draft) => draft || question);
         setMsgs((prev) => prev.filter((msg) => msg.id !== assistant.id));
         if (isSignedOutError(error)) {
           signOut();
@@ -540,7 +588,7 @@ export function AskApp(): JSX.Element {
         }
       }
     },
-    [consented, convId, noteUsage, signOut, useMcp],
+    [consented, convId, noteUsage, signOut, threadLoading, useMcp],
   );
 
   const stop = useCallback(async () => {
@@ -553,7 +601,7 @@ export function AskApp(): JSX.Element {
     }
   }, []);
 
-  const costLabel = fuLeft === null ? "Ask…" : fuLeft > 0 ? `Follow-up · ½ question · ${fuLeft} left` : "1 question · follow-ups used up";
+  const costLabel = fuLeft === null ? "1 question" : fuLeft > 0 ? `Follow-up · ½ question · ${fuLeft} left` : "1 question · follow-ups used up";
 
   if (phase === "signedOut") {
     return (
@@ -603,21 +651,36 @@ export function AskApp(): JSX.Element {
     }`
     : "";
   const checking = phase === "checking";
+  const writing = msgs.some((message) => message.streaming);
+  const threadTitle = convs.find((conversation) => conversation.id === convId)?.title || "Ask";
 
   return (
     <div className="askview">
       <header className="av-head">
-        <div className="av-brand">Ask</div>
+        <div className="av-heading">
+          <span className="av-mark" aria-hidden="true">✦</span>
+          <div>
+            <h1 className="av-brand">{threadTitle}</h1>
+            <p className="av-muted">{writing ? "Writing · safe to close" : "A House Divided"}</p>
+          </div>
+        </div>
         <div className="av-head-actions">
           {usage ? (
-            <span className="av-quota" aria-live="polite" title={quotaTitle}>
-              {quotaLabel(usage)}{refreshing ? " · Updating…" : ""}
-            </span>
+            <button
+              type="button"
+              className="av-quota"
+              aria-live="polite"
+              aria-expanded={showAllowance}
+              title={quotaTitle}
+              onClick={() => { setShowAllowance(!showAllowance); setShowHistory(false); }}
+            >
+              {quotaLabel(usage)}{refreshing ? " · Updating…" : ""}{quotaStale ? " · Last known" : ""}
+            </button>
           ) : refreshing ? (
             <span className="av-quota">Checking access…</span>
           ) : null}
-          <button type="button" className="av-iconbtn" aria-label="New chat" title="New chat" onClick={() => void openThread(null)}>
-            +
+          <button type="button" className="av-iconbtn" aria-label="New chat" title="New chat" disabled={writing} onClick={() => { setShowHistory(false); void openThread(null); }}>
+            New
           </button>
           <button
             type="button"
@@ -625,14 +688,14 @@ export function AskApp(): JSX.Element {
             aria-label="Chat history"
             title="Chat history"
             aria-expanded={showHistory}
-            onClick={() => setShowHistory((open) => !open)}
+            onClick={() => { setShowHistory(!showHistory); setShowAllowance(false); }}
           >
-            ☰
+            History
           </button>
         </div>
       </header>
 
-      {usage ? (
+      {usage && showAllowance ? (
         <div className="av-quota-strip" aria-label="Question allowance">
           <div className="av-meter">
             <div className="av-meter-row">
@@ -658,12 +721,14 @@ export function AskApp(): JSX.Element {
 
       {showHistory ? (
         <div className="av-history" role="dialog" aria-label="Chat history">
+          {writing ? <p className="av-muted">You can switch chats when this answer finishes.</p> : null}
           {convs.length === 0 ? <p className="av-muted">No conversations yet.</p> : null}
           {convs.map((conv) => (
             <button
               key={conv.id}
               type="button"
               className={conv.id === convId ? "av-conv active" : "av-conv"}
+              disabled={writing}
               onClick={() => {
                 setShowHistory(false);
                 void openThread(conv.id);
@@ -682,16 +747,25 @@ export function AskApp(): JSX.Element {
         role="log"
         aria-label="Conversation"
         aria-live="off"
-        aria-busy={msgs.some((m) => m.role !== "user" && m.streaming) ? "true" : "false"}
+        aria-busy={writing || threadLoading}
         onScroll={(event) => {
           const node = event.currentTarget;
           stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
         }}
       >
-        {msgs.length === 0 ? (
-          <div className="av-center">
-            <p className="av-muted">Ask about any part of the game: rules, strategy, your character, the wider world.</p>
-          </div>
+        {threadLoading ? <p className="av-muted">Opening chat…</p> : msgs.length === 0 ? (
+          <section className="av-welcome">
+            <span className="av-mark" aria-hidden="true">✦</span>
+            <h2>What would you like to know?</h2>
+            <p className="av-muted">Get help with the rules, your character, or what’s happening in the world.</p>
+            <div className="av-starters">
+              {STARTERS.map((question) => (
+                <button key={question} type="button" onClick={() => { setInput(question); composerRef.current?.focus(); }} disabled={checking}>
+                  {question}<span aria-hidden="true">↗</span>
+                </button>
+              ))}
+            </div>
+          </section>
         ) : null}
         {msgs.map((msg) =>
           msg.role === "user" ? (
@@ -699,7 +773,7 @@ export function AskApp(): JSX.Element {
               <div className="av-q"><p className="av-qt">{msg.text}</p></div>
             </div>
           ) : (
-            <AssistantMsg key={msg.id} msg={msg} onFollowup={(text) => void send(text)} />
+            <AssistantMsg key={msg.id} msg={msg} onFollowup={send} />
           ),
         )}
       </div>
@@ -725,6 +799,7 @@ export function AskApp(): JSX.Element {
         </label>
         <div className="av-row">
           <textarea
+            ref={composerRef}
             value={input}
             rows={2}
             placeholder={checking ? "Checking access…" : "Ask a question…"}
@@ -732,7 +807,7 @@ export function AskApp(): JSX.Element {
             disabled={checking}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 void send(input);
               }
@@ -743,7 +818,7 @@ export function AskApp(): JSX.Element {
               ■
             </button>
           ) : (
-            <button type="button" className="av-send" disabled={checking || !consented || !input.trim()} onClick={() => void send(input)}>
+            <button type="button" className="av-send" disabled={checking || threadLoading || writing || !consented || !input.trim()} onClick={() => void send(input)}>
               Ask
             </button>
           )}
@@ -761,7 +836,7 @@ export function AskApp(): JSX.Element {
   );
 }
 
-function AssistantMsg({ msg, onFollowup }: { msg: Msg; onFollowup: (text: string) => void }): JSX.Element {
+const AssistantMsg = memo(function AssistantMsg({ msg, onFollowup }: { msg: Msg; onFollowup: (text: string) => void }): JSX.Element {
   const result = msg.result;
   const citations = result?.citations ?? [];
   const followups = result?.followups ?? [];
@@ -780,14 +855,11 @@ function AssistantMsg({ msg, onFollowup }: { msg: Msg; onFollowup: (text: string
         {result?.cached ? <span className="av-flag">cached</span> : null}
         {msg.stopped ? <span className="av-flag">stopped</span> : null}
       </div>
-      {msg.error ? (
-        <p className="av-error">{msg.error}</p>
-      ) : msg.text ? (
-        <div className="av-answer"><Md text={msg.text} scope={msg.id} /></div>
-      ) : (
-        <p className="av-muted">{msg.status ?? "Thinking…"}{msg.trail ? ` · ${msg.trail} checks` : ""}</p>
-      )}
-      {msg.streaming && msg.text ? <p className="av-muted">{msg.status ?? "Writing…"}</p> : null}
+      {msg.text ? <div className="av-answer"><Md text={msg.text} scope={msg.id} /></div> : null}
+      {msg.error ? <p className="av-error" role="alert">{msg.error}</p> : null}
+      {msg.streaming ? (
+        <p className="av-muted">{msg.status ?? (msg.text ? "Writing…" : "Thinking…")}{msg.trail ? ` · ${msg.trail} checks` : ""}</p>
+      ) : null}
       {result?.vizBlocked ? (
         <p className="av-note">Visualizations are used up for today, so this answer comes without them.</p>
       ) : null}
@@ -823,7 +895,7 @@ function AssistantMsg({ msg, onFollowup }: { msg: Msg; onFollowup: (text: string
       ) : null}
     </div>
   );
-}
+});
 
 function AskConsent({
   providers,

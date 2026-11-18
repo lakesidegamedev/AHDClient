@@ -1694,6 +1694,12 @@ pub(crate) fn configure(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<t
           }
         }
       }
+      if window.label() == "main" && matches!(event, WindowEvent::Destroyed) {
+        // A hidden Ask window must not keep the client process alive after quit.
+        if let Some(ask) = window.app_handle().get_webview_window("ask") {
+          let _ = ask.destroy();
+        }
+      }
       if window.label() == "main" && matches!(event, WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }) {
         if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
           let logical = size.to_logical::<f64>(scale);
