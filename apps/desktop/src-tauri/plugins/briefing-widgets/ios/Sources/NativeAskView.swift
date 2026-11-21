@@ -403,7 +403,7 @@ private struct NativeAskConversationView: View {
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
           if model.loadingConversation {
             NativeAskLoadingThread()
           } else if model.turns.isEmpty {
@@ -539,68 +539,51 @@ private struct NativeAskEmptyState: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 30) {
-      VStack(spacing: 14) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(LinearGradient(colors: [NativeAskTint.color, NativeAskTint.color.opacity(0.78)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 68, height: 68)
-            .shadow(color: NativeAskTint.color.opacity(0.25), radius: 12, y: 6)
-          Image(systemName: "building.columns.fill")
-            .font(.system(size: 30, weight: .semibold))
-            .foregroundColor(.white)
-        }
-        .accessibilityHidden(true)
-        Text("Ask about A House Divided")
-          .font(.title2.weight(.bold))
-          .multilineTextAlignment(.center)
+    VStack(alignment: .leading, spacing: 21) {
+      VStack(alignment: .leading, spacing: 7) {
+        Text("Ask about the game")
+          .font(.title2.weight(.semibold))
           .accessibilityAddTraits(.isHeader)
         Text(model.provider == .server
-          ? "Rules, your character, elections and markets. Answers can read the live game and include charts and maps."
+          ? "Look up a rule, plan your next move, or catch up on the latest turn."
           : "Answers are written privately on this \(NativeAskModel.deviceName) from the game's guides.")
           .font(.subheadline)
           .foregroundColor(.secondary)
-          .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
-          .frame(maxWidth: 420)
       }
-      .frame(maxWidth: .infinity)
-      .padding(.top, 24)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 26)
 
-      VStack(alignment: .leading, spacing: 8) {
-        Text("TRY ASKING")
-          .font(.caption.weight(.semibold))
-          .foregroundColor(.secondary)
-          .padding(.leading, 4)
-        VStack(spacing: 0) {
-          ForEach(Array(starters.enumerated()), id: \.offset) { item in
-            if item.offset > 0 { Divider().padding(.leading, 52) }
-            Button { model.send(item.element.1) } label: {
-              HStack(spacing: 14) {
-                Image(systemName: item.element.0)
-                  .font(.body)
-                  .foregroundColor(NativeAskTint.color)
-                  .frame(width: 24)
-                Text(item.element.1)
-                  .font(.subheadline)
-                  .foregroundColor(.primary)
-                  .multilineTextAlignment(.leading)
-                  .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Image(systemName: "arrow.up.circle")
-                  .foregroundColor(Color(.tertiaryLabel))
-              }
-              .padding(.horizontal, 14)
-              .padding(.vertical, 13)
-              .contentShape(Rectangle())
+      VStack(spacing: 0) {
+        Divider()
+        ForEach(Array(starters.enumerated()), id: \.offset) { item in
+          Button { model.draft = item.element.1 } label: {
+            HStack(spacing: 14) {
+              Image(systemName: item.element.0)
+                .font(.body)
+                .foregroundColor(NativeAskTint.color)
+                .frame(width: 24)
+              Text(item.element.1)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+              Spacer(minLength: 8)
+              Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .disabled(!model.canAsk)
-            .accessibilityHint(Text("Sends this question"))
+            .padding(.trailing, 2)
+            .padding(.vertical, 13)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
           }
+          .buttonStyle(.plain)
+          .disabled(!model.canAsk)
+          .accessibilityHint(Text("Fills the question field"))
+          Divider()
         }
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
       }
     }
   }
@@ -707,11 +690,11 @@ private struct NativeAskTurnView: View {
         }
         Text(turn.question)
           .font(.body)
-          .foregroundColor(.white)
+          .foregroundColor(.primary)
           .fixedSize(horizontal: false, vertical: true)
           .padding(.horizontal, 15)
           .padding(.vertical, 10)
-          .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(NativeAskTint.color))
+          .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemFill)))
           .textSelection(.enabled)
       }
     }
@@ -732,18 +715,18 @@ private struct NativeAskTurnView: View {
 
   @ViewBuilder private var answer: some View {
     switch turn.state {
-    case .streaming, .pending:
+    case .streaming:
       if turn.answer.isEmpty {
         NativeAskSkeleton()
       } else {
         NativeAskAnswerView(text: turn.answer, model: model)
       }
-      NativeAskStatusLine(text: turn.status, lookups: turn.lookups, pending: turn.state == .pending)
+      NativeAskStatusLine(text: turn.status, lookups: turn.lookups)
     case .failed(let message):
       NativeAskErrorCard(message: message, actionTitle: "Try again") { model.retry(turn.id) }
     case .interrupted(let message):
       NativeAskAnswerView(text: turn.answer, model: model)
-      NativeAskErrorCard(message: message, actionTitle: "Retry") { model.retry(turn.id) }
+      NativeAskErrorCard(message: message, actionTitle: "Check and retry") { model.retry(turn.id) }
     case .done, .stopped:
       NativeAskAnswerView(text: turn.answer, model: model)
     }
@@ -757,7 +740,7 @@ private struct NativeAskTurnView: View {
   }
 
   @ViewBuilder private var footer: some View {
-    if turn.state != .streaming && turn.state != .pending && !turn.answer.isEmpty {
+    if turn.state != .streaming && !turn.answer.isEmpty {
       VStack(alignment: .leading, spacing: 8) {
         if turn.chartsUsedUp {
           Label("Charts and maps are used up for today, so this answer comes without them.", systemImage: "chart.bar.xaxis")
@@ -896,15 +879,10 @@ private struct NativeAskTurnView: View {
 private struct NativeAskStatusLine: View {
   let text: String
   let lookups: Int
-  let pending: Bool
 
   var body: some View {
     HStack(spacing: 8) {
-      if pending {
-        Image(systemName: "clock").font(.footnote).foregroundColor(.secondary)
-      } else {
-        ProgressView().controlSize(.small)
-      }
+      ProgressView().controlSize(.small)
       Text(text.isEmpty ? "Thinking" : text)
         .font(.footnote)
         .foregroundColor(.secondary)
@@ -993,6 +971,12 @@ private struct NativeAskComposer: View {
       // Notices sit with the composer so they stay visible wherever the
       // thread is scrolled.
       NativeAskBanners(model: model)
+      if model.sending {
+        Label("Writing · safe to close", systemImage: "ellipsis.bubble")
+          .font(.footnote)
+          .foregroundColor(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
       if !model.draftAttachments.isEmpty {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 12) {
@@ -1030,7 +1014,7 @@ private struct NativeAskComposer: View {
     .padding(.bottom, 10)
     .frame(maxWidth: 760)
     .frame(maxWidth: .infinity)
-    .background(.bar)
+    .background(Color(.secondarySystemBackground))
     .overlay(Divider(), alignment: .top)
     .sheet(isPresented: $pickingPhoto) {
       NativeAskPhotoPicker(limit: max(1, NativeAskModel.maxAttachments - model.draftAttachments.count),

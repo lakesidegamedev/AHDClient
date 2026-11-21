@@ -690,9 +690,9 @@ final class NativeAskHostingController: UIHostingController<NativeAskView> {
 
   /// The launcher window is pinned dark, so the sheet would inherit dark.
   /// Follow the device's own light or dark setting instead.
-  func applySystemAppearance() {
+  func applySystemAppearance(from scene: UIWindowScene? = nil) {
     guard followsSystemAppearance else { return }
-    let system = view.window?.windowScene?.traitCollection.userInterfaceStyle ?? UIScreen.main.traitCollection.userInterfaceStyle
+    let system = (scene ?? view.window?.windowScene)?.traitCollection.userInterfaceStyle ?? UIScreen.main.traitCollection.userInterfaceStyle
     let style: UIUserInterfaceStyle = system == .unspecified ? .dark : system
     if overrideUserInterfaceStyle != style { overrideUserInterfaceStyle = style }
   }
@@ -775,7 +775,7 @@ final class NativeAskController: NSObject {
       host.followsSystemAppearance = false
       host.overrideUserInterfaceStyle = style == "light" ? .light : .dark
     } else {
-      host.applySystemAppearance()
+      host.applySystemAppearance(from: webView.window?.windowScene)
     }
     if UIDevice.current.userInterfaceIdiom == .pad {
       host.modalPresentationStyle = .formSheet

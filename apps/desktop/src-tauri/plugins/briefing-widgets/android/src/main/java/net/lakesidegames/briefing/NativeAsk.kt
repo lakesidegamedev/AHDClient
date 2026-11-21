@@ -237,7 +237,7 @@ object NativeAskController {
 
   internal fun rebuild() {
     val wasPreview = sheetPreview
-    sheet?.dismiss()
+    sheet?.dismiss(forRebuild = true)
     if (wasPreview) presentPreview() else present()
   }
 

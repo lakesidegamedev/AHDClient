@@ -362,6 +362,9 @@ async fn sign_out(app: AppHandle) -> Result<(), String> {
     }
   }
 
+  #[cfg(desktop)]
+  crate::ask::emit_ask_session(&app, false);
+
   match linked_account(app).await {
     Ok(Some(account)) if account.linked => Err("Sign out did not finish. Try again.".into()),
     _ => Ok(()),

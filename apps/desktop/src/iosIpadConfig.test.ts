@@ -71,7 +71,7 @@ describe("iOS appearance", () => {
     // The launcher window pins itself dark; Ask overrides from the device setting.
     expect(plugin).toContain("NativeLauncherAppearance.pinDark(webview)");
     expect(ask).toContain("window.overrideUserInterfaceStyle = .dark");
-    expect(ask).toContain("func applySystemAppearance()");
+    expect(ask).toContain("host.applySystemAppearance(from: webView.window?.windowScene)");
   });
 
   it("paints the launch screen the launcher color so light mode never flashes white", () => {

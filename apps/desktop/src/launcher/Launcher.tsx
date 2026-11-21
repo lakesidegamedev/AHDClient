@@ -228,9 +228,7 @@ export function Launcher({
         className="launcher-pattern"
         aria-hidden="true"
         style={{ "--nebula": themeForEra(eraId).dim } as CSSProperties}
-      >
-        <div className="launcher-nebula" />
-      </div>
+      />
 
       {topControls.some(Boolean) && (
         <nav className="launcher-topbar" aria-label="Client">

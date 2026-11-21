@@ -63,14 +63,11 @@ import WebKit
   private var publicAPI: NativeAskAPI?
   private var connectTask: Task<Void, Never>?
   private var sendTask: Task<Void, Never>?
-  private var resumeTask: Task<Void, Never>?
   private var toastTask: Task<Void, Never>?
   private var requestID: String?
   /// The turn whose answer is streaming; late events for any other turn drop.
   private var streamingTurnID: String?
-  /// Set when the sheet closes mid-answer: the stream is released but the
-  /// service is left to finish and save the answer.
-  private var detachingStream = false
+  private var sheetVisible = false
   private var pendingText: [String: String] = [:]
   private var flushScheduled = false
   private var mapCache: [String: String] = [:]
@@ -106,13 +103,13 @@ import WebKit
   deinit {
     connectTask?.cancel()
     sendTask?.cancel()
-    resumeTask?.cancel()
     pathMonitor.cancel()
   }
 
   // MARK: Lifecycle
 
   func start() {
+    sheetVisible = true
     guard !isPreview else { return }
     refreshAppleStatus()
     startMonitoring()
@@ -128,18 +125,14 @@ import WebKit
       await self?.refreshProfile()
       await self?.refreshHistory()
     }
-    if turns.contains(where: { $0.state == .pending }) { resumePending() }
   }
 
-  /// The sheet closed. Release the stream without telling the service to
-  /// stop: a closed sheet is not a Stop, and the answer is saved for later.
+  /// Presentation and generation have independent lifetimes. The retained
+  /// model keeps the draft and receives the rest of the answer off-screen.
   func sheetClosed() {
+    sheetVisible = false
     showingHistory = false
-    guard sending else { return }
-    if provider == .server && streamingTurnID != nil {
-      detachingStream = true
-    }
-    sendTask?.cancel()
+    reviewingConsent = false
   }
 
   func reconnect() {
@@ -212,7 +205,6 @@ import WebKit
       }
     }
     await refreshHistory()
-    if turns.contains(where: { $0.state == .pending }) { resumePending() }
   }
 
   private func applyProfile(_ profile: [String: Any]) {
@@ -466,7 +458,6 @@ import WebKit
     sending = true
     requestID = nil
     streamingTurnID = turnID
-    detachingStream = false
     let local = turn.local
     let history = turns.prefix(index).suffix(8).map { "User: \($0.question)\nAssistant: \(String($0.answer.prefix(1200)))" }
     sendTask = Task { [weak self] in
@@ -483,7 +474,7 @@ import WebKit
         } else {
           try await self.answerOnline(turnID: turnID, turn: turn)
         }
-      } catch _ where Task.isCancelled || self.detachingStream {
+      } catch _ where Task.isCancelled {
         self.cancelled(turnID: turnID)
       } catch is CancellationError {
         self.cancelled(turnID: turnID)
@@ -512,8 +503,10 @@ import WebKit
     if let id = payload["convId"] as? String, !id.isEmpty { conversationID = id }
     if let fresh = NativeAskUsage(payload["usage"]) { usage = fresh }
     if let left = (payload["followupsLeft"] as? NSNumber)?.intValue { followupsLeft = left }
-    haptic(.success)
-    UIAccessibility.post(notification: .announcement, argument: "Answer ready")
+    if sheetVisible {
+      haptic(.success)
+      UIAccessibility.post(notification: .announcement, argument: "Answer ready")
+    }
     Task { [weak self] in await self?.refreshHistory() }
   }
 
@@ -539,8 +532,10 @@ import WebKit
     turns[index].citations = evidence.files.map { NativeAskCitation(label: $0, path: "", url: nil) }
     turns[index].state = .done
     turns[index].status = ""
-    haptic(.success)
-    UIAccessibility.post(notification: .announcement, argument: "Answer ready")
+    if sheetVisible {
+      haptic(.success)
+      UIAccessibility.post(notification: .announcement, argument: "Answer ready")
+    }
   }
 
   private func handle(_ event: NativeAskStreamEvent, turnID: String) {
@@ -590,13 +585,6 @@ import WebKit
   private func cancelled(turnID: String) {
     flushPending()
     guard let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
-    if detachingStream {
-      // Closed, not stopped: fetch the saved answer when Ask reopens.
-      turns[index].state = .pending
-      turns[index].status = "Still writing. Reopen to see the answer."
-      detachingStream = false
-      return
-    }
     if turns[index].answer.isEmpty {
       // Stopped before anything arrived: put the question back.
       let question = turns[index].question
@@ -615,7 +603,7 @@ import WebKit
   private func failed(turnID: String, error: Error) {
     flushPending()
     guard let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
-    haptic(.error)
+    if sheetVisible { haptic(.error) }
     let message = NativeAskMessages.text(for: error)
     if case NativeAskError.quota(let text, let usagePayload)? = error as? NativeAskError {
       if let fresh = NativeAskUsage(usagePayload) { usage = fresh }
@@ -631,7 +619,9 @@ import WebKit
       return
     }
     if NativeAskMessages.isOffline(error) { offline = true }
-    if !turns[index].answer.isEmpty {
+    if case NativeAskError.streamDropped? = error as? NativeAskError, !conversationID.isEmpty {
+      turns[index].state = .interrupted(message)
+    } else if !turns[index].answer.isEmpty {
       turns[index].state = .interrupted(message)
     } else {
       turns[index].state = .failed(message)
@@ -653,47 +643,10 @@ import WebKit
   /// stopped question records nothing and costs no quota.
   func stop() {
     guard sending else { return }
-    detachingStream = false
     if let requestID, let api {
       Task { await api.stop(requestID: requestID) }
     }
     sendTask?.cancel()
-  }
-
-  /// Answers left writing when the sheet closed are saved by the service.
-  /// Poll for them for about half a minute, then offer a manual check.
-  private func resumePending() {
-    guard resumeTask == nil, let api else { return }
-    resumeTask = Task { [weak self] in
-      defer { self?.resumeTask = nil }
-      for attempt in 0..<8 {
-        guard let self else { return }
-        guard let pending = self.turns.first(where: { $0.state == .pending }) else { return }
-        if self.conversationID.isEmpty {
-          // The stream closed before the service named the conversation.
-          await self.refreshHistory()
-          if let newest = self.conversations.first, let updated = newest.updated,
-             updated >= pending.sentAt.addingTimeInterval(-10) {
-            self.conversationID = newest.id
-          }
-        }
-        if !self.conversationID.isEmpty, let payload = try? await api.conversation(id: self.conversationID) {
-          let saved = (payload["turns"] as? [Any] ?? []).compactMap { NativeAskTurn.saved($0) }
-          if let match = saved.last(where: { $0.question == pending.question && $0.sentAt >= pending.sentAt.addingTimeInterval(-10) }),
-             !match.answer.isEmpty, let index = self.turns.firstIndex(where: { $0.id == pending.id }) {
-            self.turns[index] = match
-            Task { await self.refreshCost() }
-            continue
-          }
-        }
-        if attempt < 7 { try? await Task.sleep(nanoseconds: 4_000_000_000) }
-      }
-      guard let self else { return }
-      for index in self.turns.indices where self.turns[index].state == .pending {
-        self.turns[index].state = .interrupted("Ask was still writing this answer when you closed it.")
-        self.turns[index].status = ""
-      }
-    }
   }
 
   // MARK: Answer actions

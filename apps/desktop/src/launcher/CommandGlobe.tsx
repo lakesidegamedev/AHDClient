@@ -77,39 +77,35 @@ export function globeBackingSize(cssPixels: number, devicePixelRatio: number): n
 
 export function CommandGlobe({ eraId, live = false }: Props): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const eraRef = useRef<EraTheme>(themeForEra(eraId));
-  eraRef.current = themeForEra(eraId);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let reduceMotion = mql.matches || document.documentElement.dataset.animations === "off";
-
+    const era = themeForEra(eraId);
     let S = 0;
     let R = 0;
     let dpr = 1;
-    let raf = 0;
-    let rot = 0;
-    let last = performance.now();
-    let hidden = document.hidden;
+    let pendingResize: number | null = null;
 
-    function resize(): void {
-      dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
-      S = Math.max(canvas!.clientWidth, canvas!.getBoundingClientRect().width);
-      canvas!.width = globeBackingSize(S, dpr);
-      canvas!.height = globeBackingSize(S, dpr);
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+    function drawIfNeeded(): void {
+      const size = Math.max(canvas!.clientWidth, canvas!.getBoundingClientRect().width);
+      const ratio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+      if (size === 0 || (size === S && ratio === dpr)) return;
+
+      S = size;
       R = S * 0.47;
+      dpr = ratio;
+      canvas!.width = globeBackingSize(S, dpr);
+      canvas!.height = canvas!.width;
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawGlobe();
     }
 
-    function drawFrame(): void {
+    function drawGlobe(): void {
       const cx = S / 2;
       const cy = S / 2;
-      const era = eraRef.current;
       ctx!.clearRect(0, 0, S, S);
 
       ctx!.save();
@@ -127,7 +123,7 @@ export function CommandGlobe({ eraId, live = false }: Props): JSX.Element {
       ctx!.fillRect(0, 0, S, S);
 
       const project = (longitude: number, latitude: number): ProjectedPoint => {
-        const lon = longitude * DEG + rot;
+        const lon = longitude * DEG;
         const lat = latitude * DEG;
         const cosLat = Math.cos(lat);
         const x3 = cosLat * Math.sin(lon);
@@ -192,7 +188,7 @@ export function CommandGlobe({ eraId, live = false }: Props): JSX.Element {
 
       ctx!.font = "600 9px ui-sans-serif, system-ui, sans-serif";
       for (const c of CAPITALS) {
-        const lon = c.lon * DEG + rot;
+        const lon = c.lon * DEG;
         const lat = c.lat * DEG;
         const cosLat = Math.cos(lat);
         const x3 = cosLat * Math.sin(lon);
@@ -226,62 +222,24 @@ export function CommandGlobe({ eraId, live = false }: Props): JSX.Element {
       ctx!.restore();
     }
 
-    function frame(now: number): void {
-      if (!reduceMotion && now - last < 1000 / 30) {
-        raf = requestAnimationFrame(frame);
-        return;
-      }
-      const dt = Math.min((now - last) / 1000, 0.1);
-      last = now;
-      if (!reduceMotion) rot += dt * 0.035;
-      drawFrame();
-      if (!reduceMotion && !hidden) {
-        raf = requestAnimationFrame(frame);
-      }
-    }
-
-    resize();
-    drawFrame();
-    if (!reduceMotion && !hidden) {
-      raf = requestAnimationFrame(frame);
-    }
-    const handleResize = () => {
-      resize();
-      drawFrame();
+    // The globe is backdrop artwork. Repaint only when its size or theme changes.
+    drawIfNeeded();
+    const scheduleResize = () => {
+      if (pendingResize !== null) return;
+      pendingResize = requestAnimationFrame(() => {
+        pendingResize = null;
+        drawIfNeeded();
+      });
     };
-    window.addEventListener("resize", handleResize);
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(handleResize);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleResize);
     resizeObserver?.observe(canvas);
-    const onVisibilityChange = () => {
-      hidden = document.hidden;
-      if (hidden) cancelAnimationFrame(raf);
-      else if (!reduceMotion) { last = performance.now(); raf = requestAnimationFrame(frame); }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    const onSettingsChange = () => {
-      reduceMotion = mql.matches || document.documentElement.dataset.animations === "off";
-      cancelAnimationFrame(raf);
-      if (!reduceMotion && !hidden) { last = performance.now(); raf = requestAnimationFrame(frame); }
-      else drawFrame();
-    };
-    document.addEventListener("ahdclient:settings", onSettingsChange);
-
-    const onMotionChange = () => onSettingsChange();
-    if (typeof mql.addEventListener === "function") {
-      mql.addEventListener("change", onMotionChange);
-    }
-
+    window.addEventListener("resize", scheduleResize);
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", handleResize);
+      if (pendingResize !== null) cancelAnimationFrame(pendingResize);
       resizeObserver?.disconnect();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      document.removeEventListener("ahdclient:settings", onSettingsChange);
-      if (typeof mql.removeEventListener === "function") {
-        mql.removeEventListener("change", onMotionChange);
-      }
+      window.removeEventListener("resize", scheduleResize);
     };
-  }, []);
+  }, [eraId]);
 
   const theme = themeForEra(eraId);
 

@@ -25,133 +25,18 @@
   font: inherit;
 }
 
-/*
- * Background: a slow nebula. Three oversized, blurred colour fields drift
- * and breathe on minute-long cycles that never share a period, so the
- * composite never visibly repeats. --nebula is the era's tint (r,g,b), set
- * inline by the launcher; navy and red are the brand constants. The dot
- * grid sits on top, unmoving, so the console still reads as an instrument.
- */
+/* Paint the era-tinted atmosphere as one backdrop behind the launcher. */
 .launcher-pattern {
   --nebula: 23, 63, 105;
   position: fixed;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
-  background-image: radial-gradient(
-    circle,
-    rgba(232, 232, 238, 0.055) 0.7px,
-    transparent 0.8px
-  );
-  background-size: 28px 28px;
-  isolation: isolate;
-}
-
-.launcher-pattern::before,
-.launcher-pattern::after,
-.launcher-nebula {
-  content: "";
-  position: absolute;
-  inset: -30%;
-  z-index: -1;
-  pointer-events: none;
-  filter: blur(70px) saturate(150%);
-  will-change: transform, opacity;
-  transition: background 1.8s ease;
-}
-
-.launcher-pattern::before {
   background:
-    radial-gradient(
-      ellipse 42% 36% at 22% 24%,
-      rgba(var(--nebula), 0.7),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 30% 40% at 70% 30%,
-      rgba(29, 78, 216, 0.28),
-      transparent 70%
-    );
-  animation: nebula-drift-a 96s ease-in-out infinite alternate;
-}
-
-.launcher-pattern::after {
-  background:
-    radial-gradient(
-      ellipse 38% 32% at 78% 76%,
-      rgba(220, 38, 38, 0.33),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 28% 30% at 34% 78%,
-      rgba(var(--nebula), 0.45),
-      transparent 70%
-    );
-  animation: nebula-drift-b 131s ease-in-out infinite alternate;
-}
-
-.launcher-nebula {
-  background:
-    radial-gradient(
-      ellipse 34% 34% at 50% 50%,
-      rgba(var(--nebula), 0.36),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 24% 20% at 60% 40%,
-      rgba(232, 232, 238, 0.05),
-      transparent 70%
-    );
-  animation: nebula-breathe 73s ease-in-out infinite alternate;
-}
-
-@keyframes nebula-drift-a {
-  0% {
-    transform: translate3d(-4%, -3%, 0) scale(1) rotate(0deg);
-    opacity: 0.85;
-  }
-  50% {
-    transform: translate3d(5%, 4%, 0) scale(1.18) rotate(6deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(-2%, 6%, 0) scale(1.05) rotate(-4deg);
-    opacity: 0.8;
-  }
-}
-
-@keyframes nebula-drift-b {
-  0% {
-    transform: translate3d(3%, 4%, 0) scale(1.1) rotate(0deg);
-    opacity: 0.8;
-  }
-  50% {
-    transform: translate3d(-6%, -3%, 0) scale(0.95) rotate(-7deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(4%, -6%, 0) scale(1.2) rotate(5deg);
-    opacity: 0.75;
-  }
-}
-
-@keyframes nebula-breathe {
-  0% {
-    transform: translate3d(-3%, 2%, 0) scale(0.9);
-    opacity: 0.5;
-  }
-  100% {
-    transform: translate3d(4%, -4%, 0) scale(1.25);
-    opacity: 0.9;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .launcher-pattern::before,
-  .launcher-pattern::after,
-  .launcher-nebula {
-    animation: none;
-  }
+    radial-gradient(circle, rgb(232 232 238 / 5.5%) 0.7px, transparent 0.8px) 0 0 / 28px 28px,
+    radial-gradient(ellipse at 20% 20%, rgba(var(--nebula), 0.55), transparent 62%),
+    radial-gradient(ellipse at 80% 78%, rgb(220 38 38 / 21%), transparent 64%),
+    radial-gradient(ellipse at 72% 22%, rgb(29 78 216 / 15%), transparent 65%),
+    radial-gradient(ellipse at 40% 75%, rgba(var(--nebula), 0.28), transparent 70%);
 }
 
 .launcher-stage {

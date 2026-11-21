@@ -87,7 +87,7 @@ fn ask_session_cookie(app: &AppHandle) -> Option<String> {
   None
 }
 
-fn emit_ask_session(app: &AppHandle, ready: bool) {
+pub(crate) fn emit_ask_session(app: &AppHandle, ready: bool) {
   let _ = app.emit("ask-session", serde_json::json!({ "ready": ready }));
 }
 
@@ -192,7 +192,7 @@ fn forget_stream(app: &AppHandle, req_id: &str) {
   }
 }
 
-/// Start a question. Returns a client request id immediately; answer events
+/// Start a question with the ID already registered by the client. Answer events
 /// arrive on the `ask-stream` window event: `meta`, `status`, `action`,
 /// `delta`, `done`, `final` (non-streaming JSON reply: cache hit, quota
 /// refusal), `error`, `stopped`.
@@ -203,26 +203,29 @@ pub(crate) async fn ask_send(
   question: String,
   conv_id: Option<String>,
   use_mcp: bool,
-) -> Result<String, String> {
+  req_id: String,
+) -> Result<(), String> {
   if question.trim().len() < 5 {
     return Err("Please ask a slightly longer question.".into());
   }
+  if req_id.len() != 18 || !req_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    return Err("Invalid Ask request ID.".into());
+  }
   let session = ask_session_cookie(&app).ok_or("Please sign in to Ask first.")?;
-  let mut entropy = [0_u8; 9];
-  getrandom::getrandom(&mut entropy).map_err(|_| "secure random source unavailable".to_string())?;
-  let req_id = entropy.iter().map(|b| format!("{b:02x}")).collect::<String>();
   let stop = Arc::new(AtomicBool::new(false));
-  state
-    .0
-    .lock()
-    .map_err(|_| "Ask state poisoned".to_string())?
-    .insert(req_id.clone(), stop.clone());
+  {
+    let mut inflight = state.0.lock().map_err(|_| "Ask state poisoned".to_string())?;
+    if inflight.contains_key(&req_id) {
+      return Err("That question is already in progress.".into());
+    }
+    inflight.insert(req_id.clone(), stop.clone());
+  }
   let pump_app = app.clone();
   let pump_req_id = req_id.clone();
   tauri::async_runtime::spawn_blocking(move || {
     pump_ask_stream(&pump_app, &pump_req_id, stop, session, question, conv_id, use_mcp);
   });
-  Ok(req_id)
+  Ok(())
 }
 
 /// Stop a question: halt the local pump and tell the server to abort the
@@ -271,6 +274,7 @@ fn pump_ask_stream(
   let url = format!("{}/api/ask", crate::ASK_URL.trim_end_matches('/'));
   let payload = serde_json::json!({
     "question": question,
+    "clientReqId": req_id,
     "convId": conv_id,
     "useMcp": use_mcp,
     // The service validates this against its zone database and drops anything
@@ -288,6 +292,11 @@ fn pump_ask_stream(
     .set("Content-Type", "application/json")
     .set("User-Agent", "AHDClient/2")
     .send_string(&payload);
+  if stop.load(Ordering::SeqCst) {
+    finish("stopped", serde_json::Value::Null);
+    forget_stream(app, req_id);
+    return;
+  }
   let response = match response {
     Ok(ok) => ok,
     Err(ureq::Error::Status(code, failed)) => {
@@ -343,11 +352,15 @@ fn pump_ask_stream(
       }
     }
   }
-  if !terminal && !stop.load(Ordering::SeqCst) {
-    finish(
-      "error",
-      serde_json::json!({ "error": "The answer stream ended before completion. It may still be saved. Check your history in a moment, or try again." }),
-    );
+  if !terminal {
+    if stop.load(Ordering::SeqCst) {
+      finish("stopped", serde_json::Value::Null);
+    } else {
+      finish(
+        "error",
+        serde_json::json!({ "error": "The answer stream ended before completion. It may still be saved. Check your history in a moment, or try again." }),
+      );
+    }
   }
   forget_stream(app, req_id);
 }
@@ -436,12 +449,19 @@ pub(crate) async fn open_ask_window(app: AppHandle) -> Result<(), String> {
 /// The native chat UI: a local view, so it renders instantly, works offline
 /// except for the answers themselves, and needs no remote capability.
 fn open_ask_ui(app: &AppHandle) -> Result<(), String> {
+  let dark = app.get_webview_window("main").and_then(|main| main.theme().ok())
+    == Some(tauri::Theme::Dark);
+  let background = if dark {
+    tauri::window::Color(0x18, 0x19, 0x1d, 0xff)
+  } else {
+    tauri::window::Color(0xfb, 0xfa, 0xf8, 0xff)
+  };
   let mut builder = WebviewWindowBuilder::new(app, "ask", WebviewUrl::App("index.html?view=ask".into()))
     .title("A House Divided: Ask")
     .inner_size(ASK_WINDOW_WIDTH, ASK_WINDOW_HEIGHT)
     .min_inner_size(320.0, 480.0)
     .resizable(true)
-    .background_color(tauri::window::Color(0x14, 0x14, 0x1c, 0xff))
+    .background_color(background)
     .on_navigation(|url| {
       (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
         || (matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost"))
@@ -475,7 +495,12 @@ fn open_ask_ui(app: &AppHandle) -> Result<(), String> {
   let window = builder.build().map_err(|e| e.to_string())?;
   let close_app = app.clone();
   window.on_window_event(move |event| {
-    if matches!(event, WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed) {
+    if let WindowEvent::CloseRequested { api, .. } = event {
+      if let Some(ask) = close_app.get_webview_window("ask") {
+        if ask.hide().is_ok() {
+          api.prevent_close();
+        }
+      }
       if let Some(main) = close_app.get_webview_window("main") {
         let _ = main.set_focus();
       }

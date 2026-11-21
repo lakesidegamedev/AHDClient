@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   askSend: vi.fn(),
   askStop: vi.fn(),
   askOpen: vi.fn(),
+  sessionHandler: null as null | ((event: { payload: { ready: boolean } }) => void),
   streamHandler: null as null | ((event: { reqId: string; kind: string; data: unknown }) => void),
 }));
 
@@ -46,7 +47,10 @@ vi.mock("./api.js", () => ({
 
 vi.mock("../worlds.js", () => ({ ask: { open: mocks.askOpen } }));
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(async () => () => {}),
+  listen: vi.fn(async (event: string, handler: (event: { payload: { ready: boolean } }) => void) => {
+    if (event === "ask-session") mocks.sessionHandler = handler;
+    return () => {};
+  }),
 }));
 
 import { AskApp } from "./AskApp.js";
@@ -85,10 +89,11 @@ beforeEach(() => {
   // Most tests are about the panel after permission; consent has its own block.
   saveAskConsent(FALLBACK_PROVIDERS);
   mocks.streamHandler = null;
+  mocks.sessionHandler = null;
   mocks.askMe.mockReset().mockResolvedValue(me("marshall", baseUsage));
   mocks.askConversations.mockReset().mockResolvedValue({ conversations: [], usage: null });
   mocks.askConversation.mockReset().mockResolvedValue([]);
-  mocks.askSend.mockReset().mockResolvedValue("req-1");
+  mocks.askSend.mockReset().mockResolvedValue(undefined);
   mocks.askStop.mockReset().mockResolvedValue(undefined);
   mocks.askOpen.mockReset();
 });
@@ -187,11 +192,11 @@ describe("ask quota updates", () => {
     mocks.askMe.mockReturnValue(refresh.promise);
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "Why did the harvest fail?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
 
     mocks.streamHandler?.({
-      reqId: "req-1",
+      reqId: mocks.askSend.mock.lastCall?.[3] as string,
       kind: "done",
       data: { answer: "Blight.", usage: answered },
     });
@@ -212,11 +217,11 @@ describe("ask quota updates", () => {
     mocks.askMe.mockReturnValue(refresh.promise);
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "One more question?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
 
     mocks.streamHandler?.({
-      reqId: "req-1",
+      reqId: mocks.askSend.mock.lastCall?.[3] as string,
       kind: "final",
       data: { status: 429, body: JSON.stringify({ error: "No questions left", usage: spent }) },
     });
@@ -235,12 +240,12 @@ describe("ask screen reader support", () => {
     expect(screen.getByRole("log").getAttribute("aria-live")).toBe("off");
 
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "Why?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
     expect(screen.getByRole("log").getAttribute("aria-busy")).toBe("true");
     expect(screen.getByRole("status").textContent).toBe("");
 
-    mocks.streamHandler?.({ reqId: "req-1", kind: "done", data: { answer: "Blight.", usage: baseUsage } });
+    mocks.streamHandler?.({ reqId: mocks.askSend.mock.lastCall?.[3] as string, kind: "done", data: { answer: "Blight.", usage: baseUsage } });
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Answer ready"));
     expect(screen.getByRole("log").getAttribute("aria-busy")).toBe("false");
   });
@@ -299,16 +304,79 @@ describe("ask AI provider consent", () => {
 
     await waitFor(() => expect((screen.getByLabelText("Ask a question") as HTMLTextAreaElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText("Ask a question"), { target: { value: "How do elections work?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     await waitFor(() => expect(mocks.askSend).toHaveBeenCalled());
     await waitFor(() => expect(mocks.streamHandler).not.toBeNull());
 
     mocks.streamHandler!({
-      reqId: "req-1",
+      reqId: mocks.askSend.mock.lastCall?.[3] as string,
       kind: "done",
       data: { answer: "They run on a calendar.", modelName: "DeepSeek V4 Flash", providerName: "Ollama Cloud" },
     });
 
     await waitFor(() => expect(screen.getByText("DeepSeek V4 Flash · Ollama Cloud")).toBeTruthy());
   });
+});
+
+
+it("keeps a draft and an in-flight answer when the native panel is shown again", async () => {
+  saveCachedAskSession({ username: "marshall", usage: baseUsage, tier: "Player" });
+  localStorage.setItem("ahdclient.ask.conv", "c1");
+  mocks.askConversations.mockResolvedValue({ conversations: [{ id: "c1", title: "Harvest" }], usage: null });
+  mocks.askConversation.mockResolvedValue([{ question: "Earlier question", answer: "Earlier answer" }]);
+
+  render(<AskApp />);
+  await screen.findByText("Earlier answer");
+  const composer = screen.getByLabelText<HTMLTextAreaElement>("Ask a question");
+  fireEvent.change(composer, { target: { value: "What should I do about the harvest?" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  await screen.findByRole("button", { name: "Stop" });
+  fireEvent.change(composer, { target: { value: "Draft follow-up" } });
+  mocks.streamHandler?.({ reqId: mocks.askSend.mock.lastCall?.[3] as string, kind: "delta", data: "Partial answer" });
+  await screen.findByText("Partial answer");
+
+  mocks.askMe.mockResolvedValue(me("marshall", { ...baseUsage, remaining: 6 }));
+  mocks.sessionHandler?.({ payload: { ready: true } });
+  await screen.findByText("6 of 10 left", { exact: false });
+  expect(screen.getByText("Partial answer")).toBeTruthy();
+  expect(composer.value).toBe("Draft follow-up");
+
+  mocks.streamHandler?.({ reqId: mocks.askSend.mock.lastCall?.[3] as string, kind: "done", data: { answer: "Complete answer", convId: "c1" } });
+  await screen.findByText("Complete answer");
+  mocks.sessionHandler?.({ payload: { ready: true } });
+  await waitFor(() => expect(mocks.askMe).toHaveBeenCalledTimes(4));
+  expect(screen.getByText("Complete answer")).toBeTruthy();
+  expect(mocks.askConversation).toHaveBeenCalledTimes(1);
+});
+
+
+it("routes a cached answer that arrives before the native send command returns", async () => {
+  const ipc = deferred<void>();
+  mocks.askSend.mockImplementation((_question, _conversation, _live, reqId: string) => {
+    mocks.streamHandler?.({ reqId, kind: "done", data: { answer: "An instant cached answer." } });
+    return ipc.promise;
+  });
+  render(<AskApp />);
+  fireEvent.change(await screen.findByLabelText("Ask a question"), { target: { value: "How do action points work?" } });
+  await waitFor(() => expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  await screen.findByText("An instant cached answer.");
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  ipc.resolve();
+});
+
+
+it("keeps the part of an answer already received when the stream drops", async () => {
+  render(<AskApp />);
+  const composer = await screen.findByLabelText("Ask a question");
+  fireEvent.change(composer, { target: { value: "What changed in the latest turn?" } });
+  await waitFor(() => expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  const reqId = mocks.askSend.mock.lastCall?.[3] as string;
+  mocks.streamHandler?.({ reqId, kind: "delta", data: "The first part of the answer." });
+  await screen.findByText("The first part of the answer.");
+  mocks.streamHandler?.({ reqId, kind: "error", data: { error: "The connection dropped." } });
+  await screen.findByRole("alert");
+  expect(screen.getByText("The first part of the answer.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
 });
